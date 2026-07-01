@@ -22,7 +22,15 @@ export function attachInput(element: HTMLElement, picker: GroundPicker, tools: T
     if (event.button !== 0) return;
     if (tools.isBuildTool) {
       const cell = picker.pick(event.clientX, event.clientY);
-      if (cell) element.setPointerCapture(event.pointerId);
+      if (cell) {
+        // Best-effort: synthetic pointers (automated playtests) have no
+        // active pointer id and would throw, aborting the drag.
+        try {
+          element.setPointerCapture(event.pointerId);
+        } catch {
+          /* capture is an optional nicety */
+        }
+      }
       tools.pointerDown(cell);
     } else {
       clickStart = { x: event.clientX, y: event.clientY };

@@ -47,6 +47,9 @@ export class GroundPicker {
   private intersect(clientX: number, clientY: number): PickedCell | null {
     const rect = this.element.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
+    // Don't depend on the render loop having run: background tabs throttle
+    // rAF to zero, leaving matrixWorld stale (breaks automated playtests).
+    this.camera.updateMatrixWorld();
     this.ndc.set(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1,
