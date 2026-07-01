@@ -15,7 +15,8 @@ export const VEHICLE_BASE_SPEED = 0.35;
 export const CONGESTION_SLOWDOWN_PER_BUCKET = 0.25;
 export const MIN_SPEED_FACTOR = 0.25;
 
-export const EDGE_CAPACITY_PER_CELL = 6;
+/** Tuned so a busy artery in a ~100-citizen town reaches bucket 1-2 (playtest 2026-07-01). */
+export const EDGE_CAPACITY_PER_CELL = 2;
 /** Congestion (count/capacity) thresholds for buckets 1, 2, 3. */
 export const BUCKET_THRESHOLDS = [0.4, 0.75, 1.0] as const;
 export const CONGESTION_INTERVAL = 64;
