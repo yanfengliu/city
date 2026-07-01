@@ -16,7 +16,7 @@ Scale the approach to the task: trivial fixes → just do them; substantial work
 
 A browser city-building game inspired by Cities: Skylines — cloning the core simulation behavior (roads, RCI zoning, growable buildings, agent-based traffic, utilities, services, pollution/land value, economy) and a 3D graphical presentation. Grid-aligned roads for now (freeform splines are a possible later phase). The game must be its own implementation and visual identity, not an asset/source clone.
 
-The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless deterministic ECS engine. Game rules are game code here; the engine provides ECS, pathfinding, layers, occupancy, commands/events, and serialization. Read `docs/architecture/architecture.md` § "civ-engine usage rules" before touching sim code.
+The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless deterministic ECS engine. Game rules are game code here; the engine provides ECS, pathfinding, layers, occupancy, commands/events, and serialization. Read the "civ-engine usage rules" section below before touching sim code.
 
 ## Stack and layout
 
@@ -72,8 +72,8 @@ Run the smallest relevant check while iterating. All four gates (`test`, `typech
 - Keep `strict: true` (default). Route all mutations through systems/commands; randomness through `world.random()` only. Never `Math.random()`/`Date.now()` in sim code.
 - Always write components via `setComponent`/`patchComponent`/`setPosition` — in-place mutation is invisible to the spatial grid and the diff system.
 - Positions are integers on a fixed-size grid chosen at construction. Smooth motion is renderer-side interpolation; vehicles parametrize as `(edgeId, t)` in a component and the renderer samples the road geometry.
-- `Layer<T>`, `OccupancyGrid`, and path-queue state are NOT serialized by `world.serialize()`. Persist layers via `world.setState('<name>Layer', layer.getState())` on their update cadence; rebuild with `fromState` on load. Pending path requests live as plain data in components/world state, never only inside a queue instance.
-- Route traffic on the road **graph** (nodes/edges), not the cell grid. Cache paths against a topology version (bump on road build/demolish, then `clearCache()`); congestion enters via periodic repaths, not per-tick cost churn.
+- `Layer<T>`, `OccupancyGrid`, and path-queue state are NOT serialized by `world.serialize()`. Persist layers by mirroring `layer.getState()` into a component on a dedicated singleton "mirror" entity — one component per layer, written only on that layer's recompute cadence; rebuild with `fromState` on load. Never mirror layers into `world.setState(...)`: world-state values are JSON-fingerprinted twice per tick by the engine, while component diffs are dirty-flag-only. OccupancyGrid and other derived maps are never mirrored — `rebuildDerived` reconstructs them from entities. Pending path requests live as plain data in components/world state, never only inside a queue instance.
+- Route traffic on the road **graph** (nodes/edges), not the cell grid. Cache paths keyed by (fromNode, toNode) against a single monotonic pathVersion (bump on topology change or congestion-epoch change; `clearCache()` on topology change); congestion enters via periodic repaths, not per-tick cost churn.
 - Heavy systems declare `interval`/`intervalOffset` and stagger; work budgets are counts, never milliseconds.
 - Determinism gate: replayable scenario bundles use `capacity: Number.MAX_SAFE_INTEGER, captureCommandPayloads: true, captureInitialSnapshot: true`; CI runs `SessionReplayer.selfCheck()` on a synthetic playtest.
 - Pin the civ-engine version; it is consumed as `file:../civ-engine`. If an engine bug or missing feature blocks the game, note it in `PROGRESS.md` and work around it here — do not edit the engine repo unless the user asks.

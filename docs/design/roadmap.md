@@ -14,29 +14,29 @@ Seeded terrain (water/land/trees) sent once to renderer; road place/bulldoze com
 
 Accept: draw/bulldoze road networks in browser; graph unit tests pass (corners, intersections, islands); terrain deterministic per seed.
 
-## Phase 2 — Zoning, growth, demand
+## Phase 2 — Zoning, growth, demand, citizens
 
-Zone paint/dezone commands; growth system with footprints on OccupancyGrid; demand model; building level/abandon state machine (power/water gates arrive in phase 5 — until then those inputs read as satisfied); instanced building rendering; zone tint overlay; inspect panel basics.
+Zone paint/dezone commands; growth system with footprint occupancy; demand model; citizen move-in/out (citizen entities live in phase 2 because demand math needs population and unemployment to bootstrap C/I — verified by walking the formulas: with P=0 and U=0, C and I can never go positive and R stalls at 8 free housing capacity); building level/abandon state machine gated by explicit `createCitySim` flags `{fieldsEnabled, utilitiesEnabled}` (both false until their phase: disabled fields read landValue = 30 / coverage 0 / educated false, disabled utilities read powered = watered = true; the flags stay supported forever so early-phase scenario tests remain valid); rect bulldoze covering buildings and roads; instanced building rendering; zone tint overlay; inspect panel basics.
 
-Accept: zoning near roads grows buildings over time per demand; scenario test: 200 zoned cells + positive demand → ≥ 30 buildings within N ticks; buildings render with level variation.
+Accept: zoning near roads grows buildings over time per demand; scenario test: zoned R+C+I districts with road access → buildings of all three zones and rising population within N ticks; buildings render with zone-distinct archetypes; level variation becomes reachable in phase 4 when land value and services feed the score (with neutral inputs score is pinned at 25, below LEVEL2_SCORE 45 — level-ups are intentionally impossible until phase 4).
 
-## Phase 3 — Citizens and traffic
+## Phase 3 — Employment and traffic
 
-Citizen move-in/out, employment matching; trip generation; road-graph pathfinding via queue+cache with topology/congestion versioning; vehicle motion with per-edge counts, congestion buckets and epoch; vehicle instancing with interpolation; traffic overlay; disconnectedTrips warning.
+Employment matching; trip generation; road-graph pathfinding via queue+cache with topology/congestion versioning; vehicle motion with per-edge counts, congestion buckets and epoch; vehicle instancing with interpolation; traffic overlay; disconnectedTrips warning.
 
 Accept: scenario tests — commuters flow between R and C/I clusters; blocking the only route cancels trips; a parallel road reduces max congestion bucket. Browser: visible smooth vehicles, congestion coloring.
 
 ## Phase 4 — Fields and services
 
-Pollution/noise/landValue layers with cadences + world-state mirroring; service buildings (fire/police/clinic/school) with coverage layers; desirability wiring (land value + coverage now feed levels); field overlays via DataTexture; service placement UI.
+Pollution/noise/landValue layers with cadences + mirroring into the singleton mirror entity's components; service buildings (fire/police/clinic/school) with coverage layers; desirability wiring (`fieldsEnabled` flips on — land value + coverage now feed levels); field overlays via DataTexture; service placement UI.
 
 Accept: scenario tests — industry raises pollution which drags neighboring land value down; a school enables level-3; overlays visibly match sim values in browser.
 
 ## Phase 5 — Utilities and economy
 
-Power (plants/lines/flood-fill/brownout) and water (pumps/pipes) networks; powered/watered gating of growth/leveling/abandonment; budget interval (taxes by zone/level, upkeep), tax sliders, broke state blocking purchases; ⚡/💧 problem icons; power/water overlays.
+Power (plants/lines/flood-fill/brownout) and water (pumps/pipes) networks; powered/watered gating of growth/leveling/abandonment (`utilitiesEnabled` flips on; the `createCitySim` flag stays supported so earlier-phase scenario tests remain valid); budget interval (taxes by zone/level, upkeep), tax sliders, broke state blocking all purchases except power and water items (plants, lines, pumps, pipes); ⚡/💧 problem icons; power/water overlays.
 
-Accept: scenario tests — unpowered city stalls and abandons, powering it recovers; brownout is deterministic; taxes at 20% suppress demand; budget can go negative and recover. Browser: place utilities, watch icons clear.
+Accept: scenario tests — unpowered city stalls and abandons, powering it recovers; brownout is deterministic; taxes at 20% suppress demand; budget can go negative and recover; a city that starts broke and unpowered can still buy a wind turbine and recover. Browser: place utilities, watch icons clear.
 
 ## Phase 6 — Game shell and polish
 
