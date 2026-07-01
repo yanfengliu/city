@@ -13,8 +13,9 @@ Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine (file:../
 - [x] Design docs adversarially reviewed against civ-engine API (23 confirmed findings folded in).
 - [x] Phase 0 — scaffold
 - [x] Phase 1 — terrain + roads (browser-verified: road drag + bulldoze with exact refund)
-- [~] Phase 2 — zoning + growth + demand + citizens (sim done + tested; renderer in progress)
+- [x] Phase 2 — zoning + growth + demand + citizens (browser-verified: 48 buildings, 96 population, demand bars, inspect panel)
 - [~] Phase 3 — employment + traffic (sim done + tested incl. congestion scenario, save/load replay, topology remap; vehicle rendering pending)
+- [~] Phase 4 — fields + services (sim done, 47 tests; overlays + service UI pending)
 - [ ] Phase 4 — fields + services
 - [ ] Phase 5 — utilities + economy
 - [ ] Phase 6 — game shell + polish
