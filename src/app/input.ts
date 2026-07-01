@@ -1,27 +1,37 @@
 import type { GroundPicker } from '../rendering/picking';
 import type { Tools } from './tools';
 
+/** Max pointer travel (px, squared) for a press to still count as a select click. */
+const CLICK_SLOP_SQ = 36;
+
 /**
  * Wires pointer/keyboard events on the canvas to the tool state machine.
  * Primary button starts build drags (MapControls' left-pan is disabled while
- * a build tool is active); right-click or Escape cancels an in-flight drag;
- * middle/right buttons stay free for camera navigation.
+ * a build tool is active) or, with the select tool, inspects the clicked cell
+ * (ignoring drags, which pan the camera); right-click or Escape cancels an
+ * in-flight drag; middle/right buttons stay free for camera navigation.
  */
 export function attachInput(element: HTMLElement, picker: GroundPicker, tools: Tools): void {
+  let clickStart: { x: number; y: number } | null = null;
+
   element.addEventListener('pointerdown', (event) => {
     if (event.button === 2 && tools.dragging) {
       tools.cancelDrag();
       return;
     }
-    if (event.button !== 0 || !tools.isBuildTool) return;
-    const cell = picker.pick(event.clientX, event.clientY);
-    if (cell) element.setPointerCapture(event.pointerId);
-    tools.pointerDown(cell);
+    if (event.button !== 0) return;
+    if (tools.isBuildTool) {
+      const cell = picker.pick(event.clientX, event.clientY);
+      if (cell) element.setPointerCapture(event.pointerId);
+      tools.pointerDown(cell);
+    } else {
+      clickStart = { x: event.clientX, y: event.clientY };
+    }
   });
 
   element.addEventListener('pointermove', (event) => {
     if (!tools.isBuildTool) return;
-    // During a drag, clamp so the path stays usable while the pointer roams off-map.
+    // During a drag, clamp so the selection stays usable while the pointer roams off-map.
     const cell = tools.dragging
       ? picker.pickClamped(event.clientX, event.clientY)
       : picker.pick(event.clientX, event.clientY);
@@ -29,8 +39,19 @@ export function attachInput(element: HTMLElement, picker: GroundPicker, tools: T
   });
 
   element.addEventListener('pointerup', (event) => {
-    if (event.button !== 0 || !tools.dragging) return;
-    tools.pointerUp(picker.pickClamped(event.clientX, event.clientY));
+    if (event.button !== 0) return;
+    if (tools.dragging) {
+      tools.pointerUp(picker.pickClamped(event.clientX, event.clientY));
+      return;
+    }
+    if (clickStart) {
+      const dx = event.clientX - clickStart.x;
+      const dy = event.clientY - clickStart.y;
+      if (dx * dx + dy * dy <= CLICK_SLOP_SQ) {
+        tools.select(picker.pick(event.clientX, event.clientY));
+      }
+      clickStart = null;
+    }
   });
 
   element.addEventListener('pointerleave', () => {

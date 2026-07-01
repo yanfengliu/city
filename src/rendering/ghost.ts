@@ -15,9 +15,11 @@ export interface GhostCell {
 }
 
 /**
- * Translucent drag-preview boxes over the cells a road/bulldoze action would
- * affect. White while the path looks valid client-side, red when trivially
- * invalid — authoritative validation stays in the sim.
+ * Translucent drag-preview boxes over the cells a road/bulldoze/zone action
+ * would affect. Tinted (white by default, zone color for zone tools) while
+ * the selection looks valid client-side, red when trivially invalid —
+ * authoritative validation stays in the sim. Selections beyond capacity clip
+ * visually; the submitted command is unaffected.
  */
 export class GhostView {
   readonly mesh: InstancedMesh;
@@ -38,7 +40,7 @@ export class GhostView {
     this.mesh.count = 0;
   }
 
-  update(cells: readonly GhostCell[], valid: boolean): void {
+  update(cells: readonly GhostCell[], valid: boolean, tint: number = GHOST_VALID_COLOR): void {
     const matrix = new Matrix4();
     const count = Math.min(cells.length, GHOST_CAPACITY);
     for (let i = 0; i < count; i++) {
@@ -47,7 +49,7 @@ export class GhostView {
     }
     this.mesh.count = count;
     this.mesh.instanceMatrix.needsUpdate = true;
-    this.material.color.setHex(valid ? GHOST_VALID_COLOR : GHOST_INVALID_COLOR);
+    this.material.color.setHex(valid ? tint : GHOST_INVALID_COLOR);
   }
 
   clear(): void {

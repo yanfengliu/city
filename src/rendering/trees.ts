@@ -33,8 +33,9 @@ const UP = new Vector3(0, 1, 0);
 
 /**
  * Decorative trees as two InstancedMeshes (trunks + canopies) sharing one
- * instance layout. Trees on road cells are hidden by rebuilding the instance
- * buffer on each `roads` message (infrequent, so a full rebuild is fine).
+ * instance layout. Trees on occupied cells (roads and building footprints)
+ * are hidden by rebuilding the instance buffer whenever the occupied set
+ * changes (infrequent and cheap, so a full rebuild is fine).
  */
 export class TreesView {
   readonly group = new Group();
@@ -76,18 +77,18 @@ export class TreesView {
       this.group.add(mesh);
     }
     this.group.name = 'trees';
-    this.updateRoads(new Set());
+    this.updateOccupied(new Set());
   }
 
-  /** Rebuilds instances so trees on road cells disappear (and reappear after bulldozing). */
-  updateRoads(roadCells: ReadonlySet<number>): void {
+  /** Rebuilds instances so trees on occupied cells disappear (and reappear after bulldozing). */
+  updateOccupied(occupiedCells: ReadonlySet<number>): void {
     const matrix = new Matrix4();
     const position = new Vector3();
     const rotation = new Quaternion();
     const scale = new Vector3();
     let used = 0;
     for (const index of this.treeCells) {
-      if (roadCells.has(index)) continue;
+      if (occupiedCells.has(index)) continue;
       const x = index % this.width;
       const z = Math.floor(index / this.width);
       const s = TREE_SCALE_MIN + cellHash01(index) * TREE_SCALE_RANGE;

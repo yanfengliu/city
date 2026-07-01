@@ -24,6 +24,7 @@ export class CityScene {
   private fps = 0;
   private frameCount = 0;
   private lastFpsSample = performance.now();
+  private readonly frameCallbacks: Array<() => void> = [];
 
   constructor(container: HTMLElement, gridWidth: number, gridHeight: number) {
     this.renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -67,6 +68,11 @@ export class CityScene {
     this.scene.add(...objects);
   }
 
+  /** Registers a callback run once per rendered frame, before drawing (dirty-flag flushes). */
+  onFrame(callback: () => void): void {
+    this.frameCallbacks.push(callback);
+  }
+
   /**
    * While a build tool is active, left-drag draws instead of panning; middle
    * (zoom) and right (rotate) always stay with MapControls.
@@ -80,6 +86,7 @@ export class CityScene {
   }
 
   private renderFrame(): void {
+    for (const callback of this.frameCallbacks) callback();
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
     this.frameCount++;
