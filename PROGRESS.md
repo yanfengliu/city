@@ -22,6 +22,10 @@ Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine (file:../
 
 ## Log
 
+### 2026-07-01 — Phase 1 renderer (terrain, roads, tools, HUD)
+
+Main-thread presentation for Phase 1: terrain mesh (one merged vertex-colored BufferGeometry from the `ready` TerrainPayload — land at y=0 with per-cell-hash lightness jitter, water recessed at y=-0.12, shore skirts at land/water and map edges), decorative trees (two InstancedMeshes, trunks+canopies, rebuilt per `roads` message so trees under roads hide/re-show), roads (merged flat quads at y=0.02, full rebuild per `roads` message — chunking deferred), ground-plane picking (mathematical y=0 plane → floored cell, null off-grid, clamped variant for drags), select/road/bulldoze tools with L-path drag ghost (InstancedMesh, capacity 256; red tint when road path crosses water or bulldoze path has no road; Escape/right-click cancels; MapControls left-pan disabled while a build tool is active), HUD treasury + tool buttons + rejection toasts, `render_game_to_text` extended with treasury/activeTool/roadCellCount/cameraTarget. Boundary kept: rendering/ has zero sim imports (scene now takes grid dims via constructor; grid helpers only used in app/). Browser verification pending (orchestrator).
+
 ### 2026-07-01 — Project inception
 
 Assessed civ-engine fit via 6-reader doc sweep (findings in Claude memory + baked into architecture.md "civ-engine usage rules"). Key constraints honored in design: integer fixed grid, renderer-side interpolation, layers/occupancy/queues not world-serialized (mirror into world state + `rebuildDerived`), road-graph pathfinding with topology×congestion cache versioning, strict-mode determinism. civ-sim-web is NOT a civ-engine consumer (stale README) — used only for process precedent (engine-first phases, automation hooks). Next: adversarial design review, then scaffold.
