@@ -1,0 +1,112 @@
+# AGENTS.md
+
+## Agentic working style
+
+Treat the rest of this file as defaults, not rigid law. The right approach is the one that fits the task in front of you — when a rule here would make the work worse, deviate and say why. Optimize for the outcome: correct, verified, readable, and fun to play.
+
+Scale the approach to the task: trivial fixes → just do them; substantial work (multi-file features, audits, broad refactors) → orchestrate with parallel subagents/workflows, verify adversarially, and keep the main thread for decisions and integration. This does not lower the verification bar — tests still pass, diffs still get reviewed, docs still stay current.
+
+## Continuing through plans
+
+- No stopping points within a multi-task plan. Work through all N tasks continuously; do not ask whether to keep going. Harness reminders are administrative noise, not stop signals.
+- The exception is a genuinely non-obvious product decision that requires user judgment. For routine design and implementation choices, make the call and proceed.
+- Keep `PROGRESS.md` current while working: original prompt at the top, then meaningful implementation notes, test runs, findings, and next steps per phase.
+
+## Project intent
+
+A browser city-building game inspired by Cities: Skylines — cloning the core simulation behavior (roads, RCI zoning, growable buildings, agent-based traffic, utilities, services, pollution/land value, economy) and a 3D graphical presentation. Grid-aligned roads for now (freeform splines are a possible later phase). The game must be its own implementation and visual identity, not an asset/source clone.
+
+The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless deterministic ECS engine. Game rules are game code here; the engine provides ECS, pathfinding, layers, occupancy, commands/events, and serialization. Read `docs/architecture/architecture.md` § "civ-engine usage rules" before touching sim code.
+
+## Stack and layout
+
+Vite + TypeScript (strict) + Three.js + civ-engine + Vitest. Desktop browser only; single primary canvas; the first screen is the playable game, not a landing page.
+
+```text
+src/
+  main.ts                 # Browser entry point
+  app/                    # Bootstrap, worker wiring, render loop, input → commands
+  sim/                    # Pure game simulation on civ-engine (zero DOM/Three deps)
+    components.ts         # Component/state type registry
+    constants/            # Domain constants (no magic numbers in systems)
+    systems/              # One file per system (zoning, growth, traffic, fields, ...)
+    commands/             # Command types, validators, handlers
+    world-factory.ts      # Deterministic world construction (identical registration order)
+  worker/                 # Web Worker entry hosting the sim; protocol glue only
+  protocol/               # Typed messages between worker and main thread
+  rendering/              # Three.js scene, meshes, instancing, camera, picking, interpolation
+  ui/                     # HUD, tool palette, panels (DOM); dispatches commands only
+  persistence/            # Save/load, versioned format
+tests/                    # Vitest suites (sim contract tests, scenario runs)
+docs/                     # design, architecture, progress artifacts
+```
+
+Boundary rules: `sim/` and `protocol/` must not import Three.js or touch the DOM. `rendering/` consumes protocol snapshots/diffs only — never the World directly. `ui/` dispatches commands, never mutates state. `persistence/` serializes explicit versioned state.
+
+## Commands
+
+```bash
+npm run dev        # Vite dev server
+npm test           # vitest run
+npm run typecheck  # tsc --noEmit
+npm run lint       # eslint, zero warnings
+npm run build      # typecheck + vite build
+```
+
+Run the smallest relevant check while iterating. All four gates (`test`, `typecheck`, `lint`, `build`) must pass before declaring a task done or committing.
+
+## Core rules
+
+- Test-driven development for sim behavior: write the failing contract test first (scenario-level where possible: "after N ticks of X, Y holds"), then implement. Test the contract, not the implementation.
+- For each desired change, make the change easy, then make the easy change.
+- Before broad implementation work, write or update the relevant docs under `docs/`.
+- No magic numbers — tunable gameplay values live in `src/sim/constants/` domain files.
+- Files under 500 LOC — extract helpers or split. 2-space indentation. `import type` for type-only imports. Remove dead code and duplicated logic.
+- Do not ship a visual feature without verifying it in a browser screenshot.
+- Expose `window.render_game_to_text()` and `window.advanceTime(ms)` for automated playtesting; init Three.js with `preserveDrawingBuffer: true` so screenshots capture WebGL.
+- Adversarially review non-trivial changes before declaring them done: fan out independent reviewer agents over the diff (correctness, sim-determinism, engine-contract, rendering/perf lenses), verify each claim against the live code, fix real findings, re-review until reviewers only nitpick.
+- Record non-obvious failure modes in `docs/learning/lessons.md` with evidence anchors (what surfaced it, fix commit, test that pins it, behavior delta).
+
+## civ-engine usage rules (hard-won; violating these causes silent breakage)
+
+- Keep `strict: true` (default). Route all mutations through systems/commands; randomness through `world.random()` only. Never `Math.random()`/`Date.now()` in sim code.
+- Always write components via `setComponent`/`patchComponent`/`setPosition` — in-place mutation is invisible to the spatial grid and the diff system.
+- Positions are integers on a fixed-size grid chosen at construction. Smooth motion is renderer-side interpolation; vehicles parametrize as `(edgeId, t)` in a component and the renderer samples the road geometry.
+- `Layer<T>`, `OccupancyGrid`, and path-queue state are NOT serialized by `world.serialize()`. Persist layers via `world.setState('<name>Layer', layer.getState())` on their update cadence; rebuild with `fromState` on load. Pending path requests live as plain data in components/world state, never only inside a queue instance.
+- Route traffic on the road **graph** (nodes/edges), not the cell grid. Cache paths against a topology version (bump on road build/demolish, then `clearCache()`); congestion enters via periodic repaths, not per-tick cost churn.
+- Heavy systems declare `interval`/`intervalOffset` and stagger; work budgets are counts, never milliseconds.
+- Determinism gate: replayable scenario bundles use `capacity: Number.MAX_SAFE_INTEGER, captureCommandPayloads: true, captureInitialSnapshot: true`; CI runs `SessionReplayer.selfCheck()` on a synthetic playtest.
+- Pin the civ-engine version; it is consumed as `file:../civ-engine`. If an engine bug or missing feature blocks the game, note it in `PROGRESS.md` and work around it here — do not edit the engine repo unless the user asks.
+
+## Game testing loop
+
+For meaningful gameplay changes:
+
+1. Implement a small behavior with its headless test.
+2. Start the dev server and drive the game in a real browser (preview tools / Playwright).
+3. Inspect `render_game_to_text()` output and screenshots; verify controls, visuals, and text state agree.
+4. Fix and repeat.
+
+Interactions to verify before calling the game complete: road place/bulldoze, zone paint/erase, service and utility placement, camera orbit/pan/zoom, overlays, speed/pause, save/load/reset, demand meter and budget reacting to play, traffic visibly flowing and congesting.
+
+## Dependency-change protocol
+
+Whenever `package.json` dependency surface changes: re-resolve the lockfile with `npm install`; run `npm audit --audit-level=high --omit=dev` and `npm audit --audit-level=high`; a new HIGH/CRITICAL CVE is a blocker unless documented with reason and expiry; mention the audit result in the commit message.
+
+## Git
+
+- Commit directly to `main` — solo-developer repo; each coherent, self-contained unit lands as its own commit with all four gates green.
+- Commit durable docs that guide future work. Never revert user changes unless explicitly requested.
+- Push at the end of a task if local commits are ahead and network access is available.
+
+## Documentation
+
+Read before changing the relevant system:
+
+- `docs/design/vision.md` — product direction and visual identity.
+- `docs/design/game-design.md` — gameplay rules, mechanics, and tuning values.
+- `docs/design/roadmap.md` — milestone ordering and acceptance criteria.
+- `docs/architecture/architecture.md` — code boundaries, worker protocol, data flow.
+- `PROGRESS.md` — current status and next steps.
+
+Update docs in the same task when gameplay rules, architecture, protocol, save format, or test expectations change. Don't wrap lines in docs; new lines start new paragraphs.
