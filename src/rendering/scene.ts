@@ -2,17 +2,20 @@ import {
   AmbientLight,
   Color,
   DirectionalLight,
-  Mesh,
-  MeshLambertMaterial,
+  MOUSE,
   PerspectiveCamera,
-  PlaneGeometry,
   Scene,
   WebGLRenderer,
 } from 'three';
+import type { Object3D, Vector3 } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
-import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 
-/** Owns the Three.js scene graph, camera, and render loop. */
+/**
+ * Owns the Three.js renderer, scene graph, camera, and MapControls. Grid
+ * dimensions arrive as plain numbers from app code — rendering never imports
+ * sim modules. Content meshes (terrain, roads, trees, ghost) are added via
+ * add() by the composition root.
+ */
 export class CityScene {
   readonly renderer: WebGLRenderer;
   readonly scene: Scene;
@@ -22,7 +25,7 @@ export class CityScene {
   private frameCount = 0;
   private lastFpsSample = performance.now();
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, gridWidth: number, gridHeight: number) {
     this.renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -37,10 +40,10 @@ export class CityScene {
       0.1,
       1000,
     );
-    this.camera.position.set(GRID_WIDTH / 2, 60, GRID_HEIGHT / 2 + 60);
+    this.camera.position.set(gridWidth / 2, 60, gridHeight / 2 + 60);
 
     this.controls = new MapControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(GRID_WIDTH / 2, 0, GRID_HEIGHT / 2);
+    this.controls.target.set(gridWidth / 2, 0, gridHeight / 2);
     this.controls.maxPolarAngle = Math.PI / 2.2;
     this.controls.minDistance = 8;
     this.controls.maxDistance = 220;
@@ -51,15 +54,6 @@ export class CityScene {
     sun.position.set(80, 120, 40);
     this.scene.add(ambient, sun);
 
-    // Placeholder ground; replaced by generated terrain in phase 1.
-    const ground = new Mesh(
-      new PlaneGeometry(GRID_WIDTH, GRID_HEIGHT),
-      new MeshLambertMaterial({ color: 0x6ea564 }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(GRID_WIDTH / 2, 0, GRID_HEIGHT / 2);
-    this.scene.add(ground);
-
     window.addEventListener('resize', () => {
       this.camera.aspect = container.clientWidth / container.clientHeight;
       this.camera.updateProjectionMatrix();
@@ -67,6 +61,22 @@ export class CityScene {
     });
 
     this.renderer.setAnimationLoop(() => this.renderFrame());
+  }
+
+  add(...objects: Object3D[]): void {
+    this.scene.add(...objects);
+  }
+
+  /**
+   * While a build tool is active, left-drag draws instead of panning; middle
+   * (zoom) and right (rotate) always stay with MapControls.
+   */
+  setLeftDragEnabled(enabled: boolean): void {
+    this.controls.mouseButtons.LEFT = enabled ? MOUSE.PAN : null;
+  }
+
+  getCameraTarget(): Vector3 {
+    return this.controls.target;
   }
 
   private renderFrame(): void {
