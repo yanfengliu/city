@@ -1,4 +1,4 @@
-import type { CityCommands, DemandState, ZoneType } from '../sim/types';
+import type { CityCommands, DemandState, FieldName, ServiceType, ZoneType } from '../sim/types';
 
 /** Typed messages between the main thread and the sim worker. All payloads must be structured-clone-safe plain data. */
 
@@ -14,7 +14,9 @@ export type ClientToWorker =
   | CommandMessage
   | { type: 'setSpeed'; speed: GameSpeed }
   /** Automation/testing: synchronously step N ticks regardless of speed. */
-  | { type: 'advance'; ticks: number };
+  | { type: 'advance'; ticks: number }
+  /** Replaces the set of field overlays the client wants pushed on recompute. */
+  | { type: 'setFieldSubscriptions'; fields: FieldName[] };
 
 export interface TerrainPayload {
   width: number;
@@ -70,6 +72,16 @@ export interface BuildingView {
   jobsFilled: number;
 }
 
+export interface StructureView {
+  id: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  kind: 'service';
+  service: ServiceType;
+}
+
 export type WorkerToClient =
   | {
       type: 'ready';
@@ -89,4 +101,20 @@ export type WorkerToClient =
   | { type: 'buildings'; upserts: BuildingView[]; removed: number[] }
   | { type: 'vehicles'; topologyVersion: number; list: VehicleView[] }
   | { type: 'traffic'; edges: Array<{ id: number; bucket: number }> }
+  | { type: 'structures'; upserts: StructureView[]; removed: number[] }
+  /**
+   * Sparse field snapshot, pushed on each subscribed field's recompute and on
+   * subscription change. width/height are the layer's cell-grid dimensions
+   * (each cell covers blockSize x blockSize world cells); cells absent from
+   * `cells` hold `defaultValue`.
+   */
+  | {
+      type: 'field';
+      name: FieldName;
+      blockSize: number;
+      width: number;
+      height: number;
+      defaultValue: number;
+      cells: Array<[index: number, value: number]>;
+    }
   | { type: 'commandRejected'; name: CommandName; message: string };

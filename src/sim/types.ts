@@ -1,4 +1,4 @@
-import type { World } from 'civ-engine';
+import type { LayerState, World } from 'civ-engine';
 
 export interface Position {
   x: number;
@@ -6,6 +6,11 @@ export interface Position {
 }
 
 export type ZoneType = 'R' | 'C' | 'I';
+
+export type ServiceType = 'fireStation' | 'police' | 'clinic' | 'school';
+
+/** Overlay-subscribable field layers (coverage is separate — rebuilt on structure changes). */
+export type FieldName = 'pollution' | 'noise' | 'landValue';
 
 /** Both road commands take an L-path between two cells (dominant axis first). */
 export interface RoadEndpoints {
@@ -44,6 +49,18 @@ export interface BuildingComponent {
   /** Separate, longer-grace streak for utilities-only problems. */
   badUtilityEvals: number;
   recoverEvals: number;
+}
+
+/** Player-placed service building (2x2 footprint anchored at the position component). */
+export interface StructureComponent {
+  type: ServiceType;
+}
+
+export interface PlaceServiceCommand {
+  service: ServiceType;
+  /** Anchor cell (top-left of the 2x2 footprint). */
+  x: number;
+  y: number;
 }
 
 export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome';
@@ -92,6 +109,13 @@ export type CityComponents = {
    * Components diff by dirty flag, so writes cost nothing between changes.
    */
   congestionMirror: { buckets: Array<[edge: number, bucket: number]> };
+  structure: StructureComponent;
+  /** Layer mirrors (see congestionMirror doc): written only on that layer's recompute cadence. */
+  pollutionMirror: LayerState<number>;
+  noiseMirror: LayerState<number>;
+  landValueMirror: LayerState<number>;
+  /** All four coverage layers, keyed by service; written on structure changes only. */
+  coverageMirror: Record<ServiceType, LayerState<number>>;
 };
 
 export type CityCommands = {
@@ -100,6 +124,7 @@ export type CityCommands = {
   zone: ZoneCommand;
   dezone: RectArea;
   bulldozeRect: RectArea;
+  placeService: PlaceServiceCommand;
 };
 
 export type CityEvents = {
@@ -109,6 +134,9 @@ export type CityEvents = {
   buildingRecovered: { entity: number };
   zonesChanged: Record<string, never>;
   trafficChanged: Record<string, never>;
+  structuresChanged: Record<string, never>;
+  /** A field layer's recompute produced new values (drives overlay pushes). */
+  fieldChanged: { field: FieldName };
 };
 
 export type CityState = {

@@ -47,6 +47,25 @@ import {
   TRIP_INTERVAL_OFFSET,
 } from './constants/traffic';
 import {
+  LAND_VALUE_INTERVAL,
+  LAND_VALUE_INTERVAL_OFFSET,
+  NOISE_INTERVAL,
+  NOISE_INTERVAL_OFFSET,
+  POLLUTION_INTERVAL,
+  POLLUTION_INTERVAL_OFFSET,
+} from './constants/fields';
+import {
+  coverageMirrorState,
+  createCityFields,
+  fieldScoreInputs,
+  landValueSystem,
+  noiseSystem,
+  pollutionSystem,
+  readFieldMirrors,
+  type CityFields,
+} from './fields';
+import { bulldozeStructures, refreshStructures, registerServiceCommands } from './services';
+import {
   rectCells,
   refreshZoneEntities,
   refreshZones,
@@ -92,8 +111,10 @@ export interface CitySim {
   zoneCells: Map<number, ZoneType>;
   /** Zoned cell → zoneCell entity id (derived). */
   zoneEntities: Map<number, number>;
-  /** Building footprint cell → building entity id (derived). */
+  /** Footprint cell → entity id, buildings AND service structures (derived). */
   occupiedCells: Map<number, number>;
+  /** Field layers + static terrain masks; layer states persist via mirror components. */
+  fields: CityFields;
   scoreInputs: ScoreInputs;
   /** Vehicles currently on each edge (derived from vehicle components). */
   edgeCounts: Map<number, number>;
@@ -166,8 +187,10 @@ export function rebuildDerived(sim: CitySim): void {
   refreshZones(sim);
   refreshZoneEntities(sim);
   refreshOccupancy(sim);
+  refreshStructures(sim); // after refreshOccupancy — it replaces occupiedCells
   refreshEdgeCounts(sim);
   readCongestionMirror(sim);
+  readFieldMirrors(sim);
 }
 
 function dezoneCellsUnderRoad(sim: CitySim, w: CityWorld, cells: number[]): void {
@@ -274,6 +297,10 @@ function registerBulldozeRect(sim: CitySim): void {
   world.registerHandler('bulldozeRect', (data, w) => {
     const cells = rectCells(data).map((c) => cellIndex(c.x, c.y));
 
+    // Service structures first — frees their occupiedCells entries so the
+    // building pass below only sees actual buildings.
+    bulldozeStructures(sim, w, cells);
+
     // Buildings whose footprint intersects the rect.
     const buildings = new Set<number>();
     for (const i of cells) {
@@ -335,6 +362,11 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.registerComponent('citizen');
   world.registerComponent('vehicle');
   world.registerComponent('congestionMirror');
+  world.registerComponent('structure');
+  world.registerComponent('pollutionMirror');
+  world.registerComponent('noiseMirror');
+  world.registerComponent('landValueMirror');
+  world.registerComponent('coverageMirror');
 
   // -- world state --
   world.setState('treasury', STARTING_TREASURY);
@@ -344,8 +376,13 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.setState('tripCursor', 0);
 
   // Singleton mirror entity (see CityComponents.congestionMirror).
+  const fields = createCityFields(terrain);
   const mirror = world.createEntity();
   world.addComponent(mirror, 'congestionMirror', { buckets: [] });
+  world.addComponent(mirror, 'pollutionMirror', fields.pollution.getState());
+  world.addComponent(mirror, 'noiseMirror', fields.noise.getState());
+  world.addComponent(mirror, 'landValueMirror', fields.landValue.getState());
+  world.addComponent(mirror, 'coverageMirror', coverageMirrorState(fields));
   world.setState('mirrorEntity', mirror);
 
   const sim: CitySim = {
@@ -358,6 +395,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
     zoneCells: new Map(),
     zoneEntities: new Map(),
     occupiedCells: new Map(),
+    fields,
     scoreInputs: neutralScoreInputs(config),
     edgeCounts: new Map(),
     edgeBuckets: new Map(),
@@ -365,11 +403,14 @@ export function createCitySim(config: CitySimConfig): CitySim {
     pathCache: new Map(),
     adjacencyCache: null,
   };
+  // Phase 4: real field-driven desirability inputs replace the neutral seam.
+  if (config.fieldsEnabled) sim.scoreInputs = fieldScoreInputs(sim);
 
   // -- commands --
   registerRoadCommands(sim);
   registerZoneCommands(sim);
   registerBulldozeRect(sim);
+  registerServiceCommands(sim);
 
   // Abandoned workplaces shed their workers (listener avoids an import cycle
   // between buildings.ts and employment.ts; runs synchronously at emit).
@@ -425,6 +466,27 @@ export function createCitySim(config: CitySimConfig): CitySim {
     execute: congestionSystem(sim),
     interval: CONGESTION_INTERVAL,
     intervalOffset: CONGESTION_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'pollution',
+    phase: 'postUpdate',
+    execute: pollutionSystem(sim),
+    interval: POLLUTION_INTERVAL,
+    intervalOffset: POLLUTION_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'noise',
+    phase: 'postUpdate',
+    execute: noiseSystem(sim),
+    interval: NOISE_INTERVAL,
+    intervalOffset: NOISE_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'landValue',
+    phase: 'postUpdate',
+    execute: landValueSystem(sim),
+    interval: LAND_VALUE_INTERVAL,
+    intervalOffset: LAND_VALUE_INTERVAL_OFFSET,
   });
 
   world.endSetup();

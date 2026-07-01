@@ -1,13 +1,20 @@
 import { createCitySim, getTreasury } from '../sim/city';
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
+import { SERVICE_FOOTPRINT } from '../sim/constants/services';
 import type {
   BuildingView,
   ClientToWorker,
   GameSpeed,
+  StructureView,
   VehicleView,
   WorkerToClient,
 } from '../protocol/messages';
-import type { BuildingComponent, DemandState } from '../sim/types';
+import type {
+  BuildingComponent,
+  DemandState,
+  FieldName,
+  StructureComponent,
+} from '../sim/types';
 
 const workerScope = self as unknown as {
   postMessage(message: WorkerToClient): void;
@@ -18,7 +25,7 @@ function post(message: WorkerToClient): void {
 }
 
 const seed = 12345;
-const sim = createCitySim({ seed });
+const sim = createCitySim({ seed, fieldsEnabled: true }); // phase 4: fields drive desirability
 const { world } = sim;
 
 let speed: GameSpeed = 1;
@@ -26,6 +33,9 @@ let sentTopologyVersion = -1;
 let zonesDirty = true;
 let trafficDirty = false;
 let hadVehicles = false;
+const subscribedFields = new Set<FieldName>();
+const dirtyFields = new Set<FieldName>();
+const knownStructures = new Set<number>();
 
 world.on('zonesChanged', () => {
   zonesDirty = true;
@@ -33,6 +43,23 @@ world.on('zonesChanged', () => {
 world.on('trafficChanged', () => {
   trafficDirty = true;
 });
+world.on('fieldChanged', ({ field }) => {
+  dirtyFields.add(field);
+});
+
+function postField(name: FieldName): void {
+  const layer = sim.fields[name];
+  const state = layer.getState();
+  post({
+    type: 'field',
+    name,
+    blockSize: state.blockSize,
+    width: layer.width,
+    height: layer.height,
+    defaultValue: state.defaultValue,
+    cells: state.cells,
+  });
+}
 
 function postRoadsIfChanged(): void {
   if (sim.topologyVersion === sentTopologyVersion) return;
@@ -89,6 +116,29 @@ world.onDiff((diff) => {
     post({ type: 'buildings', upserts, removed: [...removed] });
   }
 
+  const structureDiff = diff.components['structure'];
+  const structureUpserts: StructureView[] = [];
+  if (structureDiff) {
+    for (const [id, data] of structureDiff.set) {
+      const position = world.getComponent(id, 'position');
+      if (!position) continue;
+      knownStructures.add(id);
+      structureUpserts.push({
+        id,
+        x: position.x,
+        y: position.y,
+        w: SERVICE_FOOTPRINT,
+        h: SERVICE_FOOTPRINT,
+        kind: 'service',
+        service: (data as StructureComponent).type,
+      });
+    }
+  }
+  const structuresRemoved = [...removed].filter((id) => knownStructures.delete(id));
+  if (structureUpserts.length > 0 || structuresRemoved.length > 0) {
+    post({ type: 'structures', upserts: structureUpserts, removed: structuresRemoved });
+  }
+
   const vehicles: VehicleView[] = [];
   let employed = 0;
   for (const id of world.query('vehicle')) {
@@ -115,6 +165,11 @@ world.onDiff((diff) => {
         .map(([id, bucket]) => ({ id, bucket })),
     });
   }
+
+  for (const name of dirtyFields) {
+    if (subscribedFields.has(name)) postField(name);
+  }
+  dirtyFields.clear();
 
   post({
     type: 'frame',
@@ -148,6 +203,13 @@ addEventListener('message', (event) => {
       break;
     case 'advance':
       for (let i = 0; i < message.ticks; i++) world.step();
+      break;
+    case 'setFieldSubscriptions':
+      subscribedFields.clear();
+      for (const name of message.fields) subscribedFields.add(name);
+      // Push immediately so a newly opened overlay fills without waiting for
+      // the next recompute.
+      for (const name of subscribedFields) postField(name);
       break;
     case 'command': {
       const result = world.submitWithResult(message.name, message.data as never);
