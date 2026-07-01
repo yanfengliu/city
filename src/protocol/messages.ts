@@ -39,6 +39,19 @@ export interface FrameStats {
   citizens: number;
   treasury: number;
   demand: DemandState;
+  vehicles: number;
+  employed: number;
+  disconnectedTrips: number;
+}
+
+export interface VehicleView {
+  id: number;
+  /** Current edge id in the road graph (see the `roads` message edges). */
+  edge: number;
+  /** Progress along the edge in [0,1). */
+  t: number;
+  /** Traversing the edge's cell array back-to-front. */
+  reverse: boolean;
 }
 
 export interface BuildingView {
@@ -51,6 +64,10 @@ export interface BuildingView {
   zone: ZoneType;
   level: number;
   abandoned: boolean;
+  /** Citizen entities housed (R). */
+  residents: number;
+  /** Job slots filled (C/I), phase 3+. */
+  jobsFilled: number;
 }
 
 export type WorkerToClient =
@@ -70,4 +87,6 @@ export type WorkerToClient =
     }
   | { type: 'zones'; cells: Array<{ i: number; zone: ZoneType }> }
   | { type: 'buildings'; upserts: BuildingView[]; removed: number[] }
+  | { type: 'vehicles'; topologyVersion: number; list: VehicleView[] }
+  | { type: 'traffic'; edges: Array<{ id: number; bucket: number }> }
   | { type: 'commandRejected'; name: CommandName; message: string };

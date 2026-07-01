@@ -4,6 +4,7 @@ import type {
   BuildingView,
   ClientToWorker,
   GameSpeed,
+  VehicleView,
   WorkerToClient,
 } from '../protocol/messages';
 import type { BuildingComponent, DemandState } from '../sim/types';
@@ -23,9 +24,14 @@ const { world } = sim;
 let speed: GameSpeed = 1;
 let sentTopologyVersion = -1;
 let zonesDirty = true;
+let trafficDirty = false;
+let hadVehicles = false;
 
 world.on('zonesChanged', () => {
   zonesDirty = true;
+});
+world.on('trafficChanged', () => {
+  trafficDirty = true;
 });
 
 function postRoadsIfChanged(): void {
@@ -63,6 +69,8 @@ function buildingView(id: number, data: BuildingComponent): BuildingView | null 
     zone: data.zone,
     level: data.level,
     abandoned: data.abandoned,
+    residents: data.residents,
+    jobsFilled: data.jobsFilled,
   };
 }
 
@@ -81,6 +89,33 @@ world.onDiff((diff) => {
     post({ type: 'buildings', upserts, removed: [...removed] });
   }
 
+  const vehicles: VehicleView[] = [];
+  let employed = 0;
+  for (const id of world.query('vehicle')) {
+    const data = world.getComponent(id, 'vehicle');
+    if (!data || data.legIndex >= data.legs.length) continue;
+    const leg = data.legs[data.legIndex];
+    vehicles.push({ id, edge: leg.edge, t: data.t, reverse: leg.reverse });
+  }
+  for (const id of world.query('citizen')) {
+    const citizen = world.getComponent(id, 'citizen');
+    if (citizen?.work !== null && citizen?.work !== undefined) employed++;
+  }
+  if (vehicles.length > 0 || hadVehicles) {
+    post({ type: 'vehicles', topologyVersion: sim.topologyVersion, list: vehicles });
+  }
+  hadVehicles = vehicles.length > 0;
+
+  if (trafficDirty) {
+    trafficDirty = false;
+    post({
+      type: 'traffic',
+      edges: [...sim.edgeBuckets.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([id, bucket]) => ({ id, bucket })),
+    });
+  }
+
   post({
     type: 'frame',
     tick: world.tick,
@@ -89,6 +124,9 @@ world.onDiff((diff) => {
       citizens: (world.getState('population') as number | undefined) ?? 0,
       treasury: getTreasury(world),
       demand: (world.getState('demand') as DemandState | undefined) ?? { r: 0, c: 0, i: 0 },
+      vehicles: vehicles.length,
+      employed,
+      disconnectedTrips: (world.getState('disconnectedTrips') as number | undefined) ?? 0,
     },
   });
   postRoadsIfChanged();

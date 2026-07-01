@@ -131,7 +131,18 @@ export function growthSystem(sim: CitySim): (w: CityWorld) => void {
 export function evictCitizens(w: CityWorld, building: number): void {
   for (const id of [...w.query('citizen')].sort((a, b) => a - b)) {
     const citizen = w.getComponent(id, 'citizen');
-    if (citizen && citizen.home === building) w.destroyEntity(id);
+    if (!citizen || citizen.home !== building) continue;
+    // Leaving citizens free their job slot.
+    if (citizen.work !== null && w.isAlive(citizen.work)) {
+      const workplace = citizen.work;
+      const job = w.getComponent(workplace, 'building');
+      if (job && job.jobsFilled > 0) {
+        w.patchComponent(workplace, 'building', (b) => {
+          b.jobsFilled -= 1;
+        });
+      }
+    }
+    w.destroyEntity(id);
   }
   const data = w.getComponent(building, 'building');
   if (data && data.residents !== 0) {

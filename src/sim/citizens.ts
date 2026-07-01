@@ -38,7 +38,7 @@ export function moveInSystem(_sim: CitySim): (w: CityWorld) => void {
       if (!position) continue;
       const citizen = w.createEntity();
       w.setPosition(citizen, { x: position.x, y: position.y });
-      w.addComponent(citizen, 'citizen', { home, work: null });
+      w.addComponent(citizen, 'citizen', { home, work: null, phase: 'home', waitUntil: 0 });
       w.patchComponent(home, 'building', (b) => {
         b.residents += 1;
       });

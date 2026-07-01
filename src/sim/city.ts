@@ -28,6 +28,24 @@ import {
 } from './buildings';
 import { moveInSystem } from './citizens';
 import { demandSystem } from './demand';
+import { employmentSystem, unassignWorkers } from './employment';
+import { tripSystem } from './traffic/trips';
+import { vehicleSystem } from './traffic/vehicles';
+import {
+  congestionSystem,
+  readCongestionMirror,
+  refreshEdgeCounts,
+  writeCongestionMirror,
+} from './traffic/congestion';
+import { captureEdgeKeys, edgeKey, remapVehiclesAfterTopologyChange } from './traffic/topology';
+import {
+  CONGESTION_INTERVAL,
+  CONGESTION_INTERVAL_OFFSET,
+  EMPLOYMENT_INTERVAL,
+  EMPLOYMENT_INTERVAL_OFFSET,
+  TRIP_INTERVAL,
+  TRIP_INTERVAL_OFFSET,
+} from './constants/traffic';
 import {
   rectCells,
   refreshZoneEntities,
@@ -77,7 +95,17 @@ export interface CitySim {
   /** Building footprint cell → building entity id (derived). */
   occupiedCells: Map<number, number>;
   scoreInputs: ScoreInputs;
+  /** Vehicles currently on each edge (derived from vehicle components). */
+  edgeCounts: Map<number, number>;
+  /** Congestion bucket (1..3) per edge; absent = 0 (derived). */
+  edgeBuckets: Map<number, number>;
+  /** Bumps on topology change or congestion requantization; keys path caching. */
+  pathVersion: number;
+  pathCache: Map<string, { version: number; nodes: number[] | null }>;
+  adjacencyCache: { version: number; map: Map<number, AdjacencyList> } | null;
 }
+
+type AdjacencyList = Array<{ to: number; edge: number; cost: number }>;
 
 export function getTreasury(world: CityWorld): number {
   return (world.getState('treasury') as number | undefined) ?? 0;
@@ -94,8 +122,14 @@ function validEndpoints(data: RoadEndpoints): boolean {
   );
 }
 
-/** Recomputes road cell set, road graph, and bumps the topology version. */
-export function refreshRoads(sim: CitySim): void {
+/**
+ * Recomputes road cell set and graph, bumps topology + path versions, clears
+ * the path cache. When called from a command handler (in-tick), pass the
+ * world so in-flight vehicles are remapped onto the new edge ids (vehicles on
+ * vanished edges despawn as disconnected trips).
+ */
+export function refreshRoads(sim: CitySim, w?: CityWorld): void {
+  const oldKeys = captureEdgeKeys(sim.roadGraph);
   const cells = new Set<number>();
   for (const id of sim.world.query('roadCell', 'position')) {
     const position = sim.world.getComponent(id, 'position');
@@ -104,14 +138,36 @@ export function refreshRoads(sim: CitySim): void {
   sim.roadCells = cells;
   sim.roadGraph = buildRoadGraph(cells, GRID_WIDTH, GRID_HEIGHT);
   sim.topologyVersion += 1;
+  sim.pathVersion += 1;
+  sim.pathCache.clear();
+  sim.adjacencyCache = null;
+  if (w) {
+    remapVehiclesAfterTopologyChange(sim, w, oldKeys);
+    // Bucket keys are edge ids — carry them across the rebuild by geometry.
+    const newIdsByKey = new Map<string, number>();
+    for (const edge of sim.roadGraph.edges) newIdsByKey.set(edgeKey(edge), edge.id);
+    const remapped = new Map<number, number>();
+    for (const [oldId, bucket] of sim.edgeBuckets) {
+      const key = oldKeys.get(oldId);
+      const newId = key !== undefined ? newIdsByKey.get(key) : undefined;
+      if (newId !== undefined) remapped.set(newId, bucket);
+    }
+    sim.edgeBuckets = remapped;
+    writeCongestionMirror(sim, w);
+  }
 }
 
 /** Restores every derived cache from world state. Call after applySnapshot. */
 export function rebuildDerived(sim: CitySim): void {
+  // Deterministic rebuild produces identical edge ids for an identical cell
+  // set, so no vehicle remap is needed here (and none would be legal outside
+  // a tick).
   refreshRoads(sim);
   refreshZones(sim);
   refreshZoneEntities(sim);
   refreshOccupancy(sim);
+  refreshEdgeCounts(sim);
+  readCongestionMirror(sim);
 }
 
 function dezoneCellsUnderRoad(sim: CitySim, w: CityWorld, cells: number[]): void {
@@ -228,6 +284,7 @@ function registerBulldozeRect(sim: CitySim): void {
       const building = w.getComponent(id, 'building');
       const position = w.getComponent(id, 'position');
       evictCitizens(w, id);
+      unassignWorkers(w, id);
       if (building && position) {
         for (const cell of footprintCells(position.x, position.y, building.w, building.h)) {
           sim.occupiedCells.delete(cell);
@@ -276,11 +333,20 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.registerComponent('zoneCell');
   world.registerComponent('building');
   world.registerComponent('citizen');
+  world.registerComponent('vehicle');
+  world.registerComponent('congestionMirror');
 
   // -- world state --
   world.setState('treasury', STARTING_TREASURY);
   world.setState('demand', { r: 0, c: 0, i: 0 });
   world.setState('population', 0);
+  world.setState('disconnectedTrips', 0);
+  world.setState('tripCursor', 0);
+
+  // Singleton mirror entity (see CityComponents.congestionMirror).
+  const mirror = world.createEntity();
+  world.addComponent(mirror, 'congestionMirror', { buckets: [] });
+  world.setState('mirrorEntity', mirror);
 
   const sim: CitySim = {
     world,
@@ -293,12 +359,21 @@ export function createCitySim(config: CitySimConfig): CitySim {
     zoneEntities: new Map(),
     occupiedCells: new Map(),
     scoreInputs: neutralScoreInputs(config),
+    edgeCounts: new Map(),
+    edgeBuckets: new Map(),
+    pathVersion: 0,
+    pathCache: new Map(),
+    adjacencyCache: null,
   };
 
   // -- commands --
   registerRoadCommands(sim);
   registerZoneCommands(sim);
   registerBulldozeRect(sim);
+
+  // Abandoned workplaces shed their workers (listener avoids an import cycle
+  // between buildings.ts and employment.ts; runs synchronously at emit).
+  world.on('buildingAbandoned', ({ entity }) => unassignWorkers(world, entity));
 
   // -- systems --
   world.registerSystem({
@@ -328,6 +403,28 @@ export function createCitySim(config: CitySimConfig): CitySim {
     execute: demandSystem(sim),
     interval: DEMAND_INTERVAL,
     intervalOffset: DEMAND_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'employment',
+    phase: 'update',
+    execute: employmentSystem(sim),
+    interval: EMPLOYMENT_INTERVAL,
+    intervalOffset: EMPLOYMENT_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'trips',
+    phase: 'update',
+    execute: tripSystem(sim),
+    interval: TRIP_INTERVAL,
+    intervalOffset: TRIP_INTERVAL_OFFSET,
+  });
+  world.registerSystem({ name: 'vehicles', phase: 'update', execute: vehicleSystem(sim) });
+  world.registerSystem({
+    name: 'congestion',
+    phase: 'postUpdate',
+    execute: congestionSystem(sim),
+    interval: CONGESTION_INTERVAL,
+    intervalOffset: CONGESTION_INTERVAL_OFFSET,
   });
 
   world.endSetup();
