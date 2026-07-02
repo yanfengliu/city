@@ -87,6 +87,8 @@ export class Game {
   private readonly trafficOverlay: TrafficOverlayView;
   private readonly networksView: NetworksView;
   private readonly radiusIndicator = new RadiusIndicator();
+  /** Coverage square shown while a service building is inspected. */
+  private readonly inspectCoverage = new RadiusIndicator();
   private readonly levelUpFx = new LevelUpFx();
   private readonly inspectPanel: InspectPanel;
   private readonly budgetPanel: BudgetPanel;
@@ -182,6 +184,7 @@ export class Game {
       this.networkOverlay.mesh,
       this.focusMarker.group,
       this.radiusIndicator.group,
+      this.inspectCoverage.group,
       this.levelUpFx.group,
     );
     this.scene.onFrame(() => {
@@ -520,6 +523,7 @@ export class Game {
   private clearInspect(): void {
     this.inspected = null;
     this.inspectPanel.hide();
+    this.inspectCoverage.hide();
   }
 
   /** Syncs the panel with the inspected object's latest view (or closes it when gone). */
@@ -531,16 +535,21 @@ export class Game {
         this.clearInspect();
         return;
       }
+      // Show the live coverage square — same Chebyshev box the sim marks
+      // (anchored on the structure's top-left cell, like placement previews).
+      const r = SERVICE_RADIUS[view.service];
+      this.inspectCoverage.show(view.x - r, view.y - r, view.x + r, view.y + r);
       this.inspectPanel.show({
         title: SERVICE_LABELS[view.service],
         lines: [
           `Footprint: ${view.w}×${view.h} cells`,
-          `Coverage radius: ${SERVICE_RADIUS[view.service]} cells`,
+          `Coverage radius: ${SERVICE_RADIUS[view.service]} cells (shown on the map)`,
         ],
         abandoned: false,
       });
       return;
     }
+    this.inspectCoverage.hide();
     const view = this.buildings.get(this.inspected.id);
     if (!view) {
       this.clearInspect();

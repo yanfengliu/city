@@ -61,14 +61,26 @@ describe('employment and commuting', () => {
     expect(phases.has('atWork')).toBe(true);
   });
 
-  it('counts disconnected trips when districts are on separate networks', () => {
+  it('counts disconnected trips when the only connector is severed mid-employment', () => {
+    // Employment is route-based, so separate networks yield no assignments at
+    // all (tests/sim/employment.test.ts). Disconnected trips still happen when
+    // the topology is destroyed AFTER assignment: commuters keep their jobs
+    // but their next trip finds no route.
     const sim = createCitySim({ seed: 7 });
     const base = findLandBlock(sim, 18, 18);
     buildDistrict(sim, 'R', base);
-    buildDistrict(sim, 'I', { x: base.x, y: base.y + 10 }); // parallel spines, no connector
+    buildDistrict(sim, 'I', { x: base.x, y: base.y + 10 });
+    const midX = base.x + 8;
+    expect(
+      sim.world.submit('placeRoad', { ax: midX, ay: base.y + 2, bx: midX, by: base.y + 12 }),
+    ).toBe(true);
+    expect(stepUntil(sim, () => stats(sim).employed > 0, 2000)).toBe(true);
 
+    // Sever the connector between the spines (keep both spines intact).
+    expect(
+      sim.world.submit('bulldozeRoad', { ax: midX, ay: base.y + 3, bx: midX, by: base.y + 11 }),
+    ).toBe(true);
     expect(stepUntil(sim, () => stats(sim).disconnected > 0, 2000)).toBe(true);
-    expect(stats(sim).vehicles).toBe(0);
   });
 
   it('stays deterministic with traffic running', () => {

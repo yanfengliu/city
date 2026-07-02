@@ -36,7 +36,7 @@ Recomputed every 32 ticks (interval 32, offset 14). ALL sim math uses citizen en
 
 - One citizen entity ≈ one household of 3 people (population display = 3 x citizens). Components: home (building id), work (building id | none). Target scale ≤ 2,000 citizen entities (≈ 6,000 population).
 - Move-in system (interval 8, offset 3): if R demand > 0 and vacancies exist, spawn `min(freeHousingCapacity, 1 + floor(Rdemand x 5))` citizens into residential buildings with space (deterministic pick via world.random), where freeHousingCapacity = Σ over non-abandoned R buildings of (capacity - residents), in citizen entities. Move-out: abandoned/bulldozed homes evict; evicted citizens leave the city (despawned) if no vacancy found within one evaluation.
-- Employment system (interval 8, offset 4; phase 3): assigns unemployed citizens to buildings with free job slots, nearest-first (findNearest over job buildings), up to 32 assignments per run. Bulldozed/abandoned workplaces unassign their workers.
+- Employment system (interval 8, offset 4; phase 3): assigns unemployed citizens to buildings with free job slots, nearest-first among REACHABLE workplaces — the workplace's road-graph access node must share a connected component (`RoadGraph.cellComponent`, recomputed on every graph rebuild) with the home's access node, so citizens never take jobs their commute cannot route to. Homes or workplaces without road access are skipped that run. Up to 32 assignments per run. Bulldozed/abandoned workplaces unassign their workers; severing the only route AFTER assignment leaves workers employed but their trips cancel as disconnected (the advisory path).
 
 ## Traffic
 

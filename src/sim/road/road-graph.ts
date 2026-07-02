@@ -24,6 +24,8 @@ export interface RoadGraph {
   edges: RoadEdge[];
   /** Interior (non-node) road cell index → the edge it belongs to. */
   cellToEdge: Map<number, number>;
+  /** Road cell index → connected-component id (deterministic flood order). */
+  cellComponent: Map<number, number>;
 }
 
 // Direction order is part of determinism: E, S, W, N.
@@ -66,7 +68,11 @@ export function buildRoadGraph(
   const nodeSet = new Set<number>();
   for (const cell of roadCells) if (isNode(cell)) nodeSet.add(cell);
 
-  // Promote one cell per node-less component (pure loops).
+  // One flood per component: promote a node for node-less components (pure
+  // loops) and record each cell's component id (used by route-based
+  // employment to skip unreachable workplaces).
+  const cellComponent = new Map<number, number>();
+  let componentId = 0;
   const visited = new Set<number>();
   const sortedCells = [...roadCells].sort((p, q) => p - q);
   for (const start of sortedCells) {
@@ -78,6 +84,7 @@ export function buildRoadGraph(
     while (stack.length > 0) {
       const cell = stack.pop() as number;
       component.push(cell);
+      cellComponent.set(cell, componentId);
       if (nodeSet.has(cell)) hasNode = true;
       for (const d of neighborDirs.get(cell) as number[]) {
         const neighbor = cell + DIRECTIONS[d].dx + DIRECTIONS[d].dy * width;
@@ -88,6 +95,7 @@ export function buildRoadGraph(
       }
     }
     if (!hasNode) nodeSet.add(Math.min(...component));
+    componentId++;
   }
 
   const nodes = new Map<number, number[]>();
@@ -125,5 +133,5 @@ export function buildRoadGraph(
     }
   }
 
-  return { nodes, edges, cellToEdge };
+  return { nodes, edges, cellToEdge, cellComponent };
 }
