@@ -1,7 +1,14 @@
 import type { GameSpeed } from '../protocol/messages';
 
 /** Map overlay selection; field names mirror the protocol FieldName literals. */
-export type OverlayName = 'none' | 'pollution' | 'noise' | 'landValue' | 'traffic';
+export type OverlayName =
+  | 'none'
+  | 'pollution'
+  | 'noise'
+  | 'landValue'
+  | 'traffic'
+  | 'power'
+  | 'water';
 
 export interface HudState<TTool extends string> {
   /** In-game day number (player-facing time; raw tick/fps stay in the automation state only). */
@@ -23,6 +30,8 @@ export interface HudState<TTool extends string> {
 export interface HudToolSpec<TTool extends string> {
   id: TTool;
   label: string;
+  /** Hover tooltip explaining what the tool does and how it connects. */
+  title?: string;
 }
 
 export interface HudCallbacks<TTool extends string> {
@@ -36,12 +45,22 @@ export interface HudCallbacks<TTool extends string> {
 
 const SPEEDS: GameSpeed[] = [0, 1, 2, 4];
 const SPEED_LABELS: Record<GameSpeed, string> = { 0: '⏸', 1: '1×', 2: '2×', 4: '4×' };
-const OVERLAYS: { id: OverlayName; label: string }[] = [
+const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   { id: 'none', label: 'None' },
   { id: 'pollution', label: 'Pollution' },
   { id: 'noise', label: 'Noise' },
   { id: 'landValue', label: 'Land value' },
-  { id: 'traffic', label: 'Traffic' },
+  { id: 'traffic', label: 'Traffic', title: 'Road congestion: green → red by traffic load' },
+  {
+    id: 'power',
+    label: 'Power ⚡',
+    title: 'Yellow: plants & lines · green: powered buildings · faint halo: connection reach (2 cells) · red: no power',
+  },
+  {
+    id: 'water',
+    label: 'Water 💧',
+    title: 'Blue: pumps & pipes · teal: watered buildings · faint halo: connection reach (2 cells) · red: no water',
+  },
 ];
 const TOAST_DURATION_MS = 4000;
 const MAX_TOASTS = 4;
@@ -119,7 +138,7 @@ export class Hud<TTool extends string> {
     for (const group of toolGroups) {
       this.root.appendChild(this.makeDivider());
       for (const tool of group) {
-        const button = this.makeButton(tool.label, () => callbacks.onSelectTool(tool.id));
+        const button = this.makeButton(tool.label, () => callbacks.onSelectTool(tool.id), tool.title);
         this.toolButtons.set(tool.id, button);
       }
     }
@@ -130,7 +149,7 @@ export class Hud<TTool extends string> {
     overlaysLabel.style.color = '#c9d4dd';
     this.root.appendChild(overlaysLabel);
     for (const overlay of OVERLAYS) {
-      const button = this.makeButton(overlay.label, () => callbacks.onSelectOverlay(overlay.id));
+      const button = this.makeButton(overlay.label, () => callbacks.onSelectOverlay(overlay.id), overlay.title);
       this.overlayButtons.set(overlay.id, button);
     }
     this.root.appendChild(this.makeDivider());
@@ -180,9 +199,10 @@ export class Hud<TTool extends string> {
     return wrap;
   }
 
-  private makeButton(label: string, onClick: () => void): HTMLButtonElement {
+  private makeButton(label: string, onClick: () => void, title?: string): HTMLButtonElement {
     const button = document.createElement('button');
     button.textContent = label;
+    if (title) button.title = title;
     button.style.cssText = BUTTON_CSS;
     button.addEventListener('click', onClick);
     this.root.appendChild(button);

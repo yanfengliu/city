@@ -154,3 +154,6 @@ export const RADIUS_FILL_COLOR = 0x53c1e8;
 export const RADIUS_FILL_OPACITY = 0.1;
 export const RADIUS_LINE_COLOR = 0x8fe0ff;
 export const RADIUS_Y = 0.03;
+
+/** Utility (power/water) overlay plane height — above field overlays. */
+export const NETWORK_OVERLAY_Y = 0.055;

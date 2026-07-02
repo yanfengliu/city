@@ -4,6 +4,7 @@ import { CityScene } from '../rendering/scene';
 import { GhostView } from '../rendering/ghost';
 import { FieldOverlayView, TrafficOverlayView } from '../rendering/overlay';
 import { NetworksView } from '../rendering/networks-mesh';
+import { NetworkOverlayView } from '../rendering/network-overlay';
 import { GroundPicker } from '../rendering/picking';
 import { RadiusIndicator } from '../rendering/radius-indicator';
 import { RoadsView } from '../rendering/roads-mesh';
@@ -14,9 +15,10 @@ import { VehiclesView } from '../rendering/vehicles-mesh';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { InspectPanel } from '../ui/inspect-panel';
-import { AdvisorBanner } from '../ui/advisor';
+import { AdvisorPanel } from '../ui/advisor';
 import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
 import { SERVICE_RADIUS } from '../sim/constants/services';
+import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
 import { CAPACITY_PER_CELL, PEOPLE_PER_CITIZEN } from '../sim/constants/zoning';
 import { cellIndex, type Cell } from '../sim/grid';
 import {
@@ -76,9 +78,12 @@ export class Game {
   private readonly networksView: NetworksView;
   private readonly radiusIndicator = new RadiusIndicator();
   private readonly inspectPanel: InspectPanel;
-  private readonly advisor: AdvisorBanner;
+  private readonly advisor: AdvisorPanel;
+  private readonly networkOverlay: NetworkOverlayView;
   private hasPlant = false;
   private hasPump = false;
+  private powerInfraCells: ReadonlySet<number> = new Set();
+  private waterInfraCells: ReadonlySet<number> = new Set();
   private lastDisconnectAt = -Infinity;
   private treesView: TreesView | null = null;
   private terrain: TerrainPayload | null = null;
@@ -125,7 +130,7 @@ export class Game {
       onNewCity: () => location.reload(),
     });
     this.inspectPanel = new InspectPanel(container, () => this.clearInspect());
-    this.advisor = new AdvisorBanner(container);
+    this.advisor = new AdvisorPanel(container);
 
     this.ghost = new GhostView();
     this.roadsView = new RoadsView(GRID_WIDTH);
@@ -136,6 +141,7 @@ export class Game {
     this.fieldOverlay = new FieldOverlayView(GRID_WIDTH, GRID_HEIGHT);
     this.trafficOverlay = new TrafficOverlayView(GRID_WIDTH);
     this.networksView = new NetworksView(GRID_WIDTH);
+    this.networkOverlay = new NetworkOverlayView(GRID_WIDTH, GRID_HEIGHT);
     this.scene.add(
       this.ghost.mesh,
       this.roadsView.mesh,
@@ -146,6 +152,7 @@ export class Game {
       this.fieldOverlay.mesh,
       this.trafficOverlay.mesh,
       this.networksView.group,
+      this.networkOverlay.mesh,
       this.radiusIndicator.group,
     );
     this.scene.onFrame(() => {
@@ -253,6 +260,7 @@ export class Game {
         for (const view of message.upserts) this.applyBuildingUpsert(view);
         for (const id of message.removed) this.applyBuildingRemoval(id);
         this.refreshInspect();
+        this.refreshNetworkOverlay();
         break;
       case 'structures':
         for (const view of message.upserts) this.applyStructureUpsert(view);
@@ -263,7 +271,10 @@ export class Game {
         this.networksView.update(message.power, message.water);
         this.hasPlant = message.power.plantCells.length > 0;
         this.hasPump = message.water.pumpCells.length > 0;
+        this.powerInfraCells = new Set([...message.power.plantCells, ...message.power.lineCells]);
+        this.waterInfraCells = new Set([...message.water.pumpCells, ...message.water.pipeCells]);
         this.occupancyDirty = true;
+        this.refreshNetworkOverlay();
         break;
       case 'vehicles':
         this.vehiclesOnScreen = message.list.length;
@@ -309,7 +320,53 @@ export class Game {
     this.send({ type: 'setFieldSubscriptions', fields: field ? [field] : [] });
     this.fieldOverlay.hide();
     this.trafficOverlay.setActive(overlay === 'traffic');
+    this.refreshNetworkOverlay();
     this.refreshHud();
+  }
+
+  /** Rebuilds the client-computed power/water overlay when active. */
+  private refreshNetworkOverlay(): void {
+    if (this.activeOverlay !== 'power' && this.activeOverlay !== 'water') {
+      this.networkOverlay.hide();
+      return;
+    }
+    const mode = this.activeOverlay;
+    const infrastructure = new Set<number>(
+      mode === 'power'
+        ? [...this.powerInfraCells]
+        : [...this.waterInfraCells],
+    );
+    const supplied = new Set<number>();
+    const problems = new Set<number>();
+    for (const view of this.buildings.values()) {
+      if (view.abandoned) continue;
+      const ok = mode === 'power' ? view.powered : view.watered;
+      for (let dy = 0; dy < view.h; dy++) {
+        for (let dx = 0; dx < view.w; dx++) {
+          (ok ? supplied : problems).add(cellIndex(view.x + dx, view.y + dy));
+        }
+      }
+    }
+    // Connection reach: everything within the bridge radius of the network
+    // (infrastructure + supplied buildings — both conduct).
+    const reach = new Set<number>();
+    const expand = (cells: Iterable<number>) => {
+      for (const cell of cells) {
+        const x = cell % GRID_WIDTH;
+        const y = Math.floor(cell / GRID_WIDTH);
+        for (let dy = -UTILITY_BRIDGE_RADIUS; dy <= UTILITY_BRIDGE_RADIUS; dy++) {
+          for (let dx = -UTILITY_BRIDGE_RADIUS; dx <= UTILITY_BRIDGE_RADIUS; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= GRID_WIDTH || ny >= GRID_HEIGHT) continue;
+            reach.add(cellIndex(nx, ny));
+          }
+        }
+      }
+    };
+    expand(infrastructure);
+    expand(supplied);
+    this.networkOverlay.update(mode, { infrastructure, reach, supplied, problems });
   }
 
   private applyBuildingUpsert(view: BuildingView): void {
@@ -492,12 +549,12 @@ export class Game {
     if (!this.hasPlant && this.buildings.size > 0) {
       out.push('⚡ No power source — buildings will abandon. Place a Coal or Wind plant and drag Lines to your districts.');
     } else if (unpowered > 0) {
-      out.push(`⚡ ${unpowered} building${unpowered === 1 ? '' : 's'} lack power — extend Lines to within 2 cells (lines may cross roads).`);
+      out.push(`⚡ ${unpowered} building${unpowered === 1 ? ' lacks' : 's lack'} power — extend Lines to within 2 cells (lines may cross roads).`);
     }
     if (!this.hasPump && this.buildings.size > 0) {
       out.push('💧 No water pump — buildings will abandon. Place a Pump beside water and drag Pipes to your districts.');
     } else if (unwatered > 0) {
-      out.push(`💧 ${unwatered} building${unwatered === 1 ? '' : 's'} lack water — extend Pipes to within 2 cells (pipes run under anything).`);
+      out.push(`💧 ${unwatered} building${unwatered === 1 ? ' lacks' : 's lack'} water — extend Pipes to within 2 cells (pipes run under anything).`);
     }
     if (abandoned > 0) {
       out.push(`🏚 ${abandoned} abandoned building${abandoned === 1 ? '' : 's'} — fix power, water, or nearby pollution and they recover on their own.`);

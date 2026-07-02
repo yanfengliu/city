@@ -80,7 +80,7 @@ No fire/crime/health incidents in v1 (documented later-phase candidates).
 
 ## UI surface (v1)
 
-Toolbar: select/inspect, road, bulldoze, zone R/C/I, dezone, services x4, coal/wind, power line, pump, pipe. Top HUD: treasury (+ per-interval delta), population, RCI demand bars, day counter, speed controls. Overlays menu: pollution, noise, land value, power, water, traffic (edge congestion coloring). Click a building → info panel (zone, level, residents/jobs, powered/watered, score inputs). Toasts appear for rejected commands and save/load results; a HUD warning badge shows broke and disconnected-trips states (per-event sim toasts are a later-phase candidate).
+Toolbar: select/inspect, road, bulldoze, zone R/C/I, dezone, services x4, coal/wind, power line, pump, pipe. Top HUD: treasury (+ per-interval delta), population, RCI demand bars, day counter, speed controls. Overlays menu: pollution, noise, land value, traffic (edge congestion coloring), power, and water (network cells, 2-cell connection reach halo, unsupplied buildings in red). Click a building → info panel (zone, level, residents/jobs, powered/watered, score inputs). Toasts appear for rejected commands and save/load results; a HUD warning badge shows broke and disconnected-trips states, and a dismissable scrollable Advisor panel (bottom right) lists prioritized guidance: missing roads/zones/power/water, unsupplied building counts, abandonment, unroutable commuters, demand pressure, and unemployment.
 
 ## Save/load
 
