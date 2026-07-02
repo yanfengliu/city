@@ -195,6 +195,7 @@ export class Game {
         this.radiusIndicator.hide();
       },
       showRadius: (minX, minY, maxX, maxY) => this.radiusIndicator.show(minX, minY, maxX, maxY),
+      notify: (message) => this.hud.showToast(message),
       onToolChanged: (tool) => {
         this.scene.setLeftDragEnabled(tool === 'select');
         this.refreshHud();

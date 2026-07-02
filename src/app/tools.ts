@@ -88,6 +88,8 @@ export interface ToolHost {
   clearGhost(): void;
   /** Effect-area preview (inclusive cell box) for click-place tools; hidden with clearGhost. */
   showRadius(minX: number, minY: number, maxX: number, maxY: number): void;
+  /** Player-facing explanation for a blocked placement (toast). */
+  notify(message: string): void;
   onToolChanged(tool: ToolName): void;
 }
 
@@ -138,20 +140,19 @@ export class Tools {
 
   pointerDown(cell: Cell | null): void {
     if (!this.isBuildTool || !cell) return;
-    const service = SERVICE_BY_TOOL[this.activeTool];
-    if (service) {
-      this.host.submitPlaceService(service, cell);
-      this.refreshGhost(cell);
-      return;
-    }
-    const plant = PLANT_BY_TOOL[this.activeTool];
-    if (plant) {
-      this.host.submitPlacePlant(plant, cell);
-      this.refreshGhost(cell);
-      return;
-    }
-    if (this.activeTool === 'pump') {
-      this.host.submitPlacePump(cell);
+    if (this.isClickPlaceTool()) {
+      // Explain the problem instead of a silent sim rejection.
+      const problem = this.footprintProblem(this.footprintCells(cell));
+      if (problem) {
+        this.host.notify(problem);
+        this.refreshGhost(cell);
+        return;
+      }
+      const service = SERVICE_BY_TOOL[this.activeTool];
+      const plant = PLANT_BY_TOOL[this.activeTool];
+      if (service) this.host.submitPlaceService(service, cell);
+      else if (plant) this.host.submitPlacePlant(plant, cell);
+      else this.host.submitPlacePump(cell);
       this.refreshGhost(cell);
       return;
     }
@@ -263,16 +264,45 @@ export class Tools {
 
   /** Full footprint in bounds and every cell free of water, roads, buildings, and structures. */
   private isFootprintPlaceable(cells: Cell[]): boolean {
-    if (cells.length !== this.footprintSize() ** 2) return false;
-    return cells.every((cell) => {
+    return this.footprintProblem(cells) === null;
+  }
+
+  /**
+   * Why the hovered footprint can't be placed (null = placeable). Mirrors the
+   * sim validators so the ghost is honest and rejections are explainable.
+   */
+  footprintProblem(cells: Cell[]): string | null {
+    if (cells.length !== this.footprintSize() ** 2) return 'Too close to the map edge';
+    for (const cell of cells) {
       const index = cellIndex(cell.x, cell.y, this.host.gridWidth);
-      return (
-        !this.host.isWater(cell.x, cell.y) &&
-        !this.host.hasRoad(index) &&
-        !this.host.hasBuilding(index) &&
-        !this.host.hasStructure(index)
+      if (this.host.isWater(cell.x, cell.y)) return 'Cannot build on water';
+      if (this.host.hasRoad(index)) return 'A road is in the way';
+      if (this.host.hasBuilding(index) || this.host.hasStructure(index)) {
+        return 'A building is in the way — bulldoze first';
+      }
+    }
+    if (SERVICE_BY_TOOL[this.activeTool]) {
+      const touchesRoad = cells.some((cell) =>
+        this.neighbors4(cell).some((n) => this.host.hasRoad(cellIndex(n.x, n.y, this.host.gridWidth))),
       );
-    });
+      if (!touchesRoad) return 'A service must touch a road';
+    }
+    if (this.activeTool === 'pump') {
+      const touchesWater = cells.some((cell) =>
+        this.neighbors4(cell).some((n) => this.host.isWater(n.x, n.y)),
+      );
+      if (!touchesWater) return 'A pump must be placed on land right next to water';
+    }
+    return null;
+  }
+
+  private neighbors4(cell: Cell): Cell[] {
+    return [
+      { x: cell.x + 1, y: cell.y },
+      { x: cell.x - 1, y: cell.y },
+      { x: cell.x, y: cell.y + 1 },
+      { x: cell.x, y: cell.y - 1 },
+    ].filter((n) => n.x >= 0 && n.y >= 0 && n.x < this.host.gridWidth && n.y < this.host.gridHeight);
   }
 
   /**
