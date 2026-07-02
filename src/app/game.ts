@@ -5,6 +5,7 @@ import { GhostView } from '../rendering/ghost';
 import { FieldOverlayView, TrafficOverlayView } from '../rendering/overlay';
 import { NetworksView } from '../rendering/networks-mesh';
 import { GroundPicker } from '../rendering/picking';
+import { RadiusIndicator } from '../rendering/radius-indicator';
 import { RoadsView } from '../rendering/roads-mesh';
 import { StructuresView } from '../rendering/structures-mesh';
 import { buildTerrainMesh } from '../rendering/terrain-mesh';
@@ -72,6 +73,7 @@ export class Game {
   private readonly fieldOverlay: FieldOverlayView;
   private readonly trafficOverlay: TrafficOverlayView;
   private readonly networksView: NetworksView;
+  private readonly radiusIndicator = new RadiusIndicator();
   private readonly inspectPanel: InspectPanel;
   private treesView: TreesView | null = null;
   private terrain: TerrainPayload | null = null;
@@ -138,6 +140,7 @@ export class Game {
       this.fieldOverlay.mesh,
       this.trafficOverlay.mesh,
       this.networksView.group,
+      this.radiusIndicator.group,
     );
     this.scene.onFrame(() => {
       this.flushDirtyViews();
@@ -174,7 +177,11 @@ export class Game {
       inspect: (cell) => this.inspectCell(cell),
       showGhost: (cells, valid, zone) =>
         this.ghost.update(cells, valid, zone ? ZONE_COLORS[zone] : undefined),
-      clearGhost: () => this.ghost.clear(),
+      clearGhost: () => {
+        this.ghost.clear();
+        this.radiusIndicator.hide();
+      },
+      showRadius: (minX, minY, maxX, maxY) => this.radiusIndicator.show(minX, minY, maxX, maxY),
       onToolChanged: (tool) => {
         this.scene.setLeftDragEnabled(tool === 'select');
         this.refreshHud();

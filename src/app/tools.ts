@@ -1,5 +1,5 @@
-import { SERVICE_FOOTPRINT } from '../sim/constants/services';
-import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
+import { SERVICE_FOOTPRINT, SERVICE_RADIUS } from '../sim/constants/services';
+import { POWER_PLANT_FOOTPRINT, UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
 import { ZONE_MAX_ROAD_DISTANCE } from '../sim/constants/zoning';
 import { cellIndex, lPathCells, type Cell } from '../sim/grid';
 import type { PowerPlantKind, ServiceType, ZoneType } from '../sim/types';
@@ -86,6 +86,8 @@ export interface ToolHost {
   inspect(cell: Cell | null): void;
   showGhost(cells: Cell[], valid: boolean, zone?: ZoneType): void;
   clearGhost(): void;
+  /** Effect-area preview (inclusive cell box) for click-place tools; hidden with clearGhost. */
+  showRadius(minX: number, minY: number, maxX: number, maxY: number): void;
   onToolChanged(tool: ToolName): void;
 }
 
@@ -197,6 +199,23 @@ export class Tools {
    * Shows the L-path (road), the service footprint, or the rect (others) from
    * the drag anchor (or a 1-cell / footprint hover preview).
    */
+  /**
+   * Effect-area box for the hovered click-place tool. Services cover a
+   * Chebyshev radius around the ANCHOR cell (matches sim markCoverage);
+   * plants/pumps connect within the utility bridge radius of their footprint.
+   */
+  private showEffectArea(anchor: Cell): void {
+    const service = SERVICE_BY_TOOL[this.activeTool];
+    if (service) {
+      const r = SERVICE_RADIUS[service];
+      this.host.showRadius(anchor.x - r, anchor.y - r, anchor.x + r, anchor.y + r);
+      return;
+    }
+    const size = this.footprintSize();
+    const r = UTILITY_BRIDGE_RADIUS;
+    this.host.showRadius(anchor.x - r, anchor.y - r, anchor.x + size - 1 + r, anchor.y + size - 1 + r);
+  }
+
   /** Footprint side length for click-place tools (services, plants, pumps). */
   private footprintSize(): number {
     const plant = PLANT_BY_TOOL[this.activeTool];
@@ -217,6 +236,7 @@ export class Tools {
     if (this.isClickPlaceTool()) {
       const cells = this.footprintCells(current);
       this.host.showGhost(cells, this.isFootprintPlaceable(cells));
+      this.showEffectArea(current);
       return;
     }
     const anchor = this.dragAnchor ?? current;

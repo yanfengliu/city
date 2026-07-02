@@ -148,3 +148,9 @@ export const PUMP_COLOR = 0x3f74c9;
 export const PIPE_COLOR = 0x2e4a5f;
 /** Pipes are underground; render as a faint hint just above the terrain. */
 export const PIPE_Y = 0.006;
+
+// Effect-radius placement preview
+export const RADIUS_FILL_COLOR = 0x53c1e8;
+export const RADIUS_FILL_OPACITY = 0.1;
+export const RADIUS_LINE_COLOR = 0x8fe0ff;
+export const RADIUS_Y = 0.03;
