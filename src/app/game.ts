@@ -14,6 +14,7 @@ import { VehiclesView } from '../rendering/vehicles-mesh';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { InspectPanel } from '../ui/inspect-panel';
+import { AdvisorBanner } from '../ui/advisor';
 import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
 import { SERVICE_RADIUS } from '../sim/constants/services';
 import { CAPACITY_PER_CELL, PEOPLE_PER_CITIZEN } from '../sim/constants/zoning';
@@ -75,6 +76,10 @@ export class Game {
   private readonly networksView: NetworksView;
   private readonly radiusIndicator = new RadiusIndicator();
   private readonly inspectPanel: InspectPanel;
+  private readonly advisor: AdvisorBanner;
+  private hasPlant = false;
+  private hasPump = false;
+  private lastDisconnectAt = -Infinity;
   private treesView: TreesView | null = null;
   private terrain: TerrainPayload | null = null;
   private roadCells: ReadonlySet<number> = new Set();
@@ -120,6 +125,7 @@ export class Game {
       onNewCity: () => location.reload(),
     });
     this.inspectPanel = new InspectPanel(container, () => this.clearInspect());
+    this.advisor = new AdvisorBanner(container);
 
     this.ghost = new GhostView();
     this.roadsView = new RoadsView(GRID_WIDTH);
@@ -255,6 +261,8 @@ export class Game {
         break;
       case 'networks':
         this.networksView.update(message.power, message.water);
+        this.hasPlant = message.power.plantCells.length > 0;
+        this.hasPump = message.water.pumpCells.length > 0;
         this.occupancyDirty = true;
         break;
       case 'vehicles':
@@ -277,6 +285,9 @@ export class Game {
         this.demand = message.stats.demand;
         this.vehicles = message.stats.vehicles;
         this.employed = message.stats.employed;
+        if (message.stats.disconnectedTrips > this.disconnectedTrips) {
+          this.lastDisconnectAt = performance.now();
+        }
         this.disconnectedTrips = message.stats.disconnectedTrips;
         break;
       case 'commandRejected':
@@ -444,8 +455,7 @@ export class Game {
 
   private refreshHud(): void {
     this.hud.update({
-      tick: this.tick,
-      fps: this.scene.getFps(),
+      day: Math.floor(this.tick / TICKS_PER_DAY) + 1,
       speed: this.speed,
       treasury: this.treasury,
       populationPeople: this.citizens * PEOPLE_PER_CITIZEN,
@@ -455,6 +465,57 @@ export class Game {
       vehicles: this.vehicles,
       disconnectedTrips: this.disconnectedTrips,
     });
+    this.advisor.update(this.computeAdvisories());
+  }
+
+  /**
+   * What the city lacks or what's going wrong, in priority order — feeds the
+   * rolling advisor banner. Computed from client mirrors only.
+   */
+  private computeAdvisories(): string[] {
+    const out: string[] = [];
+    const live = [...this.buildings.values()].filter((b) => !b.abandoned);
+    const abandoned = this.buildings.size - live.length;
+    const unpowered = live.filter((b) => !b.powered).length;
+    const unwatered = live.filter((b) => !b.watered).length;
+
+    if (this.treasury < 0) {
+      out.push('💸 The city is broke — only power/water purchases are allowed until income recovers. Consider raising taxes.');
+    }
+    if (this.roadCells.size === 0) {
+      out.push('🛣 Draw a Road to found your city — everything grows along roads.');
+      return out;
+    }
+    if (this.zonedCells.size === 0 && this.buildings.size === 0) {
+      out.push('🏘 Paint Zone R (homes), Zone C (shops), and Zone I (jobs) within 2 cells of a road.');
+    }
+    if (!this.hasPlant && this.buildings.size > 0) {
+      out.push('⚡ No power source — buildings will abandon. Place a Coal or Wind plant and drag Lines to your districts.');
+    } else if (unpowered > 0) {
+      out.push(`⚡ ${unpowered} building${unpowered === 1 ? '' : 's'} lack power — extend Lines to within 2 cells (lines may cross roads).`);
+    }
+    if (!this.hasPump && this.buildings.size > 0) {
+      out.push('💧 No water pump — buildings will abandon. Place a Pump beside water and drag Pipes to your districts.');
+    } else if (unwatered > 0) {
+      out.push(`💧 ${unwatered} building${unwatered === 1 ? '' : 's'} lack water — extend Pipes to within 2 cells (pipes run under anything).`);
+    }
+    if (abandoned > 0) {
+      out.push(`🏚 ${abandoned} abandoned building${abandoned === 1 ? '' : 's'} — fix power, water, or nearby pollution and they recover on their own.`);
+    }
+    if (performance.now() - this.lastDisconnectAt < 15_000) {
+      out.push('🚧 Commuters can’t reach their jobs — connect your districts with roads.');
+    }
+    if (this.demand.r > 0.5) out.push('🟩 Housing demand is high — zone more Residential.');
+    if (this.demand.c > 0.5) out.push('🟦 Commercial demand is high — zone more Commercial.');
+    if (this.demand.i > 0.5) out.push('🟧 Industrial demand is high — zone more Industrial.');
+    const unemployed = this.citizens - this.employed;
+    if (this.citizens > 10 && unemployed > this.citizens * 0.4 && (this.demand.i > 0 || this.demand.c > 0)) {
+      out.push('👷 Many citizens are unemployed — zone Commercial or Industrial for jobs.');
+    }
+    if (out.length === 0 && this.buildings.size > 0) {
+      out.push('✅ The city is healthy — keep growing!');
+    }
+    return out.slice(0, 6);
   }
 
   setSpeed(speed: GameSpeed): void {
@@ -473,8 +534,10 @@ export class Game {
     return {
       ready: this.ready,
       tick: this.tick,
+      day: Math.floor(this.tick / TICKS_PER_DAY) + 1,
       speed: this.speed,
       fps: this.scene.getFps(),
+      advisories: this.advisor.current(),
       treasury: this.treasury,
       populationPeople: this.citizens * PEOPLE_PER_CITIZEN,
       demand: { r: round2(this.demand.r), c: round2(this.demand.c), i: round2(this.demand.i) },

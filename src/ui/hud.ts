@@ -4,8 +4,8 @@ import type { GameSpeed } from '../protocol/messages';
 export type OverlayName = 'none' | 'pollution' | 'noise' | 'landValue' | 'traffic';
 
 export interface HudState<TTool extends string> {
-  tick: number;
-  fps: number;
+  /** In-game day number (player-facing time; raw tick/fps stay in the automation state only). */
+  day: number;
   speed: GameSpeed;
   treasury: number;
   /** Display population (citizens × people-per-citizen, computed by the app layer). */
@@ -210,7 +210,7 @@ export class Hud<TTool extends string> {
     } else {
       this.warningEl.style.display = 'none';
     }
-    this.statsEl.textContent = `tick ${state.tick} · ${state.fps} fps`;
+    this.statsEl.textContent = `Day ${state.day}`;
     for (const bar of DEMAND_BARS) {
       const fill = this.demandFills.get(bar.key);
       if (fill) fill.style.height = `${Math.round(Math.max(0, state.demand[bar.key]) * 100)}%`;
