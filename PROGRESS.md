@@ -14,8 +14,9 @@ Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine (file:../
 - [x] Phase 0 — scaffold
 - [x] Phase 1 — terrain + roads (browser-verified: road drag + bulldoze with exact refund)
 - [x] Phase 2 — zoning + growth + demand + citizens (browser-verified: 48 buildings, 96 population, demand bars, inspect panel)
-- [~] Phase 3 — employment + traffic (sim done + tested incl. congestion scenario, save/load replay, topology remap; vehicle rendering pending)
-- [~] Phase 4 — fields + services (sim done, 47 tests; overlays + service UI pending)
+- [x] Phase 3 — employment + traffic (browser-verified: vehicles commuting, 49 employed, disconnectedTrips 0)
+- [x] Phase 4 — fields + services (browser-verified: pollution overlay hazes industry, fire+school placed)
+- [x] Phase 5 — utilities + economy (browser-verified: coal+lines+pump+pipes power/water the town; 66 sim tests; fixes: power lines may cross roads, budget first fires at tick 1024, roadsChanged payload emptied for replay determinism — caught by the new SessionReplayer.selfCheck gate)
 - [ ] Phase 4 — fields + services
 - [ ] Phase 5 — utilities + economy
 - [ ] Phase 6 — game shell + polish
