@@ -307,6 +307,18 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
   postNetworksIfChanged();
 };
 
+/**
+ * Fast-forward in batches so queued commands still interleave — one giant
+ * synchronous loop starved the worker's event loop for seconds (automation
+ * hook, but batching also matters if a future UI fast-forward uses it).
+ */
+const ADVANCE_BATCH_TICKS = 100;
+function advanceInBatches(remaining: number): void {
+  const batch = Math.min(remaining, ADVANCE_BATCH_TICKS);
+  for (let i = 0; i < batch; i++) world.step();
+  if (remaining > batch) setTimeout(() => advanceInBatches(remaining - batch), 0);
+}
+
 addEventListener('message', (event) => {
   const message = (event as MessageEvent<ClientToWorker>).data;
   switch (message.type) {
@@ -321,7 +333,7 @@ addEventListener('message', (event) => {
       }
       break;
     case 'advance':
-      for (let i = 0; i < message.ticks; i++) world.step();
+      advanceInBatches(message.ticks);
       break;
     case 'setFieldSubscriptions':
       subscribedFields.clear();
