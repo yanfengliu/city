@@ -1,5 +1,8 @@
 import type { GameSpeed } from '../protocol/messages';
 
+/** Map overlay selection; field names mirror the protocol FieldName literals. */
+export type OverlayName = 'none' | 'pollution' | 'noise' | 'landValue' | 'traffic';
+
 export interface HudState<TTool extends string> {
   tick: number;
   fps: number;
@@ -10,6 +13,11 @@ export interface HudState<TTool extends string> {
   /** RCI demand in [-1, 1]; bars show only the positive part. */
   demand: { r: number; c: number; i: number };
   activeTool: TTool;
+  activeOverlay: OverlayName;
+  /** Live vehicle count from the sim's frame stats. */
+  vehicles: number;
+  /** Cumulative trips that found no route — shows a warning badge when > 0. */
+  disconnectedTrips: number;
 }
 
 export interface HudToolSpec<TTool extends string> {
@@ -20,10 +28,18 @@ export interface HudToolSpec<TTool extends string> {
 export interface HudCallbacks<TTool extends string> {
   onSetSpeed(speed: GameSpeed): void;
   onSelectTool(tool: TTool): void;
+  onSelectOverlay(overlay: OverlayName): void;
 }
 
 const SPEEDS: GameSpeed[] = [0, 1, 2, 4];
 const SPEED_LABELS: Record<GameSpeed, string> = { 0: '⏸', 1: '1×', 2: '2×', 4: '4×' };
+const OVERLAYS: { id: OverlayName; label: string }[] = [
+  { id: 'none', label: 'None' },
+  { id: 'pollution', label: 'Pollution' },
+  { id: 'noise', label: 'Noise' },
+  { id: 'landValue', label: 'Land value' },
+  { id: 'traffic', label: 'Traffic' },
+];
 const TOAST_DURATION_MS = 4000;
 const MAX_TOASTS = 4;
 
@@ -49,10 +65,13 @@ export class Hud<TTool extends string> {
   private readonly root: HTMLDivElement;
   private readonly treasuryEl: HTMLSpanElement;
   private readonly populationEl: HTMLSpanElement;
+  private readonly vehiclesEl: HTMLSpanElement;
+  private readonly warningEl: HTMLSpanElement;
   private readonly statsEl: HTMLSpanElement;
   private readonly toastArea: HTMLDivElement;
   private readonly speedButtons = new Map<GameSpeed, HTMLButtonElement>();
   private readonly toolButtons = new Map<TTool, HTMLButtonElement>();
+  private readonly overlayButtons = new Map<OverlayName, HTMLButtonElement>();
   private readonly demandFills = new Map<'r' | 'c' | 'i', HTMLDivElement>();
 
   constructor(
@@ -64,7 +83,7 @@ export class Hud<TTool extends string> {
     this.root.style.cssText =
       'position:absolute;top:8px;left:8px;color:#fff;background:rgba(10,20,30,.72);' +
       'padding:8px 12px;border-radius:8px;font-size:13px;display:flex;gap:12px;align-items:center;' +
-      'user-select:none;z-index:10';
+      'flex-wrap:wrap;max-width:calc(100vw - 32px);user-select:none;z-index:10';
 
     this.treasuryEl = document.createElement('span');
     this.treasuryEl.style.cssText = 'color:#9fdf9f;font-weight:bold';
@@ -73,6 +92,16 @@ export class Hud<TTool extends string> {
     this.populationEl = document.createElement('span');
     this.populationEl.style.cssText = 'font-weight:bold';
     this.root.appendChild(this.populationEl);
+
+    this.vehiclesEl = document.createElement('span');
+    this.vehiclesEl.title = 'Vehicles on the road';
+    this.root.appendChild(this.vehiclesEl);
+
+    this.warningEl = document.createElement('span');
+    this.warningEl.style.cssText =
+      'color:#1a1a1a;background:#ffb347;font-weight:bold;border-radius:4px;' +
+      'padding:1px 6px;display:none';
+    this.root.appendChild(this.warningEl);
 
     this.root.appendChild(this.makeDemandBars());
 
@@ -90,6 +119,16 @@ export class Hud<TTool extends string> {
         const button = this.makeButton(tool.label, () => callbacks.onSelectTool(tool.id));
         this.toolButtons.set(tool.id, button);
       }
+    }
+
+    this.root.appendChild(this.makeDivider());
+    const overlaysLabel = document.createElement('span');
+    overlaysLabel.textContent = 'Overlays:';
+    overlaysLabel.style.color = '#c9d4dd';
+    this.root.appendChild(overlaysLabel);
+    for (const overlay of OVERLAYS) {
+      const button = this.makeButton(overlay.label, () => callbacks.onSelectOverlay(overlay.id));
+      this.overlayButtons.set(overlay.id, button);
     }
     container.appendChild(this.root);
 
@@ -145,6 +184,14 @@ export class Hud<TTool extends string> {
   update(state: HudState<TTool>): void {
     this.treasuryEl.textContent = formatTreasury(state.treasury);
     this.populationEl.textContent = `👤 ${state.populationPeople.toLocaleString('en-US')}`;
+    this.vehiclesEl.textContent = `🚗 ${state.vehicles.toLocaleString('en-US')}`;
+    if (state.disconnectedTrips > 0) {
+      this.warningEl.textContent = `⚠ ${state.disconnectedTrips.toLocaleString('en-US')}`;
+      this.warningEl.title = `${state.disconnectedTrips} trips could not find a route — check road connectivity`;
+      this.warningEl.style.display = 'inline';
+    } else {
+      this.warningEl.style.display = 'none';
+    }
     this.statsEl.textContent = `tick ${state.tick} · ${state.fps} fps`;
     for (const bar of DEMAND_BARS) {
       const fill = this.demandFills.get(bar.key);
@@ -155,6 +202,9 @@ export class Hud<TTool extends string> {
     }
     for (const [tool, button] of this.toolButtons) {
       button.style.background = tool === state.activeTool ? ACTIVE_BG : IDLE_BG;
+    }
+    for (const [overlay, button] of this.overlayButtons) {
+      button.style.background = overlay === state.activeOverlay ? ACTIVE_BG : IDLE_BG;
     }
   }
 

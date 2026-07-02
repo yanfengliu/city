@@ -74,6 +74,64 @@ export const GHOST_OPACITY = 0.45;
 export const GHOST_VALID_COLOR = 0xffffff;
 export const GHOST_INVALID_COLOR = 0xd94040;
 
+// Vehicles (instanced low-poly cars; sim caps concurrent vehicles at 600).
+export const VEHICLE_CAPACITY = 600;
+export const VEHICLE_Y = 0.12;
+export const VEHICLE_BODY_LENGTH = 0.5;
+export const VEHICLE_BODY_HEIGHT = 0.25;
+export const VEHICLE_BODY_WIDTH = 0.3;
+export const VEHICLE_ROOF_LENGTH = 0.26;
+export const VEHICLE_ROOF_HEIGHT = 0.1;
+export const VEHICLE_ROOF_WIDTH = 0.24;
+/** Instance tint by the vehicle's edge congestion bucket (speed proxy): white → orange → red. */
+export const VEHICLE_BUCKET_COLORS: readonly [number, number, number, number] = [
+  0xffffff, 0xffd27d, 0xff8c3a, 0xe0453a,
+];
+/** Renderer-side lerp window between vehicle messages (one sim tick ≈ 50 ms at 1x). */
+export const VEHICLE_LERP_DEFAULT_MS = 50;
+export const VEHICLE_LERP_MIN_MS = 15;
+export const VEHICLE_LERP_MAX_MS = 250;
+
+// Traffic overlay (road cells tinted by their edge's congestion bucket).
+export const TRAFFIC_OVERLAY_Y = 0.025;
+export const TRAFFIC_BUCKET_COLORS: readonly [number, number, number, number] = [
+  0x69a869, 0xe3cf4a, 0xf2953b, 0xe0453a,
+];
+
+// Field overlays (translucent DataTexture plane over the terrain).
+export const FIELD_OVERLAY_Y = 0.05;
+export const FIELD_OVERLAY_OPACITY = 0.45;
+/** Field values are clamped to [0, FIELD_OVERLAY_VALUE_MAX] by the sim. */
+export const FIELD_OVERLAY_VALUE_MAX = 100;
+/** Field kind used across rendering (plain literal type; mirrors protocol FieldName). */
+export type FieldKind = 'pollution' | 'noise' | 'landValue';
+/** Two-stop color ramps, lerped by value/FIELD_OVERLAY_VALUE_MAX. */
+export const FIELD_RAMPS: Record<FieldKind, { low: number; high: number }> = {
+  pollution: { low: 0x46a34a, high: 0x5f4726 },
+  noise: { low: 0x46a34a, high: 0x7a3fae },
+  landValue: { low: 0xd9483f, high: 0x3fae4a },
+};
+
+// Service structures (player-placed 2x2 buildings; taller than level-1 RCI so they read).
+/** Service kind used across rendering (plain literal type; mirrors protocol ServiceType). */
+export type ServiceKind = 'fireStation' | 'police' | 'clinic' | 'school';
+export const STRUCTURE_START_CAPACITY = 64;
+export const STRUCTURE_FOOTPRINT_MARGIN = 0.9;
+export const STRUCTURE_WALL_HEIGHT = 1.2;
+export const STRUCTURE_ROOF_HEIGHT = 0.22;
+export const STRUCTURE_WALL_COLORS: Record<ServiceKind, number> = {
+  fireStation: 0xc23b2e,
+  police: 0x2c3e6b,
+  clinic: 0xf0efe8,
+  school: 0xd9b23a,
+};
+export const STRUCTURE_ROOF_COLORS: Record<ServiceKind, number> = {
+  fireStation: 0xf2f2f2,
+  police: 0x9fb2cc,
+  clinic: 0xc23b2e,
+  school: 0x7a5230,
+};
+
 /** Deterministic integer hash of a cell index → [0, 1). Drives per-cell visual jitter. */
 export function cellHash01(index: number): number {
   let h = (index + 1) | 0;
