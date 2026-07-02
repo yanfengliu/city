@@ -1,4 +1,4 @@
-import { MOVE_IN_BASE, MOVE_IN_DEMAND_SCALE } from './constants/zoning';
+import { MOVE_IN_BASE, MOVE_IN_DEMAND_SCALE, MOVE_IN_TRICKLE_THRESHOLD } from './constants/zoning';
 import { buildingCapacity } from './buildings';
 import type { CitySim } from './city';
 import type { CityWorld, DemandState } from './types';
@@ -10,7 +10,10 @@ import type { CityWorld, DemandState } from './types';
 export function moveInSystem(_sim: CitySim): (w: CityWorld) => void {
   return (w) => {
     const demand = w.getState('demand') as DemandState | undefined;
-    if (!demand || demand.r <= 0) return;
+    // Below the trickle threshold nobody comes; between it and 0, cheap empty
+    // housing attracts a slow trickle — prevents post-crash ghost towns where
+    // vacancy suppresses demand and nobody ever returns (playtest round 1).
+    if (!demand || demand.r <= MOVE_IN_TRICKLE_THRESHOLD) return;
 
     // Non-abandoned residential buildings with free capacity, canonical order.
     const open: Array<{ id: number; free: number }> = [];
@@ -28,7 +31,7 @@ export function moveInSystem(_sim: CitySim): (w: CityWorld) => void {
 
     const arrivals = Math.min(
       freeHousingCapacity,
-      MOVE_IN_BASE + Math.floor(demand.r * MOVE_IN_DEMAND_SCALE),
+      demand.r > 0 ? MOVE_IN_BASE + Math.floor(demand.r * MOVE_IN_DEMAND_SCALE) : 1,
     );
     for (let n = 0; n < arrivals; n++) {
       const pick = open[Math.floor(w.random() * open.length)];

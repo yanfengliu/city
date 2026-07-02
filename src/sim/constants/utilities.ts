@@ -45,7 +45,7 @@ export const WATER_PUMP_CAPACITY = 300;
  * A building/structure footprint joins a conduction network when any footprint
  * cell is within this Chebyshev distance of a network cell.
  */
-export const UTILITY_BRIDGE_RADIUS = 2;
+export const UTILITY_BRIDGE_RADIUS = 3;
 
 /** Power/water demand per building = this x level x footprint cells. */
 export const UTILITY_DEMAND_PER_CELL_LEVEL = 1;

@@ -20,9 +20,9 @@ export const LEVEL3_SCORE = 70;
 export const LEVEL_UP_EVALS = 3;
 export const ABANDON_SCORE = 12;
 export const ABANDON_EVALS = 10;
-/** Longer grace when only utilities are missing (player is mid-build). */
-export const UTILITY_ABANDON_EVALS = 30;
-export const RECOVER_EVALS = 5;
+/** Longer grace when only utilities are missing — ~60s at 1x, so onboarding does not mass-abandon (playtest round 1). */
+export const UTILITY_ABANDON_EVALS = 75;
+export const RECOVER_EVALS = 3;
 /** Neutral inputs until later phases wire the real sources. */
 export const DEFAULT_LAND_VALUE = 30;
 /** Industrial desirability: weak land-value coupling + flat base so industry does not abandon from its own pollution. */
@@ -51,3 +51,9 @@ export const MOVE_IN_BASE = 1;
 export const MOVE_IN_DEMAND_SCALE = 5;
 /** Display population per citizen entity (a citizen ≈ a household). */
 export const PEOPLE_PER_CITIZEN = 3;
+
+/** R demand above this (but <= 0) still attracts a 1-per-run trickle into empty homes. */
+export const MOVE_IN_TRICKLE_THRESHOLD = -0.3;
+
+/** Vacancy beyond this many free homes stops deepening negative R demand. */
+export const DEMAND_VACANCY_CAP = 16;

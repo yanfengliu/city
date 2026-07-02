@@ -285,7 +285,15 @@ export class Tools {
     switch (this.activeTool) {
       case 'road':
       case 'powerLine':
+        // Roads and lines cross each other but not water/buildings/structures.
+        return !cells.some(
+          (cell) =>
+            this.host.isWater(cell.x, cell.y) ||
+            this.host.hasBuilding(index(cell)) ||
+            this.host.hasStructure(index(cell)),
+        );
       case 'pipe':
+        // Pipes run under everything on land.
         return !cells.some((cell) => this.host.isWater(cell.x, cell.y));
       case 'bulldoze':
         return cells.some(

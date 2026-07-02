@@ -77,7 +77,10 @@ export function registerRoadCommands(sim: CitySim): void {
     if (newCells.length === 0) return false;
     for (const c of newCells) {
       const i = cellIndex(c.x, c.y);
-      if (sim.terrain.water[i] === 1 || sim.occupiedCells.has(i)) return false;
+      if (sim.terrain.water[i] === 1) return false;
+      // Roads may cross power lines (symmetric with lines crossing roads);
+      // any other occupant blocks.
+      if (sim.occupiedCells.has(i) && !sim.powerLineCells.has(i)) return false;
     }
     return purchaseAllowed(world, newCells.length * ROAD_COST_PER_CELL, false);
   });
@@ -89,6 +92,10 @@ export function registerRoadCommands(sim: CitySim): void {
       const entity = w.createEntity();
       w.setPosition(entity, { x: cell.x, y: cell.y });
       w.addComponent(entity, 'roadCell', {});
+      // Crossing a power line: the cell becomes road-owned; the line entity
+      // survives and keeps conducting (bulldozing the road re-owns it).
+      const i = cellIndex(cell.x, cell.y);
+      if (sim.powerLineCells.has(i)) sim.occupiedCells.delete(i);
     }
     w.setState('treasury', treasury(w) - newCells.length * ROAD_COST_PER_CELL);
     dezoneCells(

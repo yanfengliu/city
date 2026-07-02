@@ -1,4 +1,5 @@
 import { buildingCapacity } from './buildings';
+import { DEMAND_VACANCY_CAP } from './constants/zoning';
 import type { CitySim } from './city';
 import type { CityWorld } from './types';
 
@@ -38,7 +39,9 @@ export function demandSystem(sim: CitySim): (w: CityWorld) => void {
     // query() returns a generator — materialize before counting.
     const citizens = [...w.query('citizen')].length;
     const unemployed = citizens - jobsFilled;
-    const vacancy = housingCapacity - residents;
+    // Cap the vacancy penalty: overzoning R shouldn't bury demand so deep
+    // that the move-in trickle can never refill a crashed town.
+    const vacancy = Math.min(housingCapacity - residents, DEMAND_VACANCY_CAP);
 
     const taxPenalty = sim.scoreInputs.taxDemandPenalty;
     w.setState('demand', {
