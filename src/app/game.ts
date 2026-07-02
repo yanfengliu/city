@@ -3,6 +3,7 @@ import { ZONE_COLORS } from '../rendering/constants';
 import { CityScene } from '../rendering/scene';
 import { GhostView } from '../rendering/ghost';
 import { FieldOverlayView, TrafficOverlayView } from '../rendering/overlay';
+import { NetworksView } from '../rendering/networks-mesh';
 import { GroundPicker } from '../rendering/picking';
 import { RoadsView } from '../rendering/roads-mesh';
 import { StructuresView } from '../rendering/structures-mesh';
@@ -63,6 +64,7 @@ export class Game {
   private readonly structuresView: StructuresView;
   private readonly fieldOverlay: FieldOverlayView;
   private readonly trafficOverlay: TrafficOverlayView;
+  private readonly networksView: NetworksView;
   private readonly inspectPanel: InspectPanel;
   private treesView: TreesView | null = null;
   private terrain: TerrainPayload | null = null;
@@ -106,6 +108,7 @@ export class Game {
     this.structuresView = new StructuresView();
     this.fieldOverlay = new FieldOverlayView(GRID_WIDTH, GRID_HEIGHT);
     this.trafficOverlay = new TrafficOverlayView(GRID_WIDTH);
+    this.networksView = new NetworksView(GRID_WIDTH);
     this.scene.add(
       this.ghost.mesh,
       this.roadsView.mesh,
@@ -115,6 +118,7 @@ export class Game {
       this.structuresView.group,
       this.fieldOverlay.mesh,
       this.trafficOverlay.mesh,
+      this.networksView.group,
     );
     this.scene.onFrame(() => {
       this.flushDirtyViews();
@@ -139,6 +143,14 @@ export class Game {
         this.send({ type: 'command', name: 'dezone', data: { ax: a.x, ay: a.y, bx: b.x, by: b.y } }),
       submitPlaceService: (service, anchor) =>
         this.send({ type: 'command', name: 'placeService', data: { service, x: anchor.x, y: anchor.y } }),
+      submitPlacePlant: (kind, anchor) =>
+        this.send({ type: 'command', name: 'placePowerPlant', data: { kind, x: anchor.x, y: anchor.y } }),
+      submitPlacePump: (anchor) =>
+        this.send({ type: 'command', name: 'placeWaterPump', data: { x: anchor.x, y: anchor.y } }),
+      submitPowerLine: (a, b) =>
+        this.send({ type: 'command', name: 'placePowerLine', data: { ax: a.x, ay: a.y, bx: b.x, by: b.y } }),
+      submitPipe: (a, b) =>
+        this.send({ type: 'command', name: 'placePipe', data: { ax: a.x, ay: a.y, bx: b.x, by: b.y } }),
       inspect: (cell) => this.inspectCell(cell),
       showGhost: (cells, valid, zone) =>
         this.ghost.update(cells, valid, zone ? ZONE_COLORS[zone] : undefined),
@@ -200,6 +212,10 @@ export class Game {
         for (const view of message.upserts) this.applyStructureUpsert(view);
         for (const id of message.removed) this.applyStructureRemoval(id);
         this.refreshInspect();
+        break;
+      case 'networks':
+        this.networksView.update(message.power, message.water);
+        this.occupancyDirty = true;
         break;
       case 'vehicles':
         this.vehiclesOnScreen = message.list.length;
@@ -316,6 +332,7 @@ export class Game {
       this.zonesView.setOccludedCells(footprintCells);
       const occupied = new Set<number>(footprintCells);
       for (const index of this.roadCells) occupied.add(index);
+      for (const index of this.networksView.occupiedCells) occupied.add(index);
       this.treesView?.updateOccupied(occupied);
     }
     this.zonesView.flushIfDirty();

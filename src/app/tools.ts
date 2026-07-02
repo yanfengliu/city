@@ -1,7 +1,8 @@
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
+import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
 import { ZONE_MAX_ROAD_DISTANCE } from '../sim/constants/zoning';
 import { cellIndex, lPathCells, type Cell } from '../sim/grid';
-import type { ServiceType, ZoneType } from '../sim/types';
+import type { PowerPlantKind, ServiceType, ZoneType } from '../sim/types';
 
 export type ToolName =
   | 'select'
@@ -14,9 +15,14 @@ export type ToolName =
   | 'fire'
   | 'police'
   | 'clinic'
-  | 'school';
+  | 'school'
+  | 'coal'
+  | 'wind'
+  | 'powerLine'
+  | 'pump'
+  | 'pipe';
 
-/** Toolbar layout: [Select] | [Road, Bulldoze, Dezone] | [Zone R, C, I] | [services x4]. */
+/** Toolbar layout: [Select] | [Road, Bulldoze, Dezone] | [Zone R, C, I] | [services x4] | [utilities x5]. */
 export const TOOL_GROUPS: { id: ToolName; label: string }[][] = [
   [{ id: 'select', label: 'Select' }],
   [
@@ -35,6 +41,13 @@ export const TOOL_GROUPS: { id: ToolName; label: string }[][] = [
     { id: 'clinic', label: 'Clinic' },
     { id: 'school', label: 'School' },
   ],
+  [
+    { id: 'coal', label: 'Coal ⚡' },
+    { id: 'wind', label: 'Wind ⚡' },
+    { id: 'powerLine', label: 'Line' },
+    { id: 'pump', label: 'Pump 💧' },
+    { id: 'pipe', label: 'Pipe' },
+  ],
 ];
 
 const ZONE_BY_TOOL: Partial<Record<ToolName, ZoneType>> = { zoneR: 'R', zoneC: 'C', zoneI: 'I' };
@@ -44,6 +57,9 @@ const SERVICE_BY_TOOL: Partial<Record<ToolName, ServiceType>> = {
   clinic: 'clinic',
   school: 'school',
 };
+const PLANT_BY_TOOL: Partial<Record<ToolName, PowerPlantKind>> = { coal: 'coal', wind: 'wind' };
+/** L-path drag tools that lay linear utility runs. */
+const LINE_TOOLS: ReadonlySet<ToolName> = new Set(['powerLine', 'pipe']);
 
 /** Everything the tool state machine needs from the composition root. */
 export interface ToolHost {
@@ -60,6 +76,12 @@ export interface ToolHost {
   submitDezone(a: Cell, b: Cell): void;
   /** Service placement; anchor = top-left of the SERVICE_FOOTPRINT square. */
   submitPlaceService(service: ServiceType, anchor: Cell): void;
+  /** Power plant placement; anchor = top-left of the kind's footprint. */
+  submitPlacePlant(kind: PowerPlantKind, anchor: Cell): void;
+  /** Water pump placement (1x1; sim validates water adjacency). */
+  submitPlacePump(anchor: Cell): void;
+  submitPowerLine(a: Cell, b: Cell): void;
+  submitPipe(a: Cell, b: Cell): void;
   /** Select-tool click; null = off-grid (clears any open inspection). */
   inspect(cell: Cell | null): void;
   showGhost(cells: Cell[], valid: boolean, zone?: ZoneType): void;
@@ -120,6 +142,17 @@ export class Tools {
       this.refreshGhost(cell);
       return;
     }
+    const plant = PLANT_BY_TOOL[this.activeTool];
+    if (plant) {
+      this.host.submitPlacePlant(plant, cell);
+      this.refreshGhost(cell);
+      return;
+    }
+    if (this.activeTool === 'pump') {
+      this.host.submitPlacePump(cell);
+      this.refreshGhost(cell);
+      return;
+    }
     this.dragAnchor = cell;
     this.refreshGhost(cell);
   }
@@ -140,6 +173,8 @@ export class Tools {
     this.dragAnchor = null;
     const zone = ZONE_BY_TOOL[this.activeTool];
     if (this.activeTool === 'road') this.host.submitRoad(a, b);
+    else if (this.activeTool === 'powerLine') this.host.submitPowerLine(a, b);
+    else if (this.activeTool === 'pipe') this.host.submitPipe(a, b);
     else if (this.activeTool === 'bulldoze') this.host.submitBulldozeRect(a, b);
     else if (this.activeTool === 'dezone') this.host.submitDezone(a, b);
     else if (zone) this.host.submitZone(zone, a, b);
@@ -162,22 +197,42 @@ export class Tools {
    * Shows the L-path (road), the service footprint, or the rect (others) from
    * the drag anchor (or a 1-cell / footprint hover preview).
    */
+  /** Footprint side length for click-place tools (services, plants, pumps). */
+  private footprintSize(): number {
+    const plant = PLANT_BY_TOOL[this.activeTool];
+    if (plant) return POWER_PLANT_FOOTPRINT[plant];
+    if (this.activeTool === 'pump') return 1;
+    return SERVICE_FOOTPRINT;
+  }
+
+  private isClickPlaceTool(): boolean {
+    return (
+      SERVICE_BY_TOOL[this.activeTool] !== undefined ||
+      PLANT_BY_TOOL[this.activeTool] !== undefined ||
+      this.activeTool === 'pump'
+    );
+  }
+
   private refreshGhost(current: Cell): void {
-    if (SERVICE_BY_TOOL[this.activeTool]) {
+    if (this.isClickPlaceTool()) {
       const cells = this.footprintCells(current);
       this.host.showGhost(cells, this.isFootprintPlaceable(cells));
       return;
     }
     const anchor = this.dragAnchor ?? current;
-    const cells = this.activeTool === 'road' ? lPathCells(anchor, current) : rectCells(anchor, current);
+    const cells =
+      this.activeTool === 'road' || LINE_TOOLS.has(this.activeTool)
+        ? lPathCells(anchor, current)
+        : rectCells(anchor, current);
     this.host.showGhost(cells, this.isSelectionValid(cells), ZONE_BY_TOOL[this.activeTool]);
   }
 
-  /** In-bounds cells of the SERVICE_FOOTPRINT square anchored (top-left) at the given cell. */
+  /** In-bounds cells of the footprint square anchored (top-left) at the given cell. */
   private footprintCells(anchor: Cell): Cell[] {
+    const size = this.footprintSize();
     const cells: Cell[] = [];
-    for (let dy = 0; dy < SERVICE_FOOTPRINT; dy++) {
-      for (let dx = 0; dx < SERVICE_FOOTPRINT; dx++) {
+    for (let dy = 0; dy < size; dy++) {
+      for (let dx = 0; dx < size; dx++) {
         const x = anchor.x + dx;
         const y = anchor.y + dy;
         if (x < this.host.gridWidth && y < this.host.gridHeight) cells.push({ x, y });
@@ -188,7 +243,7 @@ export class Tools {
 
   /** Full footprint in bounds and every cell free of water, roads, buildings, and structures. */
   private isFootprintPlaceable(cells: Cell[]): boolean {
-    if (cells.length !== SERVICE_FOOTPRINT * SERVICE_FOOTPRINT) return false;
+    if (cells.length !== this.footprintSize() ** 2) return false;
     return cells.every((cell) => {
       const index = cellIndex(cell.x, cell.y, this.host.gridWidth);
       return (
@@ -209,6 +264,8 @@ export class Tools {
     const index = (cell: Cell): number => cellIndex(cell.x, cell.y, this.host.gridWidth);
     switch (this.activeTool) {
       case 'road':
+      case 'powerLine':
+      case 'pipe':
         return !cells.some((cell) => this.host.isWater(cell.x, cell.y));
       case 'bulldoze':
         return cells.some(

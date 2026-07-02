@@ -140,3 +140,12 @@ export function cellHash01(index: number): number {
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
+
+// Utility network visuals (phase 5)
+export const PLANT_COLOR = 0x5a5f66;
+export const POLE_COLOR = 0x8a7754;
+export const PUMP_COLOR = 0x3f74c9;
+export const PIPE_COLOR = 0x2e4a5f;
+/** Pipes are underground; render as a faint hint just above the terrain. */
+export const PIPE_Y = 0.006;
+export const UTILITY_MESH_CAPACITY = 2048;
