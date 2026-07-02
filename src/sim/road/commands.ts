@@ -1,5 +1,6 @@
 import { GRID_HEIGHT, GRID_WIDTH } from '../constants/map';
 import {
+  BRIDGE_COST_PER_CELL,
   ROAD_BULLDOZE_REFUND,
   ROAD_COST_PER_CELL,
 } from '../constants/economy';
@@ -24,6 +25,42 @@ function treasury(w: CityWorld): number {
 
 function roadPath(data: RoadEndpoints) {
   return lPathCells({ x: data.ax, y: data.ay }, { x: data.bx, y: data.by });
+}
+
+/** Per-cell road cost: water cells build as bridges at the premium rate. */
+export function roadCellCost(sim: CitySim, i: number): number {
+  return sim.terrain.water[i] === 1 ? BRIDGE_COST_PER_CELL : ROAD_COST_PER_CELL;
+}
+
+function roadCellsCost(sim: CitySim, cells: Array<{ x: number; y: number }>): number {
+  let total = 0;
+  for (const c of cells) total += roadCellCost(sim, cellIndex(c.x, c.y));
+  return total;
+}
+
+/**
+ * Shared placeRoad gate, evaluated at validation AND again at execution:
+ * commands validate at submit time but run at the tick drain, so a same-tick
+ * command (e.g. a bulldoze freeing cells on this path) can change the new-cell
+ * set and its cost in between. Re-gating in the handler keeps the "validators
+ * reject any purchase the treasury cannot cover" invariant — the handler
+ * no-ops instead of overdrafting or paving occupied cells.
+ */
+function placeableRoadCells(
+  sim: CitySim,
+  data: RoadEndpoints,
+): { cells: Array<{ x: number; y: number }>; cost: number } | null {
+  const newCells = roadPath(data).filter((c) => !sim.roadCells.has(cellIndex(c.x, c.y)));
+  if (newCells.length === 0) return null;
+  for (const c of newCells) {
+    const i = cellIndex(c.x, c.y);
+    // Water is buildable as a bridge (at a premium). Roads may cross power
+    // lines (symmetric with lines crossing roads); any other occupant blocks.
+    if (sim.occupiedCells.has(i) && !sim.powerLineCells.has(i)) return null;
+  }
+  const cost = roadCellsCost(sim, newCells);
+  if (!purchaseAllowed(sim.world, cost, false)) return null;
+  return { cells: newCells, cost };
 }
 
 function validEndpoints(data: RoadEndpoints): boolean {
@@ -72,24 +109,15 @@ export function registerRoadCommands(sim: CitySim): void {
   const { world } = sim;
 
   world.registerValidator('placeRoad', (data) => {
-    if (!validEndpoints(data)) return false;
-    const path = roadPath(data);
-    const newCells = path.filter((c) => !sim.roadCells.has(cellIndex(c.x, c.y)));
-    if (newCells.length === 0) return false;
-    for (const c of newCells) {
-      const i = cellIndex(c.x, c.y);
-      if (sim.terrain.water[i] === 1) return false;
-      // Roads may cross power lines (symmetric with lines crossing roads);
-      // any other occupant blocks.
-      if (sim.occupiedCells.has(i) && !sim.powerLineCells.has(i)) return false;
-    }
-    return purchaseAllowed(world, newCells.length * ROAD_COST_PER_CELL, false);
+    return validEndpoints(data) && placeableRoadCells(sim, data) !== null;
   });
 
   world.registerHandler('placeRoad', (data, w) => {
-    const path = roadPath(data);
-    const newCells = path.filter((c) => !sim.roadCells.has(cellIndex(c.x, c.y)));
-    for (const cell of newCells) {
+    // Re-gate at execution — see placeableRoadCells. No-op if a same-tick
+    // command made the placement unpayable or blocked.
+    const placement = placeableRoadCells(sim, data);
+    if (!placement) return;
+    for (const cell of placement.cells) {
       const entity = w.createEntity();
       w.setPosition(entity, { x: cell.x, y: cell.y });
       w.addComponent(entity, 'roadCell', {});
@@ -98,11 +126,11 @@ export function registerRoadCommands(sim: CitySim): void {
       const i = cellIndex(cell.x, cell.y);
       if (sim.powerLineCells.has(i)) sim.occupiedCells.delete(i);
     }
-    w.setState('treasury', treasury(w) - newCells.length * ROAD_COST_PER_CELL);
+    w.setState('treasury', treasury(w) - placement.cost);
     dezoneCells(
       sim,
       w,
-      newCells.map((c) => cellIndex(c.x, c.y)),
+      placement.cells.map((c) => cellIndex(c.x, c.y)),
     );
     refreshRoads(sim, w);
     w.emit('roadsChanged', {});
@@ -127,6 +155,7 @@ export function registerRoadCommands(sim: CitySim): void {
 /** Destroys road entities on the given cells and refunds part of their cost. */
 function removeRoadCells(sim: CitySim, w: CityWorld, cells: number[]): number {
   let removed = 0;
+  let refundBase = 0;
   for (const i of cells) {
     if (!sim.roadCells.has(i)) continue;
     const x = i % GRID_WIDTH;
@@ -137,6 +166,7 @@ function removeRoadCells(sim: CitySim, w: CityWorld, cells: number[]): number {
       if (w.getComponent(id, 'roadCell')) {
         w.destroyEntity(id);
         removed++;
+        refundBase += roadCellCost(sim, i);
       }
     }
     // A power line crossing this road survives the bulldoze; the freed cell
@@ -146,10 +176,7 @@ function removeRoadCells(sim: CitySim, w: CityWorld, cells: number[]): number {
     if (line !== undefined) sim.occupiedCells.set(i, line);
   }
   if (removed > 0) {
-    w.setState(
-      'treasury',
-      treasury(w) + Math.floor(removed * ROAD_COST_PER_CELL * ROAD_BULLDOZE_REFUND),
-    );
+    w.setState('treasury', treasury(w) + Math.floor(refundBase * ROAD_BULLDOZE_REFUND));
   }
   return removed;
 }

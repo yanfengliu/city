@@ -23,6 +23,8 @@ export function readSave(): SaveFile | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SaveFile;
     if (!parsed || typeof parsed !== 'object' || parsed.meta?.saveVersion !== 1) return null;
+    // A tampered/corrupt seed would rebuild the sim over NaN-seeded terrain.
+    if (!Number.isFinite(parsed.meta.seed)) return null;
     return parsed;
   } catch {
     return null;

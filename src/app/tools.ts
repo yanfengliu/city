@@ -26,7 +26,7 @@ export type ToolName =
 export const TOOL_GROUPS: { id: ToolName; label: string; title: string }[][] = [
   [{ id: 'select', label: 'Select', title: 'Click a building for details; left-drag pans the camera' }],
   [
-    { id: 'road', label: 'Road', title: 'Drag to draw a road ($10/cell). Buildings grow along roads; traffic drives on them' },
+    { id: 'road', label: 'Road', title: 'Drag to draw a road ($10/cell; $40 over water as a bridge). Buildings grow along roads; traffic drives on them' },
     { id: 'bulldoze', label: 'Bulldoze', title: 'Drag a rectangle to demolish roads, buildings, services, and utilities (25% road refund)' },
     { id: 'dezone', label: 'Dezone', title: 'Drag a rectangle to erase zoning (does not touch grown buildings)' },
   ],
@@ -69,6 +69,12 @@ export interface ToolHost {
   hasRoad(index: number): boolean;
   hasBuilding(index: number): boolean;
   hasStructure(index: number): boolean;
+  /** Power plant or water pump footprint (occupies like a building). */
+  hasUtilityFootprint(index: number): boolean;
+  /** Power line cell (occupies unless under a road; roads/lines cross freely). */
+  hasPowerLine(index: number): boolean;
+  /** Water pipe cell (underground; only relevant to bulldoze). */
+  hasPipe(index: number): boolean;
   hasZone(index: number): boolean;
   submitRoad(a: Cell, b: Cell): void;
   submitBulldozeRect(a: Cell, b: Cell): void;
@@ -280,6 +286,10 @@ export class Tools {
       if (this.host.hasBuilding(index) || this.host.hasStructure(index)) {
         return 'A building is in the way — bulldoze first';
       }
+      if (this.host.hasUtilityFootprint(index)) {
+        return 'A plant or pump is in the way — bulldoze first';
+      }
+      if (this.host.hasPowerLine(index)) return 'A power line is in the way — bulldoze first';
     }
     if (SERVICE_BY_TOOL[this.activeTool]) {
       const touchesRoad = cells.some((cell) =>
@@ -306,22 +316,25 @@ export class Tools {
   }
 
   /**
-   * Road: invalid when any cell is water. Bulldoze: needs ≥1 road, building,
-   * or structure cell. Dezone: needs ≥1 zoned cell. Zone: needs ≥1 zoneable
-   * cell (land, non-road, within Chebyshev ZONE_MAX_ROAD_DISTANCE of a road).
+   * Mirrors the sim validators so ghosts stay honest. Road: builds over water
+   * as a bridge and crosses power lines; anything else occupying a cell
+   * (buildings, services, plants, pumps) blocks. Power line: additionally
+   * blocked by water. Pipe: only water blocks. Bulldoze: needs ≥1 demolishable
+   * cell (road, building, structure, plant/pump, line, or pipe). Dezone:
+   * needs ≥1 zoned cell. Zone: needs ≥1 zoneable cell (land, non-road, within
+   * ZONE_MAX_ROAD_DISTANCE of a road).
    */
   private isSelectionValid(cells: Cell[]): boolean {
     const index = (cell: Cell): number => cellIndex(cell.x, cell.y, this.host.gridWidth);
+    const occupiedByNonLine = (cell: Cell): boolean =>
+      this.host.hasBuilding(index(cell)) ||
+      this.host.hasStructure(index(cell)) ||
+      this.host.hasUtilityFootprint(index(cell));
     switch (this.activeTool) {
       case 'road':
+        return !cells.some(occupiedByNonLine);
       case 'powerLine':
-        // Roads and lines cross each other but not water/buildings/structures.
-        return !cells.some(
-          (cell) =>
-            this.host.isWater(cell.x, cell.y) ||
-            this.host.hasBuilding(index(cell)) ||
-            this.host.hasStructure(index(cell)),
-        );
+        return !cells.some((cell) => this.host.isWater(cell.x, cell.y) || occupiedByNonLine(cell));
       case 'pipe':
         // Pipes run under everything on land.
         return !cells.some((cell) => this.host.isWater(cell.x, cell.y));
@@ -330,7 +343,10 @@ export class Tools {
           (cell) =>
             this.host.hasRoad(index(cell)) ||
             this.host.hasBuilding(index(cell)) ||
-            this.host.hasStructure(index(cell)),
+            this.host.hasStructure(index(cell)) ||
+            this.host.hasUtilityFootprint(index(cell)) ||
+            this.host.hasPowerLine(index(cell)) ||
+            this.host.hasPipe(index(cell)),
         );
       case 'dezone':
         return cells.some((cell) => this.host.hasZone(index(cell)));

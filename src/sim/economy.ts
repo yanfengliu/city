@@ -1,4 +1,5 @@
 import {
+  BRIDGE_UPKEEP_PER_CELL,
   MAX_TAX_RATE,
   MIN_TAX_RATE,
   ROAD_UPKEEP_PER_CELL,
@@ -98,7 +99,13 @@ export function budgetSystem(sim: CitySim): (w: CityWorld) => void {
       void id;
       expenses += WATER_PUMP_UPKEEP;
     }
-    expenses += ROAD_UPKEEP_PER_CELL * sim.roadCells.size;
+    let bridgeCells = 0;
+    for (const i of sim.roadCells) {
+      if (sim.terrain.water[i] === 1) bridgeCells++;
+    }
+    expenses +=
+      ROAD_UPKEEP_PER_CELL * (sim.roadCells.size - bridgeCells) +
+      BRIDGE_UPKEEP_PER_CELL * bridgeCells;
 
     w.setState('treasury', treasury(w) + income - expenses);
     w.emit('budget', { income, expenses });

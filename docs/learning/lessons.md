@@ -62,6 +62,16 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Test added | covered by the extended replay gate (tests/sim/replay.test.ts now exercises utilities/services/taxes/bulldozeRect with utilitiesEnabled) |
 | Behavior delta | Save/load observably changed which cells were buildable. Rule: every special case added to a live handler (here: "line cells under roads stay road-owned") needs its inverse handled on the OTHER side of the ownership transition (road removed → line re-owns) AND identical logic in the rebuild path; the replay gate only catches it if its scenario exercises those commands — keep the gate's command coverage in sync with the shipping feature set. |
 
+## preview_screenshot can hang while the page is healthy — capture the canvas yourself
+
+| Field | Value |
+|---|---|
+| Surfaced by | Bridges browser verification (2026-07-02): preview_screenshot timed out (30 s) on every attempt — fresh server, fresh tab, small viewport — while preview_eval kept working and the sim kept ticking |
+| Reviewer findings | n/a — tooling lesson |
+| Fix commit | n/a — operational workaround |
+| Test added | n/a |
+| Behavior delta | The screenshot transport can wedge independently of the page. Workaround that works because `preserveDrawingBuffer: true` is set: in preview_eval, force a frame (`s.controls.update(); s.camera.updateMatrixWorld(); s.renderer.render(s.scene, s.camera)`), stash `renderer.domElement.toDataURL('image/jpeg', 0.7)` on `window.__shot`, then return it in ~50k-char slices — oversized eval results are auto-saved to tool-result files; pad short tails (e.g. `+ '#'.repeat(20000)`) so every slice lands in a file instead of context. Concatenate the files, `tr -d '"\n#'`, strip the data-URL prefix, `base64 -d` → JPEG. Also remember rAF is throttled to zero in background tabs, so render_game_to_text camera-derived state and tweens freeze — set camera/controls directly instead of flyTo before capturing. |
+
 ## Never gate on a piped test run — the pipe eats the exit code
 
 | Field | Value |

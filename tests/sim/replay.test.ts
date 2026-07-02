@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { MemorySink, SessionRecorder, SessionReplayer, type SessionBundle } from 'civ-engine';
 import { createCitySim, rebuildDerived, type CitySimConfig } from '../../src/sim/city';
-import { buildDistrict, findConnectablePumpSpot, findLandBlock, stats } from './helpers';
+import {
+  buildDistrict,
+  findBridgeStub,
+  findConnectablePumpSpot,
+  findLandBlock,
+  stats,
+} from './helpers';
 import type { CityCommands, CityEvents } from '../../src/sim/types';
 
 /**
@@ -43,6 +49,17 @@ describe('session replay self-check', () => {
     sim.world.step();
     sim.world.submit('placePipe', { ax: pump.x, ay: pump.y, bx: midX, by: base.y + 2 });
     sim.world.submit('placePipe', { ax: midX, ay: base.y + 2, bx: midX, by: base.y + 12 });
+    // A bridge stub keeps the gate's coverage in sync with bridge pricing.
+    // Asserted so a validator rejection can't silently drop the coverage.
+    const stub = findBridgeStub(sim);
+    expect(
+      sim.world.submit('placeRoad', {
+        ax: stub.x,
+        ay: stub.y,
+        bx: stub.x + 2 * stub.dx,
+        by: stub.y + 2 * stub.dy,
+      }),
+    ).toBe(true);
     for (let i = 0; i < 700; i++) sim.world.step();
 
     // Mid-run topology edits while traffic may be in flight, plus a rect

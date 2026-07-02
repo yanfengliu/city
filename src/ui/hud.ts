@@ -38,6 +38,7 @@ export interface HudCallbacks<TTool extends string> {
   onSetSpeed(speed: GameSpeed): void;
   onSelectTool(tool: TTool): void;
   onSelectOverlay(overlay: OverlayName): void;
+  onToggleBudget(): void;
   onSave(): void;
   onLoad(): void;
   onNewCity(): void;
@@ -153,6 +154,7 @@ export class Hud<TTool extends string> {
       this.overlayButtons.set(overlay.id, button);
     }
     this.root.appendChild(this.makeDivider());
+    this.makeButton('💰 Budget', () => callbacks.onToggleBudget(), 'Income, expenses, and per-zone tax sliders');
     this.makeButton('💾 Save', () => callbacks.onSave());
     this.makeButton('📂 Load', () => callbacks.onLoad());
     this.makeButton('✨ New', () => callbacks.onNewCity());

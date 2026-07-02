@@ -22,14 +22,6 @@ function findLandStrip(sim: ReturnType<typeof createCitySim>, length: number) {
   throw new Error('no land strip found');
 }
 
-function findWaterCell(sim: ReturnType<typeof createCitySim>) {
-  const { terrain } = sim;
-  for (let i = 0; i < terrain.water.length; i++) {
-    if (terrain.water[i] === 1) return { x: i % terrain.width, y: Math.floor(i / terrain.width) };
-  }
-  throw new Error('no water found');
-}
-
 describe('createCitySim', () => {
   it('creates a steppable, deterministic world', () => {
     const a = createCitySim({ seed: 7 });
@@ -66,18 +58,6 @@ describe('placeRoad', () => {
     expect(getTreasury(sim.world)).toBe(STARTING_TREASURY - 6 * ROAD_COST_PER_CELL);
     expect(sim.roadGraph.edges).toHaveLength(1);
     expect(sim.topologyVersion).toBeGreaterThan(0);
-  });
-
-  it('rejects roads over water', () => {
-    const sim = createCitySim({ seed: 7 });
-    const water = findWaterCell(sim);
-    const accepted = sim.world.submit('placeRoad', {
-      ax: water.x,
-      ay: water.y,
-      bx: water.x,
-      by: water.y,
-    });
-    expect(accepted).toBe(false);
   });
 
   it('rejects when treasury cannot cover the cost', () => {

@@ -23,6 +23,15 @@ export const SHORE_COLOR = 0x9a8a63;
 // Roads.
 export const ROAD_COLOR = 0x3a3d42;
 
+// Bridges (road cells over water): concrete causeway deck + railings + pylons.
+export const BRIDGE_COLOR = 0x8f959e;
+export const BRIDGE_RAIL_HEIGHT = 0.14;
+export const BRIDGE_RAIL_THICKNESS = 0.08;
+/** Pylon half-width (pylon box is centered in the cell). */
+export const BRIDGE_PYLON_HALF_WIDTH = 0.14;
+/** Pylon bottom — below the water surface so pylons read as planted. */
+export const BRIDGE_PYLON_BOTTOM_Y = -0.4;
+
 // Trees.
 export const TREE_TRUNK_COLOR = 0x6b4a2f;
 export const TREE_CANOPY_COLOR = 0x2e7d3c;
@@ -148,6 +157,12 @@ export const PUMP_COLOR = 0x3f74c9;
 export const PIPE_COLOR = 0x2e4a5f;
 /** Pipes are underground; render as a faint hint just above the terrain. */
 export const PIPE_Y = 0.006;
+
+// Level-up celebration (floating "▲ Level N" sprite above the building).
+export const LEVELUP_DURATION_MS = 1600;
+export const LEVELUP_RISE_UNITS = 1.6;
+export const LEVELUP_SPRITE_SCALE = 0.9;
+export const LEVELUP_START_Y = 1.4;
 
 // Effect-radius placement preview
 export const RADIUS_FILL_COLOR = 0x53c1e8;

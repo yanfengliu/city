@@ -7,6 +7,7 @@ import { NetworksView } from '../rendering/networks-mesh';
 import { NetworkOverlayView } from '../rendering/network-overlay';
 import { GroundPicker } from '../rendering/picking';
 import { RadiusIndicator } from '../rendering/radius-indicator';
+import { LevelUpFx } from '../rendering/levelup-fx';
 import { RoadsView } from '../rendering/roads-mesh';
 import { StructuresView } from '../rendering/structures-mesh';
 import { buildTerrainMesh } from '../rendering/terrain-mesh';
@@ -14,6 +15,7 @@ import { TreesView } from '../rendering/trees';
 import { VehiclesView } from '../rendering/vehicles-mesh';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
+import { BudgetPanel } from '../ui/budget-panel';
 import { InspectPanel } from '../ui/inspect-panel';
 import { AdvisorPanel, type Advisory } from '../ui/advisor';
 import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
@@ -38,7 +40,15 @@ import type {
   TerrainPayload,
   WorkerToClient,
 } from '../protocol/messages';
-import type { DemandState, FieldName, ServiceType, ZoneType } from '../sim/types';
+import type {
+  BudgetReport,
+  DemandState,
+  FieldName,
+  ServiceType,
+  TaxRates,
+  ZoneType,
+} from '../sim/types';
+import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 
 const HUD_REFRESH_MS = 250;
 const ZONE_LABELS: Record<ZoneType, string> = {
@@ -77,7 +87,9 @@ export class Game {
   private readonly trafficOverlay: TrafficOverlayView;
   private readonly networksView: NetworksView;
   private readonly radiusIndicator = new RadiusIndicator();
+  private readonly levelUpFx = new LevelUpFx();
   private readonly inspectPanel: InspectPanel;
+  private readonly budgetPanel: BudgetPanel;
   private readonly advisor: AdvisorPanel;
   private readonly focusMarker = new RadiusIndicator();
   private focusMarkerTimer: ReturnType<typeof setTimeout> | undefined;
@@ -86,6 +98,10 @@ export class Game {
   private hasPump = false;
   private powerInfraCells: ReadonlySet<number> = new Set();
   private waterInfraCells: ReadonlySet<number> = new Set();
+  /** Plant + pump footprints — occupy cells like buildings (mirrors sim occupiedCells). */
+  private utilityFootprintCells: ReadonlySet<number> = new Set();
+  private powerLineCells: ReadonlySet<number> = new Set();
+  private pipeCells: ReadonlySet<number> = new Set();
   private lastDisconnectAt = -Infinity;
   private treesView: TreesView | null = null;
   private terrain: TerrainPayload | null = null;
@@ -106,6 +122,8 @@ export class Game {
   private tick = 0;
   private speed: GameSpeed = 1;
   private treasury = 0;
+  private taxRates: TaxRates = { r: DEFAULT_TAX_RATE, c: DEFAULT_TAX_RATE, i: DEFAULT_TAX_RATE };
+  private lastBudget: BudgetReport = { income: 0, expenses: 0 };
   private vehicles = 0;
   private vehiclesOnScreen = 0;
   private employed = 0;
@@ -118,6 +136,10 @@ export class Game {
       onSetSpeed: (speed) => this.setSpeed(speed),
       onSelectTool: (tool) => this.tools.setTool(tool),
       onSelectOverlay: (overlay) => this.setOverlay(overlay),
+      onToggleBudget: () => {
+        this.budgetPanel.toggle();
+        this.refreshHud();
+      },
       onSave: () => this.send({ type: 'requestSnapshot' }),
       onLoad: () => {
         if (!hasSave()) {
@@ -132,6 +154,9 @@ export class Game {
       onNewCity: () => location.reload(),
     });
     this.inspectPanel = new InspectPanel(container, () => this.clearInspect());
+    this.budgetPanel = new BudgetPanel(container, (zone, rate) =>
+      this.send({ type: 'command', name: 'setTaxRate', data: { zone, rate } }),
+    );
     this.advisor = new AdvisorPanel(container, (target) => this.focusProblem(target));
 
     this.ghost = new GhostView();
@@ -146,7 +171,7 @@ export class Game {
     this.networkOverlay = new NetworkOverlayView(GRID_WIDTH, GRID_HEIGHT);
     this.scene.add(
       this.ghost.mesh,
-      this.roadsView.mesh,
+      this.roadsView.group,
       this.zonesView.mesh,
       this.buildingsView.group,
       this.vehiclesView.mesh,
@@ -157,10 +182,13 @@ export class Game {
       this.networkOverlay.mesh,
       this.focusMarker.group,
       this.radiusIndicator.group,
+      this.levelUpFx.group,
     );
     this.scene.onFrame(() => {
       this.flushDirtyViews();
-      this.vehiclesView.updateFrame(performance.now());
+      const now = performance.now();
+      this.vehiclesView.updateFrame(now);
+      this.levelUpFx.updateFrame(now);
       this.scene.setDayFraction((this.tick % TICKS_PER_DAY) / TICKS_PER_DAY);
     });
 
@@ -171,6 +199,9 @@ export class Game {
       hasRoad: (index) => this.roadCells.has(index),
       hasBuilding: (index) => this.buildingCellOwner.has(index),
       hasStructure: (index) => this.structureCellOwner.has(index),
+      hasUtilityFootprint: (index) => this.utilityFootprintCells.has(index),
+      hasPowerLine: (index) => this.powerLineCells.has(index),
+      hasPipe: (index) => this.pipeCells.has(index),
       hasZone: (index) => this.zonedCells.has(index),
       submitRoad: (a, b) =>
         this.send({ type: 'command', name: 'placeRoad', data: { ax: a.x, ay: a.y, bx: b.x, by: b.y } }),
@@ -233,6 +264,7 @@ export class Game {
         if (this.ready) break;
         this.ready = true;
         this.terrain = message.terrain;
+        this.roadsView.setWater(message.terrain.water);
         this.scene.add(buildTerrainMesh(message.terrain));
         this.treesView = new TreesView({ width: message.terrain.width, trees: message.terrain.trees });
         this.scene.add(this.treesView.group);
@@ -277,6 +309,12 @@ export class Game {
         this.hasPump = message.water.pumpCells.length > 0;
         this.powerInfraCells = new Set([...message.power.plantCells, ...message.power.lineCells]);
         this.waterInfraCells = new Set([...message.water.pumpCells, ...message.water.pipeCells]);
+        this.utilityFootprintCells = new Set([
+          ...message.power.plantCells,
+          ...message.water.pumpCells,
+        ]);
+        this.powerLineCells = new Set(message.power.lineCells);
+        this.pipeCells = new Set(message.water.pipeCells);
         this.occupancyDirty = true;
         this.refreshNetworkOverlay();
         break;
@@ -296,6 +334,8 @@ export class Game {
       case 'frame':
         this.tick = message.tick;
         this.treasury = message.stats.treasury;
+        this.taxRates = message.stats.taxRates;
+        this.lastBudget = message.stats.lastBudget;
         this.citizens = message.stats.citizens;
         this.demand = message.stats.demand;
         this.vehicles = message.stats.vehicles;
@@ -375,6 +415,16 @@ export class Game {
 
   private applyBuildingUpsert(view: BuildingView): void {
     const previous = this.buildings.get(view.id);
+    // Celebrate genuine level-ups only: a known building whose level rose
+    // (boot/load full upserts have no `previous` and stay silent).
+    if (previous && !view.abandoned && view.level > previous.level) {
+      this.levelUpFx.spawn(
+        view.x + view.w / 2,
+        view.y + view.h / 2,
+        view.level,
+        performance.now(),
+      );
+    }
     const footprintChanged =
       !previous ||
       previous.x !== view.x ||
@@ -526,6 +576,7 @@ export class Game {
       vehicles: this.vehicles,
       disconnectedTrips: this.disconnectedTrips,
     });
+    this.budgetPanel.update(this.taxRates, this.lastBudget);
     this.advisor.update(this.computeAdvisories());
   }
 
@@ -599,7 +650,7 @@ export class Game {
     if (performance.now() - this.lastDisconnectAt < 15_000) {
       out.push({
         id: 'disconnected',
-        text: '🚧 Commuters can’t reach their jobs — connect your districts with roads.',
+        text: '🚧 Commuters can’t reach their jobs — connect your districts with roads (they bridge over water at $40/cell).',
       });
     }
     if (this.demand.r > 0.5) out.push({ id: 'demandR', text: '🟩 Housing demand is high — zone more Residential.' });
@@ -647,11 +698,16 @@ export class Game {
       fps: this.scene.getFps(),
       advisories: this.advisor.current(),
       treasury: this.treasury,
+      taxRates: this.taxRates,
+      lastBudget: { income: round2(this.lastBudget.income), expenses: round2(this.lastBudget.expenses) },
+      budgetPanelOpen: this.budgetPanel.visible,
       populationPeople: this.citizens * PEOPLE_PER_CITIZEN,
       demand: { r: round2(this.demand.r), c: round2(this.demand.c), i: round2(this.demand.i) },
       activeTool: this.tools.activeTool,
       activeOverlay: this.activeOverlay,
       roadCellCount: this.roadsView.cellCount,
+      bridgeCellCount: this.roadsView.bridgeCellCount,
+      levelUpsCelebrated: this.levelUpFx.celebrated,
       zonedCellCount: this.zonedCells.size,
       buildingCount: this.buildings.size,
       structureCount: this.structures.size,
