@@ -50,7 +50,8 @@ export function refreshUtilities(sim: CitySim): void {
     if (!position) continue;
     const i = cellIndex(position.x, position.y);
     lines.set(i, id);
-    sim.occupiedCells.set(i, id);
+    // Lines crossing roads leave the cell road-owned (see placePowerLine).
+    if (!sim.roadCells.has(i)) sim.occupiedCells.set(i, id);
   }
   for (const id of w.query('pipe', 'position')) {
     const position = w.getComponent(id, 'position');
@@ -79,6 +80,17 @@ function footprintPlaceable(sim: CitySim, cells: number[]): boolean {
     if (sim.terrain.water[i] === 1 || sim.roadCells.has(i) || sim.occupiedCells.has(i)) {
       return false;
     }
+  }
+  return true;
+}
+
+/**
+ * Power-line variant: lines may CROSS roads (poles stand beside the roadway),
+ * so road cells are allowed; water and occupied cells still reject.
+ */
+function lineRunPlaceable(sim: CitySim, cells: number[]): boolean {
+  for (const i of cells) {
+    if (sim.terrain.water[i] === 1 || sim.occupiedCells.has(i)) return false;
   }
   return true;
 }
@@ -145,9 +157,9 @@ export function registerUtilityCommands(sim: CitySim): void {
     if (!endpointsInBounds(data)) return false;
     const newCells = pathIndices(data).filter((i) => !sim.powerLineCells.has(i));
     if (newCells.length === 0) return false;
-    // Lines claim their cell like roads do; existing line cells are extended
-    // through, everything else occupied (incl. roads) rejects.
-    if (!footprintPlaceable(sim, newCells)) return false;
+    // Lines claim their cell like roads do — but may cross roads (the pole
+    // stands beside the roadway); water and occupied cells reject.
+    if (!lineRunPlaceable(sim, newCells)) return false;
     return purchaseAllowed(world, newCells.length * POWER_LINE_COST_PER_CELL, true);
   });
 
@@ -158,7 +170,9 @@ export function registerUtilityCommands(sim: CitySim): void {
       w.setPosition(entity, cellFromIndex(i));
       w.addComponent(entity, 'powerLine', {});
       sim.powerLineCells.set(i, entity);
-      sim.occupiedCells.set(i, entity);
+      // Road cells stay road-owned (the road already blocks growth); the line
+      // still conducts through them via powerLineCells.
+      if (!sim.roadCells.has(i)) sim.occupiedCells.set(i, entity);
     }
     w.setState('treasury', treasury(w) - newCells.length * POWER_LINE_COST_PER_CELL);
     dezoneCells(sim, w, newCells);
