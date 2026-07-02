@@ -61,3 +61,13 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Fix commit | (this commit) |
 | Test added | covered by the extended replay gate (tests/sim/replay.test.ts now exercises utilities/services/taxes/bulldozeRect with utilitiesEnabled) |
 | Behavior delta | Save/load observably changed which cells were buildable. Rule: every special case added to a live handler (here: "line cells under roads stay road-owned") needs its inverse handled on the OTHER side of the ownership transition (road removed → line re-owns) AND identical logic in the rebuild path; the replay gate only catches it if its scenario exercises those commands — keep the gate's command coverage in sync with the shipping feature set. |
+
+## Never gate on a piped test run — the pipe eats the exit code
+
+| Field | Value |
+|---|---|
+| Surfaced by | Playtest round 3: `npx vitest run 2>&1 | grep ... && git commit && git push` pushed while one (flaky, load-induced) test was red — grep's exit 0 masked vitest's failure |
+| Reviewer findings | n/a — process lesson |
+| Fix commit | n/a — process (redirect to a file, check `$?`, then grep the file) |
+| Test added | n/a — process lesson |
+| Behavior delta | A red suite reached the remote. Pattern now: `npx vitest run > out 2>&1; echo exit=$?` and only proceed on 0. |
