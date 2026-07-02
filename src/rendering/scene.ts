@@ -23,6 +23,12 @@ export class CityScene {
   readonly controls: MapControls;
   private readonly ambient: AmbientLight;
   private readonly sun: DirectionalLight;
+  private flight: {
+    start: number;
+    fromTarget: Vector3;
+    fromCamera: Vector3;
+    toTarget: { x: number; z: number };
+  } | null = null;
   private fps = 0;
   private frameCount = 0;
   private lastFpsSample = performance.now();
@@ -87,8 +93,44 @@ export class CityScene {
     return this.controls.target;
   }
 
+  /**
+   * Smoothly flies the camera to look at world cell (x, z) — used by the
+   * advisor's click-to-locate. Eased tween of both controls target and
+   * camera position over ~700ms; any user camera input after arrival wins.
+   */
+  flyTo(x: number, z: number): void {
+    this.flight = {
+      start: performance.now(),
+      fromTarget: this.controls.target.clone(),
+      fromCamera: this.camera.position.clone(),
+      toTarget: { x, z },
+    };
+  }
+
+  private updateFlight(now: number): void {
+    if (!this.flight) return;
+    const DURATION_MS = 700;
+    const raw = Math.min(1, (now - this.flight.start) / DURATION_MS);
+    const t = raw < 0.5 ? 2 * raw * raw : 1 - (-2 * raw + 2) ** 2 / 2; // easeInOutQuad
+    const { fromTarget, fromCamera, toTarget } = this.flight;
+    const targetX = fromTarget.x + (toTarget.x - fromTarget.x) * t;
+    const targetZ = fromTarget.z + (toTarget.z - fromTarget.z) * t;
+    // Keep a pleasant inspection distance/angle at the destination.
+    const destCamX = toTarget.x;
+    const destCamY = 18;
+    const destCamZ = toTarget.z + 16;
+    this.controls.target.set(targetX, 0, targetZ);
+    this.camera.position.set(
+      fromCamera.x + (destCamX - fromCamera.x) * t,
+      fromCamera.y + (destCamY - fromCamera.y) * t,
+      fromCamera.z + (destCamZ - fromCamera.z) * t,
+    );
+    if (raw >= 1) this.flight = null;
+  }
+
   private renderFrame(): void {
     for (const callback of this.frameCallbacks) callback();
+    this.updateFlight(performance.now());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
     this.frameCount++;

@@ -15,7 +15,7 @@ import { VehiclesView } from '../rendering/vehicles-mesh';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { InspectPanel } from '../ui/inspect-panel';
-import { AdvisorPanel } from '../ui/advisor';
+import { AdvisorPanel, type Advisory } from '../ui/advisor';
 import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
 import { SERVICE_RADIUS } from '../sim/constants/services';
 import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
@@ -79,6 +79,8 @@ export class Game {
   private readonly radiusIndicator = new RadiusIndicator();
   private readonly inspectPanel: InspectPanel;
   private readonly advisor: AdvisorPanel;
+  private readonly focusMarker = new RadiusIndicator();
+  private focusMarkerTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly networkOverlay: NetworkOverlayView;
   private hasPlant = false;
   private hasPump = false;
@@ -130,7 +132,7 @@ export class Game {
       onNewCity: () => location.reload(),
     });
     this.inspectPanel = new InspectPanel(container, () => this.clearInspect());
-    this.advisor = new AdvisorPanel(container);
+    this.advisor = new AdvisorPanel(container, (target) => this.focusProblem(target));
 
     this.ghost = new GhostView();
     this.roadsView = new RoadsView(GRID_WIDTH);
@@ -153,6 +155,7 @@ export class Game {
       this.trafficOverlay.mesh,
       this.networksView.group,
       this.networkOverlay.mesh,
+      this.focusMarker.group,
       this.radiusIndicator.group,
     );
     this.scene.onFrame(() => {
@@ -530,50 +533,97 @@ export class Game {
    * What the city lacks or what's going wrong, in priority order — feeds the
    * rolling advisor banner. Computed from client mirrors only.
    */
-  private computeAdvisories(): string[] {
-    const out: string[] = [];
+  private computeAdvisories(): Advisory[] {
+    const out: Advisory[] = [];
     const live = [...this.buildings.values()].filter((b) => !b.abandoned);
     const abandoned = this.buildings.size - live.length;
-    const unpowered = live.filter((b) => !b.powered).length;
-    const unwatered = live.filter((b) => !b.watered).length;
+    const unpowered = live.filter((b) => !b.powered);
+    const unwatered = live.filter((b) => !b.watered);
+    // Deterministic "show me" target: the lowest-id matching building.
+    const firstOf = (views: BuildingView[]): { x: number; y: number } | undefined => {
+      let best: BuildingView | null = null;
+      for (const view of views) if (!best || view.id < best.id) best = view;
+      return best ? { x: best.x, y: best.y } : undefined;
+    };
+    const firstAbandoned = firstOf([...this.buildings.values()].filter((b) => b.abandoned));
 
     if (this.treasury < 0) {
-      out.push('💸 The city is broke — only power/water purchases are allowed until income recovers. Consider raising taxes.');
+      out.push({
+        id: 'broke',
+        text: '💸 The city is broke — only power/water purchases are allowed until income recovers.',
+      });
     }
     if (this.roadCells.size === 0) {
-      out.push('🛣 Draw a Road to found your city — everything grows along roads.');
+      out.push({ id: 'firstRoad', text: '🛣 Draw a Road to found your city — everything grows along roads.' });
       return out;
     }
     if (this.zonedCells.size === 0 && this.buildings.size === 0) {
-      out.push('🏘 Paint Zone R (homes), Zone C (shops), and Zone I (jobs) within 2 cells of a road.');
+      out.push({
+        id: 'firstZones',
+        text: '🏘 Paint Zone R (homes), Zone C (shops), and Zone I (jobs) within 2 cells of a road.',
+      });
     }
     if (!this.hasPlant && this.buildings.size > 0) {
-      out.push('⚡ No power source — buildings will abandon. Place a Coal or Wind plant and drag Lines to your districts.');
-    } else if (unpowered > 0) {
-      out.push(`⚡ ${unpowered} building${unpowered === 1 ? ' lacks' : 's lack'} power — extend Lines to within 2 cells (lines may cross roads).`);
+      out.push({
+        id: 'noPower',
+        text: '⚡ No power source — buildings will abandon. Place a Coal or Wind plant and drag Lines to your districts.',
+        target: firstOf(live),
+      });
+    } else if (unpowered.length > 0) {
+      out.push({
+        id: 'unpowered',
+        text: `⚡ ${unpowered.length} building${unpowered.length === 1 ? ' lacks' : 's lack'} power — extend Lines to within reach.`,
+        target: firstOf(unpowered),
+      });
     }
     if (!this.hasPump && this.buildings.size > 0) {
-      out.push('💧 No water pump — buildings will abandon. Place a Pump beside water and drag Pipes to your districts.');
-    } else if (unwatered > 0) {
-      out.push(`💧 ${unwatered} building${unwatered === 1 ? ' lacks' : 's lack'} water — extend Pipes to within 2 cells (pipes run under anything).`);
+      out.push({
+        id: 'noWater',
+        text: '💧 No water pump — buildings will abandon. Place a Pump beside water and drag Pipes to your districts.',
+        target: firstOf(live),
+      });
+    } else if (unwatered.length > 0) {
+      out.push({
+        id: 'unwatered',
+        text: `💧 ${unwatered.length} building${unwatered.length === 1 ? ' lacks' : 's lack'} water — extend Pipes to within reach.`,
+        target: firstOf(unwatered),
+      });
     }
     if (abandoned > 0) {
-      out.push(`🏚 ${abandoned} abandoned building${abandoned === 1 ? '' : 's'} — fix power, water, or nearby pollution and they recover on their own.`);
+      out.push({
+        id: 'abandoned',
+        text: `🏚 ${abandoned} abandoned building${abandoned === 1 ? '' : 's'} — fix power, water, or nearby pollution and they recover on their own.`,
+        target: firstAbandoned,
+      });
     }
     if (performance.now() - this.lastDisconnectAt < 15_000) {
-      out.push('🚧 Commuters can’t reach their jobs — connect your districts with roads.');
+      out.push({
+        id: 'disconnected',
+        text: '🚧 Commuters can’t reach their jobs — connect your districts with roads.',
+      });
     }
-    if (this.demand.r > 0.5) out.push('🟩 Housing demand is high — zone more Residential.');
-    if (this.demand.c > 0.5) out.push('🟦 Commercial demand is high — zone more Commercial.');
-    if (this.demand.i > 0.5) out.push('🟧 Industrial demand is high — zone more Industrial.');
+    if (this.demand.r > 0.5) out.push({ id: 'demandR', text: '🟩 Housing demand is high — zone more Residential.' });
+    if (this.demand.c > 0.5) out.push({ id: 'demandC', text: '🟦 Commercial demand is high — zone more Commercial.' });
+    if (this.demand.i > 0.5) out.push({ id: 'demandI', text: '🟧 Industrial demand is high — zone more Industrial.' });
     const unemployed = this.citizens - this.employed;
     if (this.citizens > 10 && unemployed > this.citizens * 0.4 && (this.demand.i > 0 || this.demand.c > 0)) {
-      out.push('👷 Many citizens are unemployed — zone Commercial or Industrial for jobs.');
+      out.push({
+        id: 'unemployed',
+        text: '👷 Many citizens are unemployed — zone Commercial or Industrial for jobs.',
+      });
     }
     if (out.length === 0 && this.buildings.size > 0) {
-      out.push('✅ The city is healthy — keep growing!');
+      out.push({ id: 'healthy', text: '✅ The city is healthy — keep growing!' });
     }
     return out.slice(0, 6);
+  }
+
+  /** Advisor click-through: fly to the problem and flash a highlight on it. */
+  private focusProblem(target: { x: number; y: number }): void {
+    this.scene.flyTo(target.x + 0.5, target.y + 0.5);
+    this.focusMarker.show(target.x - 1, target.y - 1, target.x + 2, target.y + 2);
+    if (this.focusMarkerTimer !== undefined) clearTimeout(this.focusMarkerTimer);
+    this.focusMarkerTimer = setTimeout(() => this.focusMarker.hide(), 2500);
   }
 
   setSpeed(speed: GameSpeed): void {
