@@ -20,7 +20,9 @@ Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine (file:../
 - [ ] Phase 4 — fields + services
 - [ ] Phase 5 — utilities + economy
 - [x] Phase 6 — save/load (browser-verified: exact restore incl. treasury float), Save/Load/New buttons, pause/4x verified, day/night cycle
-- [~] Phase 7 — verification + hardening (README done, audits clean, final adversarial review running)
+- [x] Phase 7 — verification + hardening: final adversarial review (23 agents) found 1 critical (dead vehicle-remap path — road edits under live traffic could poison the world; fixed + regression test + browser-verified) + 1 major (line/road occupancy divergence across save/load; fixed) + doc drift (fixed); replay gate extended to the shipping config incl. utilities/services/taxes/bulldozeRect; 58 tests, all gates green, audits clean, pushed.
+
+v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes: build → zone → power/water → 100+ population with commuting traffic, congestion + relief verified headless, overlays match sim fields, budget breathes (broke badge + utility-only escape), save → reload reproduces exactly, determinism self-check green.
 
 ## Log
 
