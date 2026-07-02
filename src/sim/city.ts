@@ -1,12 +1,9 @@
 import { World } from 'civ-engine';
-import { GRID_HEIGHT, GRID_WIDTH, TPS } from './constants/map';
-import {
-  ROAD_BULLDOZE_REFUND,
-  ROAD_COST_PER_CELL,
-  STARTING_TREASURY,
-} from './constants/economy';
+import { BUDGET_INTERVAL_TICKS, GRID_HEIGHT, GRID_WIDTH, TPS } from './constants/map';
+import { BUDGET_INTERVAL_OFFSET, STARTING_TREASURY } from './constants/economy';
 import {
   DEFAULT_LAND_VALUE,
+  DEFAULT_TAX_RATE,
   DEMAND_INTERVAL,
   DEMAND_INTERVAL_OFFSET,
   GROWTH_INTERVAL,
@@ -16,18 +13,12 @@ import {
   MOVE_IN_INTERVAL,
   MOVE_IN_INTERVAL_OFFSET,
 } from './constants/zoning';
-import { cellIndex, inBounds, lPathCells } from './grid';
 import { buildRoadGraph, type RoadGraph } from './road/road-graph';
 import { generateTerrain, type TerrainData } from './terrain';
-import {
-  evictCitizens,
-  footprintCells,
-  growthSystem,
-  levelSystem,
-  refreshOccupancy,
-} from './buildings';
+import { growthSystem, levelSystem, refreshOccupancy } from './buildings';
 import { moveInSystem } from './citizens';
 import { demandSystem } from './demand';
+import { budgetSystem, registerEconomyCommands, taxDemandPenaltyOf, taxPenaltyOf } from './economy';
 import { employmentSystem, unassignWorkers } from './employment';
 import { tripSystem } from './traffic/trips';
 import { vehicleSystem } from './traffic/vehicles';
@@ -35,9 +26,7 @@ import {
   congestionSystem,
   readCongestionMirror,
   refreshEdgeCounts,
-  writeCongestionMirror,
 } from './traffic/congestion';
-import { captureEdgeKeys, edgeKey, remapVehiclesAfterTopologyChange } from './traffic/topology';
 import {
   CONGESTION_INTERVAL,
   CONGESTION_INTERVAL_OFFSET,
@@ -55,6 +44,12 @@ import {
   POLLUTION_INTERVAL_OFFSET,
 } from './constants/fields';
 import {
+  POWER_INTERVAL,
+  POWER_INTERVAL_OFFSET,
+  WATER_INTERVAL,
+  WATER_INTERVAL_OFFSET,
+} from './constants/utilities';
+import {
   coverageMirrorState,
   createCityFields,
   fieldScoreInputs,
@@ -64,15 +59,16 @@ import {
   readFieldMirrors,
   type CityFields,
 } from './fields';
-import { bulldozeStructures, refreshStructures, registerServiceCommands } from './services';
+import { refreshRoads, registerBulldozeRect, registerRoadCommands } from './road/commands';
+import { refreshStructures, registerServiceCommands } from './services';
 import {
-  rectCells,
-  refreshZoneEntities,
-  refreshZones,
-  registerZoneCommands,
-  validRect,
-} from './zoning';
-import type { CityWorld, RoadEndpoints, ZoneType } from './types';
+  powerSystem,
+  refreshUtilities,
+  registerUtilityCommands,
+  waterSystem,
+} from './utilities';
+import { refreshZoneEntities, refreshZones, registerZoneCommands } from './zoning';
+import type { CityWorld, ZoneType } from './types';
 
 export interface CitySimConfig {
   seed: number;
@@ -111,8 +107,12 @@ export interface CitySim {
   zoneCells: Map<number, ZoneType>;
   /** Zoned cell → zoneCell entity id (derived). */
   zoneEntities: Map<number, number>;
-  /** Footprint cell → entity id, buildings AND service structures (derived). */
+  /** Footprint cell → entity id: buildings, service structures, plants/pumps, power lines (derived). */
   occupiedCells: Map<number, number>;
+  /** Power line cell → entity id (derived; lines also claim occupiedCells). */
+  powerLineCells: Map<number, number>;
+  /** Pipe cell → entity id (derived; pipes are underground and never occupy). */
+  pipeCells: Map<number, number>;
   /** Field layers + static terrain masks; layer states persist via mirror components. */
   fields: CityFields;
   scoreInputs: ScoreInputs;
@@ -132,52 +132,6 @@ export function getTreasury(world: CityWorld): number {
   return (world.getState('treasury') as number | undefined) ?? 0;
 }
 
-function roadPath(data: RoadEndpoints) {
-  return lPathCells({ x: data.ax, y: data.ay }, { x: data.bx, y: data.by });
-}
-
-function validEndpoints(data: RoadEndpoints): boolean {
-  return (
-    inBounds(data.ax, data.ay, GRID_WIDTH, GRID_HEIGHT) &&
-    inBounds(data.bx, data.by, GRID_WIDTH, GRID_HEIGHT)
-  );
-}
-
-/**
- * Recomputes road cell set and graph, bumps topology + path versions, clears
- * the path cache. When called from a command handler (in-tick), pass the
- * world so in-flight vehicles are remapped onto the new edge ids (vehicles on
- * vanished edges despawn as disconnected trips).
- */
-export function refreshRoads(sim: CitySim, w?: CityWorld): void {
-  const oldKeys = captureEdgeKeys(sim.roadGraph);
-  const cells = new Set<number>();
-  for (const id of sim.world.query('roadCell', 'position')) {
-    const position = sim.world.getComponent(id, 'position');
-    if (position) cells.add(cellIndex(position.x, position.y));
-  }
-  sim.roadCells = cells;
-  sim.roadGraph = buildRoadGraph(cells, GRID_WIDTH, GRID_HEIGHT);
-  sim.topologyVersion += 1;
-  sim.pathVersion += 1;
-  sim.pathCache.clear();
-  sim.adjacencyCache = null;
-  if (w) {
-    remapVehiclesAfterTopologyChange(sim, w, oldKeys);
-    // Bucket keys are edge ids — carry them across the rebuild by geometry.
-    const newIdsByKey = new Map<string, number>();
-    for (const edge of sim.roadGraph.edges) newIdsByKey.set(edgeKey(edge), edge.id);
-    const remapped = new Map<number, number>();
-    for (const [oldId, bucket] of sim.edgeBuckets) {
-      const key = oldKeys.get(oldId);
-      const newId = key !== undefined ? newIdsByKey.get(key) : undefined;
-      if (newId !== undefined) remapped.set(newId, bucket);
-    }
-    sim.edgeBuckets = remapped;
-    writeCongestionMirror(sim, w);
-  }
-}
-
 /** Restores every derived cache from world state. Call after applySnapshot. */
 export function rebuildDerived(sim: CitySim): void {
   // Deterministic rebuild produces identical edge ids for an identical cell
@@ -188,156 +142,22 @@ export function rebuildDerived(sim: CitySim): void {
   refreshZoneEntities(sim);
   refreshOccupancy(sim);
   refreshStructures(sim); // after refreshOccupancy — it replaces occupiedCells
+  refreshUtilities(sim); // after refreshStructures — adds plant/pump/line cells
   refreshEdgeCounts(sim);
   readCongestionMirror(sim);
   readFieldMirrors(sim);
 }
 
-function dezoneCellsUnderRoad(sim: CitySim, w: CityWorld, cells: number[]): void {
-  let changed = false;
-  for (const i of cells) {
-    const entity = sim.zoneEntities.get(i);
-    if (entity !== undefined) {
-      w.destroyEntity(entity);
-      sim.zoneEntities.delete(i);
-      changed = true;
-    }
-  }
-  if (changed) {
-    refreshZones(sim);
-    w.emit('zonesChanged', {});
-  }
-}
-
-function registerRoadCommands(sim: CitySim): void {
-  const { world } = sim;
-
-  world.registerValidator('placeRoad', (data) => {
-    if (!validEndpoints(data)) return false;
-    const path = roadPath(data);
-    const newCells = path.filter((c) => !sim.roadCells.has(cellIndex(c.x, c.y)));
-    if (newCells.length === 0) return false;
-    for (const c of newCells) {
-      const i = cellIndex(c.x, c.y);
-      if (sim.terrain.water[i] === 1 || sim.occupiedCells.has(i)) return false;
-    }
-    return getTreasury(world) >= newCells.length * ROAD_COST_PER_CELL;
-  });
-
-  world.registerHandler('placeRoad', (data, w) => {
-    const path = roadPath(data);
-    const newCells = path.filter((c) => !sim.roadCells.has(cellIndex(c.x, c.y)));
-    for (const cell of newCells) {
-      const entity = w.createEntity();
-      w.setPosition(entity, { x: cell.x, y: cell.y });
-      w.addComponent(entity, 'roadCell', {});
-    }
-    w.setState('treasury', getTreasury(w) - newCells.length * ROAD_COST_PER_CELL);
-    dezoneCellsUnderRoad(
-      sim,
-      w,
-      newCells.map((c) => cellIndex(c.x, c.y)),
-    );
-    refreshRoads(sim);
-    w.emit('roadsChanged', { topologyVersion: sim.topologyVersion });
-  });
-
-  world.registerValidator('bulldozeRoad', (data) => {
-    if (!validEndpoints(data)) return false;
-    return roadPath(data).some((c) => sim.roadCells.has(cellIndex(c.x, c.y)));
-  });
-
-  world.registerHandler('bulldozeRoad', (data, w) => {
-    removeRoadCells(
-      sim,
-      w,
-      roadPath(data).map((c) => cellIndex(c.x, c.y)),
-    );
-    refreshRoads(sim);
-    w.emit('roadsChanged', { topologyVersion: sim.topologyVersion });
-  });
-}
-
-/** Destroys road entities on the given cells and refunds part of their cost. */
-function removeRoadCells(sim: CitySim, w: CityWorld, cells: number[]): number {
-  let removed = 0;
-  for (const i of cells) {
-    if (!sim.roadCells.has(i)) continue;
-    const x = i % GRID_WIDTH;
-    const y = Math.floor(i / GRID_WIDTH);
-    const occupants = w.grid.getAt(x, y);
-    if (!occupants) continue;
-    for (const id of [...occupants].sort((p, q) => p - q)) {
-      if (w.getComponent(id, 'roadCell')) {
-        w.destroyEntity(id);
-        removed++;
-      }
-    }
-  }
-  if (removed > 0) {
-    w.setState(
-      'treasury',
-      getTreasury(w) + Math.floor(removed * ROAD_COST_PER_CELL * ROAD_BULLDOZE_REFUND),
-    );
-  }
-  return removed;
-}
-
-function registerBulldozeRect(sim: CitySim): void {
-  const { world } = sim;
-
-  world.registerValidator('bulldozeRect', (data) => {
-    if (!validRect(data)) return false;
-    return rectCells(data).some((c) => {
-      const i = cellIndex(c.x, c.y);
-      return sim.roadCells.has(i) || sim.occupiedCells.has(i);
-    });
-  });
-
-  world.registerHandler('bulldozeRect', (data, w) => {
-    const cells = rectCells(data).map((c) => cellIndex(c.x, c.y));
-
-    // Service structures first — frees their occupiedCells entries so the
-    // building pass below only sees actual buildings.
-    bulldozeStructures(sim, w, cells);
-
-    // Buildings whose footprint intersects the rect.
-    const buildings = new Set<number>();
-    for (const i of cells) {
-      const id = sim.occupiedCells.get(i);
-      if (id !== undefined) buildings.add(id);
-    }
-    for (const id of [...buildings].sort((p, q) => p - q)) {
-      const building = w.getComponent(id, 'building');
-      const position = w.getComponent(id, 'position');
-      evictCitizens(w, id);
-      unassignWorkers(w, id);
-      if (building && position) {
-        for (const cell of footprintCells(position.x, position.y, building.w, building.h)) {
-          sim.occupiedCells.delete(cell);
-        }
-      }
-      w.destroyEntity(id);
-    }
-
-    const roadRemoved = removeRoadCells(sim, w, cells);
-    if (roadRemoved > 0) {
-      refreshRoads(sim);
-      w.emit('roadsChanged', { topologyVersion: sim.topologyVersion });
-    }
-  });
-}
-
-function neutralScoreInputs(config: CitySimConfig): ScoreInputs {
-  void config; // phases 4/5 branch on the flags to supply real inputs
+function neutralScoreInputs(world: CityWorld): ScoreInputs {
   return {
     landValueAt: () => DEFAULT_LAND_VALUE,
     coverageCount: () => 0,
     powered: () => true,
     watered: () => true,
     educated: () => false,
-    taxPenalty: () => 0,
-    taxDemandPenalty: () => 0,
+    // Taxes apply regardless of fieldsEnabled/utilitiesEnabled.
+    taxPenalty: (zone) => taxPenaltyOf(world, zone),
+    taxDemandPenalty: (zone) => taxDemandPenaltyOf(world, zone),
   };
 }
 
@@ -367,6 +187,10 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.registerComponent('noiseMirror');
   world.registerComponent('landValueMirror');
   world.registerComponent('coverageMirror');
+  world.registerComponent('powerPlant');
+  world.registerComponent('powerLine');
+  world.registerComponent('pipe');
+  world.registerComponent('waterPump');
 
   // -- world state --
   world.setState('treasury', STARTING_TREASURY);
@@ -374,6 +198,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.setState('population', 0);
   world.setState('disconnectedTrips', 0);
   world.setState('tripCursor', 0);
+  world.setState('taxRates', { r: DEFAULT_TAX_RATE, c: DEFAULT_TAX_RATE, i: DEFAULT_TAX_RATE });
 
   // Singleton mirror entity (see CityComponents.congestionMirror).
   const fields = createCityFields(terrain);
@@ -395,8 +220,10 @@ export function createCitySim(config: CitySimConfig): CitySim {
     zoneCells: new Map(),
     zoneEntities: new Map(),
     occupiedCells: new Map(),
+    powerLineCells: new Map(),
+    pipeCells: new Map(),
     fields,
-    scoreInputs: neutralScoreInputs(config),
+    scoreInputs: neutralScoreInputs(world),
     edgeCounts: new Map(),
     edgeBuckets: new Map(),
     pathVersion: 0,
@@ -405,12 +232,22 @@ export function createCitySim(config: CitySimConfig): CitySim {
   };
   // Phase 4: real field-driven desirability inputs replace the neutral seam.
   if (config.fieldsEnabled) sim.scoreInputs = fieldScoreInputs(sim);
+  // Phase 5: powered/watered read the flags the flood-fill systems maintain.
+  if (config.utilitiesEnabled) {
+    sim.scoreInputs = {
+      ...sim.scoreInputs,
+      powered: (entity) => world.getComponent(entity, 'building')?.powered ?? true,
+      watered: (entity) => world.getComponent(entity, 'building')?.watered ?? true,
+    };
+  }
 
   // -- commands --
   registerRoadCommands(sim);
   registerZoneCommands(sim);
   registerBulldozeRect(sim);
   registerServiceCommands(sim);
+  registerUtilityCommands(sim);
+  registerEconomyCommands(sim);
 
   // Abandoned workplaces shed their workers (listener avoids an import cycle
   // between buildings.ts and employment.ts; runs synchronously at emit).
@@ -487,6 +324,27 @@ export function createCitySim(config: CitySimConfig): CitySim {
     execute: landValueSystem(sim),
     interval: LAND_VALUE_INTERVAL,
     intervalOffset: LAND_VALUE_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'power',
+    phase: 'update',
+    execute: powerSystem(sim, config.utilitiesEnabled ?? false),
+    interval: POWER_INTERVAL,
+    intervalOffset: POWER_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'water',
+    phase: 'update',
+    execute: waterSystem(sim, config.utilitiesEnabled ?? false),
+    interval: WATER_INTERVAL,
+    intervalOffset: WATER_INTERVAL_OFFSET,
+  });
+  world.registerSystem({
+    name: 'budget',
+    phase: 'postUpdate',
+    execute: budgetSystem(sim),
+    interval: BUDGET_INTERVAL_TICKS,
+    intervalOffset: BUDGET_INTERVAL_OFFSET,
   });
 
   world.endSetup();

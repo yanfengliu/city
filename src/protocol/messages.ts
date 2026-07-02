@@ -1,4 +1,12 @@
-import type { CityCommands, DemandState, FieldName, ServiceType, ZoneType } from '../sim/types';
+import type {
+  BudgetReport,
+  CityCommands,
+  DemandState,
+  FieldName,
+  ServiceType,
+  TaxRates,
+  ZoneType,
+} from '../sim/types';
 
 /** Typed messages between the main thread and the sim worker. All payloads must be structured-clone-safe plain data. */
 
@@ -44,6 +52,9 @@ export interface FrameStats {
   vehicles: number;
   employed: number;
   disconnectedTrips: number;
+  taxRates: TaxRates;
+  /** Latest budget interval's totals; {income: 0, expenses: 0} before the first. */
+  lastBudget: BudgetReport;
 }
 
 export interface VehicleView {
@@ -70,6 +81,9 @@ export interface BuildingView {
   residents: number;
   /** Job slots filled (C/I), phase 3+. */
   jobsFilled: number;
+  /** Utility connectivity (phase 5) — false drives the ⚡/💧 problem icons. */
+  powered: boolean;
+  watered: boolean;
 }
 
 export interface StructureView {
@@ -102,6 +116,15 @@ export type WorkerToClient =
   | { type: 'vehicles'; topologyVersion: number; list: VehicleView[] }
   | { type: 'traffic'; edges: Array<{ id: number; bucket: number }> }
   | { type: 'structures'; upserts: StructureView[]; removed: number[] }
+  /**
+   * Full utility-network geometry (cell indices), posted whenever any
+   * plant/turbine/line/pump/pipe is placed or bulldozed.
+   */
+  | {
+      type: 'networks';
+      power: { plantCells: number[]; lineCells: number[] };
+      water: { pumpCells: number[]; pipeCells: number[] };
+    }
   /**
    * Sparse field snapshot, pushed on each subscribed field's recompute and on
    * subscription change. width/height are the layer's cell-grid dimensions

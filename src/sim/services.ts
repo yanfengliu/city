@@ -7,6 +7,7 @@ import {
   SERVICE_TYPES,
 } from './constants/services';
 import { footprintCells } from './buildings';
+import { purchaseAllowed } from './economy';
 import { coverageMirrorState } from './fields';
 import { cellIndex, inBounds } from './grid';
 import type { Layer } from 'civ-engine';
@@ -103,7 +104,7 @@ export function registerServiceCommands(sim: CitySim): void {
       }
     }
     if (!touchesRoad(sim, cells)) return false;
-    return treasury(world) >= SERVICE_COST[data.service];
+    return purchaseAllowed(world, SERVICE_COST[data.service], false);
   });
 
   world.registerHandler('placeService', (data, w) => {

@@ -94,6 +94,9 @@ function spawnBuilding(sim: CitySim, w: CityWorld, x: number, y: number, zone: Z
     badEvals: 0,
     badUtilityEvals: 0,
     recoverEvals: 0,
+    // True at spawn so pre-first-flood-fill buildings don't flash icons.
+    powered: true,
+    watered: true,
   });
   for (const cell of cells) sim.occupiedCells.set(cell, entity);
   w.emit('buildingGrown', { entity, zone });

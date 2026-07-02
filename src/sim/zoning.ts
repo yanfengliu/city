@@ -2,7 +2,7 @@ import { GRID_HEIGHT, GRID_WIDTH } from './constants/map';
 import { ZONE_MAX_ROAD_DISTANCE } from './constants/zoning';
 import { cellIndex, inBounds } from './grid';
 import type { CitySim } from './city';
-import type { RectArea, ZoneType } from './types';
+import type { CityWorld, RectArea, ZoneType } from './types';
 
 export function rectCells(area: RectArea): Array<{ x: number; y: number }> {
   const x0 = Math.min(area.ax, area.bx);
@@ -54,6 +54,26 @@ export function refreshZones(sim: CitySim): void {
     if (position && zone) zones.set(cellIndex(position.x, position.y), zone.zone);
   }
   sim.zoneCells = zones;
+}
+
+/**
+ * Destroys zone entities under freshly claimed cells — roads and power lines
+ * may be placed over zoned land and dezone it as they land.
+ */
+export function dezoneCells(sim: CitySim, w: CityWorld, cells: number[]): void {
+  let changed = false;
+  for (const i of cells) {
+    const entity = sim.zoneEntities.get(i);
+    if (entity !== undefined) {
+      w.destroyEntity(entity);
+      sim.zoneEntities.delete(i);
+      changed = true;
+    }
+  }
+  if (changed) {
+    refreshZones(sim);
+    w.emit('zonesChanged', {});
+  }
 }
 
 export function registerZoneCommands(sim: CitySim): void {

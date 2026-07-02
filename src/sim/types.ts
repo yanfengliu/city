@@ -9,6 +9,8 @@ export type ZoneType = 'R' | 'C' | 'I';
 
 export type ServiceType = 'fireStation' | 'police' | 'clinic' | 'school';
 
+export type PowerPlantKind = 'coal' | 'wind';
+
 /** Overlay-subscribable field layers (coverage is separate — rebuilt on structure changes). */
 export type FieldName = 'pollution' | 'noise' | 'landValue';
 
@@ -49,6 +51,12 @@ export interface BuildingComponent {
   /** Separate, longer-grace streak for utilities-only problems. */
   badUtilityEvals: number;
   recoverEvals: number;
+  /**
+   * Utility connectivity, written by the flood-fill systems (phase 5).
+   * Spawned true so pre-first-flood-fill buildings don't flash problem icons.
+   */
+  powered: boolean;
+  watered: boolean;
 }
 
 /** Player-placed service building (2x2 footprint anchored at the position component). */
@@ -61,6 +69,38 @@ export interface PlaceServiceCommand {
   /** Anchor cell (top-left of the 2x2 footprint). */
   x: number;
   y: number;
+}
+
+export interface PlacePowerPlantCommand {
+  kind: PowerPlantKind;
+  /** Anchor cell (top-left of the footprint). */
+  x: number;
+  y: number;
+}
+
+/** Pump anchor cell — must be orthogonally adjacent to at least one water cell. */
+export interface PlaceWaterPumpCommand {
+  x: number;
+  y: number;
+}
+
+/** Integer percent rate within [MIN_TAX_RATE, MAX_TAX_RATE]. */
+export interface SetTaxRateCommand {
+  zone: ZoneType;
+  rate: number;
+}
+
+/** Per-zone tax rates, integer percent. */
+export interface TaxRates {
+  r: number;
+  c: number;
+  i: number;
+}
+
+/** One budget interval's totals, emitted by the budget system. */
+export interface BudgetReport {
+  income: number;
+  expenses: number;
 }
 
 export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome';
@@ -116,6 +156,14 @@ export type CityComponents = {
   landValueMirror: LayerState<number>;
   /** All four coverage layers, keyed by service; written on structure changes only. */
   coverageMirror: Record<ServiceType, LayerState<number>>;
+  /** Coal plant (3x3) or wind turbine (1x1), anchored top-left at the position component. */
+  powerPlant: { kind: PowerPlantKind };
+  /** Power line cell marker — occupies its cell (blocks buildings and roads). */
+  powerLine: Record<string, never>;
+  /** Pipe cell marker — underground, does NOT occupy (may sit under anything on land). */
+  pipe: Record<string, never>;
+  /** Water pump (1x1) marker — occupies its cell; capacity source for the water network. */
+  waterPump: Record<string, never>;
 };
 
 export type CityCommands = {
@@ -125,10 +173,21 @@ export type CityCommands = {
   dezone: RectArea;
   bulldozeRect: RectArea;
   placeService: PlaceServiceCommand;
+  placePowerPlant: PlacePowerPlantCommand;
+  placePowerLine: RoadEndpoints;
+  placeWaterPump: PlaceWaterPumpCommand;
+  placePipe: RoadEndpoints;
+  setTaxRate: SetTaxRateCommand;
 };
 
 export type CityEvents = {
-  roadsChanged: { topologyVersion: number };
+  /**
+   * Payload intentionally empty: event payloads are replay-compared, and the
+   * derived topologyVersion counter's absolute value differs between an
+   * original run and a rebuildDerived-restored replay (the worker reads
+   * sim.topologyVersion directly instead).
+   */
+  roadsChanged: Record<string, never>;
   buildingGrown: { entity: number; zone: ZoneType };
   buildingAbandoned: { entity: number };
   buildingRecovered: { entity: number };
@@ -137,6 +196,10 @@ export type CityEvents = {
   structuresChanged: Record<string, never>;
   /** A field layer's recompute produced new values (drives overlay pushes). */
   fieldChanged: { field: FieldName };
+  /** Any plant/turbine/line/pump/pipe was placed or bulldozed. */
+  utilitiesChanged: Record<string, never>;
+  /** One budget interval settled (income and expenses already applied). */
+  budget: { income: number; expenses: number };
 };
 
 export type CityState = {
@@ -149,6 +212,8 @@ export type CityState = {
   tripCursor: number;
   /** Entity id of the singleton mirror entity. */
   mirrorEntity: number;
+  /** Per-zone tax rates (integer percent, default DEFAULT_TAX_RATE). */
+  taxRates: TaxRates;
 };
 
 export type CityWorld = World<CityEvents, CityCommands, CityComponents, CityState>;

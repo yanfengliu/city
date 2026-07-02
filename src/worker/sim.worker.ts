@@ -1,6 +1,10 @@
+import { footprintCells } from '../sim/buildings';
 import { createCitySim, getTreasury } from '../sim/city';
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
+import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
+import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
+import { cellIndex } from '../sim/grid';
 import type {
   BuildingView,
   ClientToWorker,
@@ -10,10 +14,12 @@ import type {
   WorkerToClient,
 } from '../protocol/messages';
 import type {
+  BudgetReport,
   BuildingComponent,
   DemandState,
   FieldName,
   StructureComponent,
+  TaxRates,
 } from '../sim/types';
 
 const workerScope = self as unknown as {
@@ -25,7 +31,8 @@ function post(message: WorkerToClient): void {
 }
 
 const seed = 12345;
-const sim = createCitySim({ seed, fieldsEnabled: true }); // phase 4: fields drive desirability
+// Phase 5: fields drive desirability; power/water gate buildings.
+const sim = createCitySim({ seed, fieldsEnabled: true, utilitiesEnabled: true });
 const { world } = sim;
 
 let speed: GameSpeed = 1;
@@ -33,6 +40,8 @@ let sentTopologyVersion = -1;
 let zonesDirty = true;
 let trafficDirty = false;
 let hadVehicles = false;
+let networksDirty = true;
+let lastBudget: BudgetReport = { income: 0, expenses: 0 };
 const subscribedFields = new Set<FieldName>();
 const dirtyFields = new Set<FieldName>();
 const knownStructures = new Set<number>();
@@ -45,6 +54,12 @@ world.on('trafficChanged', () => {
 });
 world.on('fieldChanged', ({ field }) => {
   dirtyFields.add(field);
+});
+world.on('utilitiesChanged', () => {
+  networksDirty = true;
+});
+world.on('budget', (report) => {
+  lastBudget = report;
 });
 
 function postField(name: FieldName): void {
@@ -69,6 +84,35 @@ function postRoadsIfChanged(): void {
     topologyVersion: sim.topologyVersion,
     cells: [...sim.roadCells].sort((a, b) => a - b),
     edges: sim.roadGraph.edges.map((e) => ({ id: e.id, a: e.a, b: e.b, cells: e.cells })),
+  });
+}
+
+function postNetworksIfChanged(): void {
+  if (!networksDirty) return;
+  networksDirty = false;
+  const plantCells: number[] = [];
+  for (const id of [...world.query('powerPlant', 'position')].sort((a, b) => a - b)) {
+    const plant = world.getComponent(id, 'powerPlant');
+    const position = world.getComponent(id, 'position');
+    if (!plant || !position) continue;
+    const side = POWER_PLANT_FOOTPRINT[plant.kind];
+    plantCells.push(...footprintCells(position.x, position.y, side, side));
+  }
+  const pumpCells: number[] = [];
+  for (const id of [...world.query('waterPump', 'position')].sort((a, b) => a - b)) {
+    const position = world.getComponent(id, 'position');
+    if (position) pumpCells.push(cellIndex(position.x, position.y));
+  }
+  post({
+    type: 'networks',
+    power: {
+      plantCells,
+      lineCells: [...sim.powerLineCells.keys()].sort((a, b) => a - b),
+    },
+    water: {
+      pumpCells,
+      pipeCells: [...sim.pipeCells.keys()].sort((a, b) => a - b),
+    },
   });
 }
 
@@ -98,6 +142,8 @@ function buildingView(id: number, data: BuildingComponent): BuildingView | null 
     abandoned: data.abandoned,
     residents: data.residents,
     jobsFilled: data.jobsFilled,
+    powered: data.powered,
+    watered: data.watered,
   };
 }
 
@@ -182,10 +228,17 @@ world.onDiff((diff) => {
       vehicles: vehicles.length,
       employed,
       disconnectedTrips: (world.getState('disconnectedTrips') as number | undefined) ?? 0,
+      taxRates: (world.getState('taxRates') as TaxRates | undefined) ?? {
+        r: DEFAULT_TAX_RATE,
+        c: DEFAULT_TAX_RATE,
+        i: DEFAULT_TAX_RATE,
+      },
+      lastBudget,
     },
   });
   postRoadsIfChanged();
   postZonesIfChanged();
+  postNetworksIfChanged();
 });
 
 addEventListener('message', (event) => {
@@ -235,4 +288,5 @@ post({
 });
 postRoadsIfChanged();
 postZonesIfChanged();
+postNetworksIfChanged();
 world.start();

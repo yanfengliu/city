@@ -23,6 +23,8 @@ import {
   POLLUTION_PER_INDUSTRIAL_LEVEL,
 } from './constants/fields';
 import { COVERAGE_BLOCK_SIZE, SERVICE_TYPES } from './constants/services';
+import { COAL_PLANT_POLLUTION } from './constants/utilities';
+import { taxDemandPenaltyOf, taxPenaltyOf } from './economy';
 import { cellIndex } from './grid';
 import type { TerrainData } from './terrain';
 import type { CitySim, ScoreInputs } from './city';
@@ -131,7 +133,11 @@ export function readFieldMirrors(sim: CitySim): void {
   }
 }
 
-/** Real phase-4 desirability inputs; utilities and taxes stay neutral until phase 5. */
+/**
+ * Real phase-4 desirability inputs. Utilities stay neutral here — city.ts
+ * overlays component-backed powered/watered when utilitiesEnabled. Taxes are
+ * always real (they apply regardless of fieldsEnabled).
+ */
 export function fieldScoreInputs(sim: CitySim): ScoreInputs {
   return {
     landValueAt: (x, y) => sim.fields.landValue.getAt(x, y),
@@ -139,8 +145,8 @@ export function fieldScoreInputs(sim: CitySim): ScoreInputs {
     powered: () => true,
     watered: () => true,
     educated: (x, y) => sim.fields.coverage.school.getAt(x, y) > 0,
-    taxPenalty: () => 0,
-    taxDemandPenalty: () => 0,
+    taxPenalty: (zone) => taxPenaltyOf(sim.world, zone),
+    taxDemandPenalty: (zone) => taxDemandPenaltyOf(sim.world, zone),
   };
 }
 
@@ -214,31 +220,58 @@ function reconcileField(layer: Layer<number>, next: Map<number, number>): boolea
   return changed;
 }
 
+/** Adds `amount` at the anchor block with radial linear falloff (Euclidean, in blocks). */
+function emitRadial(
+  next: Map<number, number>,
+  layer: Layer<number>,
+  bx: number,
+  by: number,
+  amount: number,
+): void {
+  const radius = POLLUTION_FALLOFF_RADIUS_BLOCKS;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const factor = 1 - Math.sqrt(dx * dx + dy * dy) / radius;
+      if (factor <= 0) continue;
+      addToBlock(next, layer, bx + dx, by + dy, amount * factor);
+    }
+  }
+}
+
 /**
  * Pollution recompute: decay, then every non-abandoned industrial building
  * emits at its anchor block with radial linear falloff (Euclidean, in blocks —
- * full strength at distance 0, zero at the falloff radius).
+ * full strength at distance 0, zero at the falloff radius); coal plants emit
+ * COAL_PLANT_POLLUTION at their anchor block with the same falloff.
  */
 export function pollutionSystem(sim: CitySim): (w: CityWorld) => void {
   return (w) => {
     const layer = sim.fields.pollution;
     const next = decayedCells(layer, POLLUTION_DECAY);
-    const radius = POLLUTION_FALLOFF_RADIUS_BLOCKS;
     // Sorted iteration: float accumulation order is part of determinism.
     for (const id of [...w.query('building', 'position')].sort((a, b) => a - b)) {
       const building = w.getComponent(id, 'building');
       const position = w.getComponent(id, 'position');
       if (!building || !position || building.zone !== 'I' || building.abandoned) continue;
-      const bx = Math.floor(position.x / POLLUTION_BLOCK_SIZE);
-      const by = Math.floor(position.y / POLLUTION_BLOCK_SIZE);
-      const amount = POLLUTION_PER_INDUSTRIAL_LEVEL * building.level;
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const factor = 1 - Math.sqrt(dx * dx + dy * dy) / radius;
-          if (factor <= 0) continue;
-          addToBlock(next, layer, bx + dx, by + dy, amount * factor);
-        }
-      }
+      emitRadial(
+        next,
+        layer,
+        Math.floor(position.x / POLLUTION_BLOCK_SIZE),
+        Math.floor(position.y / POLLUTION_BLOCK_SIZE),
+        POLLUTION_PER_INDUSTRIAL_LEVEL * building.level,
+      );
+    }
+    for (const id of [...w.query('powerPlant', 'position')].sort((a, b) => a - b)) {
+      const plant = w.getComponent(id, 'powerPlant');
+      const position = w.getComponent(id, 'position');
+      if (!plant || !position || plant.kind !== 'coal') continue;
+      emitRadial(
+        next,
+        layer,
+        Math.floor(position.x / POLLUTION_BLOCK_SIZE),
+        Math.floor(position.y / POLLUTION_BLOCK_SIZE),
+        COAL_PLANT_POLLUTION,
+      );
     }
     commitField(sim, w, 'pollution', reconcileField(layer, next));
   };
