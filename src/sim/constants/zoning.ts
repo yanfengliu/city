@@ -57,3 +57,6 @@ export const MOVE_IN_TRICKLE_THRESHOLD = -0.3;
 
 /** Vacancy beyond this many free homes stops deepening negative R demand. */
 export const DEMAND_VACANCY_CAP = 16;
+
+/** Bulldozed building cells stay ungrowable this long (rubble) — kills the bulldoze-then-build race (playtest round 2). */
+export const REGROWTH_COOLDOWN_TICKS = 200;

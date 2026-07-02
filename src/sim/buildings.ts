@@ -60,7 +60,14 @@ function roadAdjacent(sim: CitySim, cells: number[]): boolean {
   return false;
 }
 
-function spawnBuilding(sim: CitySim, w: CityWorld, x: number, y: number, zone: ZoneType): void {
+function spawnBuilding(
+  sim: CitySim,
+  w: CityWorld,
+  x: number,
+  y: number,
+  zone: ZoneType,
+  rubble: ReadonlySet<number>,
+): void {
   // Prefer a 2×2 footprint anchored top-left; fall back to 1×1.
   let width = 2;
   let height = 2;
@@ -73,7 +80,8 @@ function spawnBuilding(sim: CitySim, w: CityWorld, x: number, y: number, zone: Z
   const fits2x2 =
     cellBuildable(sim, x + 1, y, zone) &&
     cellBuildable(sim, x, y + 1, zone) &&
-    cellBuildable(sim, x + 1, y + 1, zone);
+    cellBuildable(sim, x + 1, y + 1, zone) &&
+    !cells.some((cell) => rubble.has(cell));
   if (!fits2x2) {
     width = 1;
     height = 1;
@@ -109,6 +117,24 @@ export function growthSystem(sim: CitySim): (w: CityWorld) => void {
     if (!demand) return;
     const demandOf: Record<ZoneType, number> = { R: demand.r, C: demand.c, I: demand.i };
 
+    // Rubble (freshly bulldozed cells): blocked from regrowth until expiry.
+    const rubbleState = (w.getState('regrowthBlock') as Record<string, number> | undefined) ?? {};
+    const rubble = new Set<number>();
+    let pruned = false;
+    const kept: Record<string, number> = {};
+    for (const [key, until] of Object.entries(rubbleState)) {
+      if (until > w.tick) {
+        rubble.add(Number(key));
+        kept[key] = until;
+      } else {
+        pruned = true;
+      }
+    }
+    if (pruned) {
+      if (Object.keys(kept).length === 0) w.deleteState('regrowthBlock');
+      else w.setState('regrowthBlock', kept);
+    }
+
     for (const zone of ZONE_ORDER) {
       if (demandOf[zone] <= 0) continue;
       // Candidate anchors, canonically sorted for replay determinism.
@@ -121,8 +147,12 @@ export function growthSystem(sim: CitySim): (w: CityWorld) => void {
         const anchor = candidates[pick];
         const x = anchor % GRID_WIDTH;
         const y = Math.floor(anchor / GRID_WIDTH);
-        if (cellBuildable(sim, x, y, zone) && roadAdjacent(sim, [anchor])) {
-          spawnBuilding(sim, w, x, y, zone);
+        if (
+          cellBuildable(sim, x, y, zone) &&
+          !rubble.has(anchor) &&
+          roadAdjacent(sim, [anchor])
+        ) {
+          spawnBuilding(sim, w, x, y, zone, rubble);
         }
         candidates.splice(pick, 1);
       }

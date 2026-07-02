@@ -4,6 +4,7 @@ import {
   ROAD_COST_PER_CELL,
 } from '../constants/economy';
 import { evictCitizens, footprintCells } from '../buildings';
+import { REGROWTH_COOLDOWN_TICKS } from '../constants/zoning';
 import { purchaseAllowed } from '../economy';
 import { unassignWorkers } from '../employment';
 import { cellIndex, inBounds, lPathCells } from '../grid';
@@ -179,6 +180,8 @@ export function registerBulldozeRect(sim: CitySim): void {
       const id = sim.occupiedCells.get(i);
       if (id !== undefined) buildings.add(id);
     }
+    const rubble = { ...((w.getState('regrowthBlock') as Record<string, number> | undefined) ?? {}) };
+    let rubbleChanged = false;
     for (const id of [...buildings].sort((p, q) => p - q)) {
       const building = w.getComponent(id, 'building');
       const position = w.getComponent(id, 'position');
@@ -187,10 +190,15 @@ export function registerBulldozeRect(sim: CitySim): void {
       if (building && position) {
         for (const cell of footprintCells(position.x, position.y, building.w, building.h)) {
           sim.occupiedCells.delete(cell);
+          // Rubble: block regrowth briefly so the player can build on the
+          // cleared cells without racing the growth system.
+          rubble[String(cell)] = w.tick + REGROWTH_COOLDOWN_TICKS;
+          rubbleChanged = true;
         }
       }
       w.destroyEntity(id);
     }
+    if (rubbleChanged) w.setState('regrowthBlock', rubble);
 
     const roadRemoved = removeRoadCells(sim, w, cells);
     if (roadRemoved > 0) {

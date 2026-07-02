@@ -60,3 +60,32 @@ describe('move-in trickle', () => {
     expect(sawNegativeDemandGrowth).toBe(true);
   });
 });
+
+describe('bulldoze rubble', () => {
+  it('bulldozed building cells do not regrow before the player can build a road', () => {
+    const sim = createCitySim({ seed: 7 });
+    const base = findLandBlock(sim, 18, 18);
+    const w = sim.world;
+    w.submit('placeRoad', { ax: base.x, ay: base.y + 2, bx: base.x + 15, by: base.y + 2 });
+    w.step();
+    w.submit('zone', { zone: 'R', ax: base.x, ay: base.y, bx: base.x + 15, by: base.y + 4 });
+    w.step();
+    // Grow a dense band.
+    for (let i = 0; i < 400; i++) w.step();
+
+    // Player clears a connector column...
+    const colX = base.x + 8;
+    expect(
+      w.submit('bulldozeRect', { ax: colX, ay: base.y + 3, bx: colX + 1, by: base.y + 4 }),
+    ).toBe(true);
+    w.step();
+    // ...dawdles a few growth cycles (the old race window)...
+    for (let i = 0; i < 40; i++) w.step();
+    // ...and the road still fits.
+    expect(
+      w.submit('placeRoad', { ax: colX, ay: base.y + 2, bx: colX, by: base.y + 4 }),
+    ).toBe(true);
+    w.step();
+    expect(sim.roadCells.has((base.y + 4) * 128 + colX)).toBe(true);
+  });
+});
