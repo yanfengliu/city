@@ -21,6 +21,8 @@ export class CityScene {
   readonly scene: Scene;
   readonly camera: PerspectiveCamera;
   readonly controls: MapControls;
+  private readonly ambient: AmbientLight;
+  private readonly sun: DirectionalLight;
   private fps = 0;
   private frameCount = 0;
   private lastFpsSample = performance.now();
@@ -50,10 +52,10 @@ export class CityScene {
     this.controls.maxDistance = 220;
     this.controls.update();
 
-    const ambient = new AmbientLight(0xffffff, 0.7);
-    const sun = new DirectionalLight(0xfff4e0, 1.6);
-    sun.position.set(80, 120, 40);
-    this.scene.add(ambient, sun);
+    this.ambient = new AmbientLight(0xffffff, 0.7);
+    this.sun = new DirectionalLight(0xfff4e0, 1.6);
+    this.sun.position.set(80, 120, 40);
+    this.scene.add(this.ambient, this.sun);
 
     window.addEventListener('resize', () => {
       this.camera.aspect = container.clientWidth / container.clientHeight;
@@ -96,6 +98,29 @@ export class CityScene {
       this.frameCount = 0;
       this.lastFpsSample = now;
     }
+  }
+
+  /**
+   * Day/night: the sun orbits with the sim's day fraction (0 = midnight).
+   * Night dims rather than blacks out so the city stays readable.
+   */
+  setDayFraction(fraction: number): void {
+    const angle = (fraction - 0.25) * Math.PI * 2; // sunrise at 0.25
+    const height = Math.sin(angle);
+    this.sun.position.set(
+      64 + Math.cos(angle) * 120,
+      Math.max(12, height * 120),
+      64 + Math.sin(angle * 0.5) * 40,
+    );
+    const daylight = Math.max(0, height);
+    this.sun.intensity = 0.25 + 1.35 * daylight;
+    this.ambient.intensity = 0.35 + 0.35 * daylight;
+    const nightBlend = 1 - daylight;
+    (this.scene.background as Color).setRGB(
+      0.53 - 0.4 * nightBlend,
+      0.71 - 0.5 * nightBlend,
+      0.84 - 0.5 * nightBlend,
+    );
   }
 
   getFps(): number {

@@ -18,11 +18,19 @@ export type CommandMessage = {
   [K in CommandName]: { type: 'command'; name: K; data: CityCommands[K] };
 }[CommandName];
 
+export interface SaveMeta {
+  saveVersion: 1;
+  seed: number;
+}
+
 export type ClientToWorker =
   | CommandMessage
   | { type: 'setSpeed'; speed: GameSpeed }
   /** Automation/testing: synchronously step N ticks regardless of speed. */
   | { type: 'advance'; ticks: number }
+  | { type: 'requestSnapshot' }
+  /** Rebuilds the sim from a saved snapshot, then re-runs the full boot sync. */
+  | { type: 'loadSnapshot'; snapshot: unknown; meta: SaveMeta }
   /** Replaces the set of field overlays the client wants pushed on recompute. */
   | { type: 'setFieldSubscriptions'; fields: FieldName[] };
 
@@ -140,4 +148,6 @@ export type WorkerToClient =
       defaultValue: number;
       cells: Array<[index: number, value: number]>;
     }
-  | { type: 'commandRejected'; name: CommandName; message: string };
+  | { type: 'commandRejected'; name: CommandName; message: string }
+  /** Save response: the serialized world + metadata for persistence. */
+  | { type: 'snapshot'; snapshot: unknown; meta: SaveMeta };

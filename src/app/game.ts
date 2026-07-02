@@ -13,10 +13,17 @@ import { VehiclesView } from '../rendering/vehicles-mesh';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { InspectPanel } from '../ui/inspect-panel';
-import { GRID_HEIGHT, GRID_WIDTH, TICK_MS } from '../sim/constants/map';
+import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
 import { SERVICE_RADIUS } from '../sim/constants/services';
 import { CAPACITY_PER_CELL, PEOPLE_PER_CITIZEN } from '../sim/constants/zoning';
 import { cellIndex, type Cell } from '../sim/grid';
+import {
+  consumePendingLoad,
+  hasSave,
+  readSave,
+  requestLoadOnNextBoot,
+  writeSave,
+} from '../persistence/save';
 import { attachInput } from './input';
 import { TOOL_GROUPS, Tools, type ToolName } from './tools';
 import type {
@@ -97,6 +104,18 @@ export class Game {
       onSetSpeed: (speed) => this.setSpeed(speed),
       onSelectTool: (tool) => this.tools.setTool(tool),
       onSelectOverlay: (overlay) => this.setOverlay(overlay),
+      onSave: () => this.send({ type: 'requestSnapshot' }),
+      onLoad: () => {
+        if (!hasSave()) {
+          this.hud.showToast('No save found');
+          return;
+        }
+        // Load = flag + reload: the snapshot applies on the fresh boot while
+        // every renderer store is still empty (no per-view reset needed).
+        requestLoadOnNextBoot();
+        location.reload();
+      },
+      onNewCity: () => location.reload(),
     });
     this.inspectPanel = new InspectPanel(container, () => this.clearInspect());
 
@@ -123,6 +142,7 @@ export class Game {
     this.scene.onFrame(() => {
       this.flushDirtyViews();
       this.vehiclesView.updateFrame(performance.now());
+      this.scene.setDayFraction((this.tick % TICKS_PER_DAY) / TICKS_PER_DAY);
     });
 
     this.tools = new Tools({
@@ -184,6 +204,8 @@ export class Game {
   private onWorkerMessage(message: WorkerToClient): void {
     switch (message.type) {
       case 'ready':
+        // The post-load sync re-sends ready; v1 saves keep the boot seed, so
+        // the already-built terrain stays valid and only the first one builds.
         if (this.ready) break;
         this.ready = true;
         this.terrain = message.terrain;
@@ -191,6 +213,17 @@ export class Game {
         this.treesView = new TreesView({ width: message.terrain.width, trees: message.terrain.trees });
         this.scene.add(this.treesView.group);
         this.occupancyDirty = true;
+        if (consumePendingLoad()) {
+          const save = readSave();
+          if (save) this.send({ type: 'loadSnapshot', snapshot: save.snapshot, meta: save.meta });
+        }
+        break;
+      case 'snapshot':
+        this.hud.showToast(
+          writeSave({ snapshot: message.snapshot, meta: message.meta })
+            ? 'City saved'
+            : 'Save failed (storage unavailable)',
+        );
         break;
       case 'roads':
         this.roadCells = new Set(message.cells);

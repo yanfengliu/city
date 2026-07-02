@@ -29,6 +29,9 @@ export interface HudCallbacks<TTool extends string> {
   onSetSpeed(speed: GameSpeed): void;
   onSelectTool(tool: TTool): void;
   onSelectOverlay(overlay: OverlayName): void;
+  onSave(): void;
+  onLoad(): void;
+  onNewCity(): void;
 }
 
 const SPEEDS: GameSpeed[] = [0, 1, 2, 4];
@@ -130,6 +133,11 @@ export class Hud<TTool extends string> {
       const button = this.makeButton(overlay.label, () => callbacks.onSelectOverlay(overlay.id));
       this.overlayButtons.set(overlay.id, button);
     }
+    this.root.appendChild(this.makeDivider());
+    this.makeButton('💾 Save', () => callbacks.onSave());
+    this.makeButton('📂 Load', () => callbacks.onLoad());
+    this.makeButton('✨ New', () => callbacks.onNewCity());
+
     container.appendChild(this.root);
 
     this.toastArea = document.createElement('div');

@@ -1,5 +1,5 @@
 import { footprintCells } from '../sim/buildings';
-import { createCitySim, getTreasury } from '../sim/city';
+import { createCitySim, getTreasury, rebuildDerived } from '../sim/city';
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
 import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
@@ -30,10 +30,11 @@ function post(message: WorkerToClient): void {
   workerScope.postMessage(message);
 }
 
-const seed = 12345;
-// Phase 5: fields drive desirability; power/water gate buildings.
-const sim = createCitySim({ seed, fieldsEnabled: true, utilitiesEnabled: true });
-const { world } = sim;
+// Fields drive desirability; power/water gate buildings. The sim is swappable:
+// loadSnapshot builds a fresh one and re-runs the boot sync.
+let currentSeed = 12345;
+let sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true });
+let world = sim.world;
 
 let speed: GameSpeed = 1;
 let sentTopologyVersion = -1;
@@ -46,21 +47,24 @@ const subscribedFields = new Set<FieldName>();
 const dirtyFields = new Set<FieldName>();
 const knownStructures = new Set<number>();
 
-world.on('zonesChanged', () => {
-  zonesDirty = true;
-});
-world.on('trafficChanged', () => {
-  trafficDirty = true;
-});
-world.on('fieldChanged', ({ field }) => {
-  dirtyFields.add(field);
-});
-world.on('utilitiesChanged', () => {
-  networksDirty = true;
-});
-world.on('budget', (report) => {
-  lastBudget = report;
-});
+function attachWorldListeners(): void {
+  world.on('zonesChanged', () => {
+    zonesDirty = true;
+  });
+  world.on('trafficChanged', () => {
+    trafficDirty = true;
+  });
+  world.on('fieldChanged', ({ field }) => {
+    dirtyFields.add(field);
+  });
+  world.on('utilitiesChanged', () => {
+    networksDirty = true;
+  });
+  world.on('budget', (report) => {
+    lastBudget = report;
+  });
+  world.onDiff(onTickDiff);
+}
 
 function postField(name: FieldName): void {
   const layer = sim.fields[name];
@@ -147,8 +151,64 @@ function buildingView(id: number, data: BuildingComponent): BuildingView | null 
   };
 }
 
+/** Posts the full current building/structure sets (boot and post-load sync). */
+function postAllEntities(): void {
+  const buildings: BuildingView[] = [];
+  for (const id of [...world.query('building')].sort((a, b) => a - b)) {
+    const data = world.getComponent(id, 'building');
+    if (!data) continue;
+    const view = buildingView(id, data);
+    if (view) buildings.push(view);
+  }
+  if (buildings.length > 0) post({ type: 'buildings', upserts: buildings, removed: [] });
+
+  knownStructures.clear();
+  const structures: StructureView[] = [];
+  for (const id of [...world.query('structure', 'position')].sort((a, b) => a - b)) {
+    const data = world.getComponent(id, 'structure');
+    const position = world.getComponent(id, 'position');
+    if (!data || !position) continue;
+    knownStructures.add(id);
+    structures.push({
+      id,
+      x: position.x,
+      y: position.y,
+      w: SERVICE_FOOTPRINT,
+      h: SERVICE_FOOTPRINT,
+      kind: 'service',
+      service: data.type,
+    });
+  }
+  if (structures.length > 0) post({ type: 'structures', upserts: structures, removed: [] });
+}
+
+/** Boot handshake: terrain, then every bulk set the renderer mirrors. */
+function postBootSync(): void {
+  post({
+    type: 'ready',
+    gridWidth: GRID_WIDTH,
+    gridHeight: GRID_HEIGHT,
+    seed: currentSeed,
+    terrain: {
+      width: sim.terrain.width,
+      height: sim.terrain.height,
+      water: sim.terrain.water,
+      trees: sim.terrain.trees,
+    },
+  });
+  sentTopologyVersion = -1;
+  zonesDirty = true;
+  networksDirty = true;
+  hadVehicles = false;
+  postRoadsIfChanged();
+  postZonesIfChanged();
+  postNetworksIfChanged();
+  postAllEntities();
+  for (const name of subscribedFields) postField(name);
+}
+
 // Fires once per executed tick (the engine's GameLoop drives stepping).
-world.onDiff((diff) => {
+const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
   const buildingDiff = diff.components['building'];
   const upserts: BuildingView[] = [];
   if (buildingDiff) {
@@ -239,7 +299,7 @@ world.onDiff((diff) => {
   postRoadsIfChanged();
   postZonesIfChanged();
   postNetworksIfChanged();
-});
+};
 
 addEventListener('message', (event) => {
   const message = (event as MessageEvent<ClientToWorker>).data;
@@ -271,22 +331,30 @@ addEventListener('message', (event) => {
       }
       break;
     }
+    case 'requestSnapshot':
+      post({
+        type: 'snapshot',
+        snapshot: world.serialize(),
+        meta: { saveVersion: 1, seed: currentSeed },
+      });
+      break;
+    case 'loadSnapshot': {
+      world.stop();
+      currentSeed = message.meta.seed;
+      sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true });
+      world = sim.world;
+      world.applySnapshot(message.snapshot as Parameters<typeof world.applySnapshot>[0]);
+      rebuildDerived(sim);
+      attachWorldListeners();
+      postBootSync();
+      if (speed === 0) world.pause();
+      else world.setSpeed(speed);
+      world.start();
+      break;
+    }
   }
 });
 
-post({
-  type: 'ready',
-  gridWidth: GRID_WIDTH,
-  gridHeight: GRID_HEIGHT,
-  seed,
-  terrain: {
-    width: sim.terrain.width,
-    height: sim.terrain.height,
-    water: sim.terrain.water,
-    trees: sim.terrain.trees,
-  },
-});
-postRoadsIfChanged();
-postZonesIfChanged();
-postNetworksIfChanged();
+attachWorldListeners();
+postBootSync();
 world.start();
