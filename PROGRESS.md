@@ -17,8 +17,6 @@ Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine (file:../
 - [x] Phase 3 — employment + traffic (browser-verified: vehicles commuting, 49 employed, disconnectedTrips 0)
 - [x] Phase 4 — fields + services (browser-verified: pollution overlay hazes industry, fire+school placed)
 - [x] Phase 5 — utilities + economy (browser-verified: coal+lines+pump+pipes power/water the town; 66 sim tests; fixes: power lines may cross roads, budget first fires at tick 1024, roadsChanged payload emptied for replay determinism — caught by the new SessionReplayer.selfCheck gate)
-- [ ] Phase 4 — fields + services
-- [ ] Phase 5 — utilities + economy
 - [x] Phase 6 — save/load (browser-verified: exact restore incl. treasury float), Save/Load/New buttons, pause/4x verified, day/night cycle
 - [x] Phase 7 — verification + hardening: final adversarial review (23 agents) found 1 critical (dead vehicle-remap path — road edits under live traffic could poison the world; fixed + regression test + browser-verified) + 1 major (line/road occupancy divergence across save/load; fixed) + doc drift (fixed); replay gate extended to the shipping config incl. utilities/services/taxes/bulldozeRect; 58 tests, all gates green, audits clean, pushed.
 
