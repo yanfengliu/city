@@ -90,7 +90,8 @@ export interface ToolHost {
   submitPipe(a: Cell, b: Cell): void;
   /** Select-tool click; null = off-grid (clears any open inspection). */
   inspect(cell: Cell | null): void;
-  showGhost(cells: Cell[], valid: boolean, zone?: ZoneType): void;
+  /** validity: one flag for all-or-nothing commands; per-cell for subset painters (zone/dezone). */
+  showGhost(cells: Cell[], validity: boolean | boolean[], zone?: ZoneType): void;
   clearGhost(): void;
   /** Effect-area preview (inclusive cell box) for click-place tools; hidden with clearGhost. */
   showRadius(minX: number, minY: number, maxX: number, maxY: number): void;
@@ -251,7 +252,20 @@ export class Tools {
       this.activeTool === 'road' || LINE_TOOLS.has(this.activeTool)
         ? lPathCells(anchor, current)
         : rectCells(anchor, current);
-    this.host.showGhost(cells, this.isSelectionValid(cells), ZONE_BY_TOOL[this.activeTool]);
+    // Zone/dezone paint only their eligible subset — tint each cell honestly.
+    const zone = ZONE_BY_TOOL[this.activeTool];
+    if (zone) {
+      this.host.showGhost(cells, cells.map((cell) => this.isZoneable(cell)), zone);
+      return;
+    }
+    if (this.activeTool === 'dezone') {
+      this.host.showGhost(
+        cells,
+        cells.map((cell) => this.host.hasZone(cellIndex(cell.x, cell.y, this.host.gridWidth))),
+      );
+      return;
+    }
+    this.host.showGhost(cells, this.isSelectionValid(cells));
   }
 
   /** In-bounds cells of the footprint square anchored (top-left) at the given cell. */

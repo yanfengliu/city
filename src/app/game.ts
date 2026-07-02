@@ -128,6 +128,8 @@ export class Game {
   private lastBudget: BudgetReport = { income: 0, expenses: 0 };
   private vehicles = 0;
   private vehiclesOnScreen = 0;
+  /** Edge congestion buckets from the last traffic message (automation + overlays). */
+  private congestionBuckets: ReadonlyMap<number, number> = new Map();
   private employed = 0;
   private disconnectedTrips = 0;
   private ready = false;
@@ -225,8 +227,8 @@ export class Game {
       submitPipe: (a, b) =>
         this.send({ type: 'command', name: 'placePipe', data: { ax: a.x, ay: a.y, bx: b.x, by: b.y } }),
       inspect: (cell) => this.inspectCell(cell),
-      showGhost: (cells, valid, zone) =>
-        this.ghost.update(cells, valid, zone ? ZONE_COLORS[zone] : undefined),
+      showGhost: (cells, validity, zone) =>
+        this.ghost.update(cells, validity, zone ? ZONE_COLORS[zone] : undefined),
       clearGhost: () => {
         this.ghost.clear();
         this.radiusIndicator.hide();
@@ -327,6 +329,7 @@ export class Game {
         break;
       case 'traffic': {
         const buckets = new Map(message.edges.map((edge) => [edge.id, edge.bucket]));
+        this.congestionBuckets = buckets;
         this.vehiclesView.setTraffic(buckets);
         this.trafficOverlay.setBuckets(buckets);
         break;
@@ -735,9 +738,21 @@ export class Game {
       vehiclesOnScreen: this.vehiclesOnScreen,
       employed: this.employed,
       disconnectedTrips: this.disconnectedTrips,
+      congestion: this.congestionTextState(),
       inspect: this.inspectTextState(),
       cameraTarget: { x: round2(target.x), y: round2(target.y), z: round2(target.z) },
     };
+  }
+
+  /** Congestion summary for automated playtests (bucket 0 edges are omitted from traffic messages). */
+  private congestionTextState(): { congestedEdges: number; maxBucket: number } {
+    let congestedEdges = 0;
+    let maxBucket = 0;
+    for (const bucket of this.congestionBuckets.values()) {
+      if (bucket >= 2) congestedEdges++;
+      if (bucket > maxBucket) maxBucket = bucket;
+    }
+    return { congestedEdges, maxBucket };
   }
 
   private inspectTextState(): Record<string, unknown> | null {
