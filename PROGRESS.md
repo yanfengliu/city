@@ -19,8 +19,8 @@ Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine (file:../
 - [x] Phase 5 — utilities + economy (browser-verified: coal+lines+pump+pipes power/water the town; 66 sim tests; fixes: power lines may cross roads, budget first fires at tick 1024, roadsChanged payload emptied for replay determinism — caught by the new SessionReplayer.selfCheck gate)
 - [ ] Phase 4 — fields + services
 - [ ] Phase 5 — utilities + economy
-- [ ] Phase 6 — game shell + polish
-- [ ] Phase 7 — verification + hardening
+- [x] Phase 6 — save/load (browser-verified: exact restore incl. treasury float), Save/Load/New buttons, pause/4x verified, day/night cycle
+- [~] Phase 7 — verification + hardening (README done, audits clean, final adversarial review running)
 
 ## Log
 
