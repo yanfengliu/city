@@ -24,6 +24,12 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes:
 
 ## Log
 
+### 2026-07-02 — Playtest round 6 (bridges + taxes + level-ups together) → deficit advisory
+
+Played a full session on the shipping seed exercising every new feature as a player: founded a lakeside grid (roads → wind/pump/pipes → R/C/I zones), watched 4 level-ups after services landed, max-taxed R (demand 0.25 → 0) and lowered to 5% (recovered), outgrew the shore and expanded across an 11-cell bridge (I district east), where route-based employment assigned 6 more workers ACROSS the bridge (employed 8 → 14, disconnected 0, commuter photographed), and the budget flipped from deficit (35.6 income / 55.1 expenses) to surplus (59.9 / 55.1) as the tax base grew — exactly the story the advisor's unemployment tip pointed at. Save → Load restored everything exactly (bridges, buildings, lowered tax rate; treasury delta was precisely one budget interval that elapsed after the save click).
+
+Findings → improvements: (1) REAL GAP: nothing warns between "healthy" and "broke" while the budget bleeds — added the 📉 deficit advisory (solvent + buildings exist + last interval's expenses > income), verified live both firing (10.8 income / 26.8 expenses city) and absent in surplus; game-design.md advisor list updated. (2) Automation recipe note: the advisories in render_game_to_text lag up to one refreshHud interval (~250 ms) after a heavy advanceTime batch — read them a beat later, don't diagnose from the first post-batch frame. (3) Reconfirmed the ~150 ms dependency gap: zoning submitted in the same eval as the bridge road was rejected (road not yet in the sim at validation) — the earlier-session recipe stands: wait between dependent commands. Vite HMR reloads the page mid-playtest when source files change — expect a fresh worker after any edit.
+
 ### 2026-07-02 — Coverage-on-inspect + route-based employment
 
 Coverage square on inspect (client-only): selecting a placed service shows its live Chebyshev coverage box via a dedicated RadiusIndicator (same anchor math as the placement preview and sim markCoverage); hides on deselect/close. Browser-verified through the real select-tool path.

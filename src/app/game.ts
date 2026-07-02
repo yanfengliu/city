@@ -662,6 +662,18 @@ export class Game {
         text: '🚧 Commuters can’t reach their jobs — connect your districts with roads (they bridge over water at $40/cell).',
       });
     }
+    // Slow-burn warning before the hard "broke" state: the last budget
+    // interval ran a deficit.
+    if (
+      this.treasury >= 0 &&
+      this.buildings.size > 0 &&
+      this.lastBudget.expenses > this.lastBudget.income
+    ) {
+      out.push({
+        id: 'deficit',
+        text: '📉 The budget runs a deficit — grow your tax base or adjust rates in the 💰 Budget panel.',
+      });
+    }
     if (this.demand.r > 0.5) out.push({ id: 'demandR', text: '🟩 Housing demand is high — zone more Residential.' });
     if (this.demand.c > 0.5) out.push({ id: 'demandC', text: '🟦 Commercial demand is high — zone more Commercial.' });
     if (this.demand.i > 0.5) out.push({ id: 'demandI', text: '🟧 Industrial demand is high — zone more Industrial.' });
