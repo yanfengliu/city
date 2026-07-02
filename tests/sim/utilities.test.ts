@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createCitySim, getTreasury, rebuildDerived } from '../../src/sim/city';
 import { UTILITY_ABANDON_EVALS } from '../../src/sim/constants/zoning';
 import { LEVEL_INTERVAL } from '../../src/sim/constants/zoning';
-import { buildDistrict, findLandBlock, stats } from './helpers';
-import { lPathCells } from '../../src/sim/grid';
+import { buildDistrict, findConnectablePumpSpot, findLandBlock, stats } from './helpers';
 import type { CitySim } from '../../src/sim/city';
 
 function poweredCounts(sim: CitySim) {
@@ -20,33 +19,6 @@ function poweredCounts(sim: CitySim) {
   return { powered, unpowered, abandoned };
 }
 
-/**
- * Water-adjacent land cell whose L-path to `target` stays entirely on land
- * (so a pipe can be laid from the pump to the district in one command).
- */
-function findConnectablePumpSpot(
-  sim: CitySim,
-  target: { x: number; y: number },
-): { x: number; y: number } {
-  const { terrain } = sim;
-  for (let y = 1; y < terrain.height - 1; y++) {
-    for (let x = 1; x < terrain.width - 1; x++) {
-      const i = y * terrain.width + x;
-      if (terrain.water[i] === 1) continue;
-      const adjacent =
-        terrain.water[i - 1] === 1 ||
-        terrain.water[i + 1] === 1 ||
-        terrain.water[i - terrain.width] === 1 ||
-        terrain.water[i + terrain.width] === 1;
-      if (!adjacent) continue;
-      const path = lPathCells({ x, y }, target);
-      if (path.every((c) => terrain.water[c.y * terrain.width + c.x] === 0)) {
-        return { x, y };
-      }
-    }
-  }
-  throw new Error('no connectable pump spot');
-}
 
 describe('power network', () => {
   it('unpowered buildings abandon on the utility grace period and recover when powered', () => {

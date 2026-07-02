@@ -46,6 +46,8 @@ let lastBudget: BudgetReport = { income: 0, expenses: 0 };
 const subscribedFields = new Set<FieldName>();
 const dirtyFields = new Set<FieldName>();
 const knownStructures = new Set<number>();
+const EMPLOYED_STAT_INTERVAL = 8;
+let cachedEmployed = -1;
 
 function attachWorldListeners(): void {
   world.on('zonesChanged', () => {
@@ -246,17 +248,21 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
   }
 
   const vehicles: VehicleView[] = [];
-  let employed = 0;
   for (const id of world.query('vehicle')) {
     const data = world.getComponent(id, 'vehicle');
     if (!data || data.legIndex >= data.legs.length) continue;
     const leg = data.legs[data.legIndex];
     vehicles.push({ id, edge: leg.edge, t: data.t, reverse: leg.reverse });
   }
-  for (const id of world.query('citizen')) {
-    const citizen = world.getComponent(id, 'citizen');
-    if (citizen?.work !== null && citizen?.work !== undefined) employed++;
+  // O(population) scan — refresh on a small cadence, not every tick.
+  if (world.tick % EMPLOYED_STAT_INTERVAL === 0 || cachedEmployed < 0) {
+    cachedEmployed = 0;
+    for (const id of world.query('citizen')) {
+      const citizen = world.getComponent(id, 'citizen');
+      if (citizen?.work !== null && citizen?.work !== undefined) cachedEmployed++;
+    }
   }
+  const employed = cachedEmployed;
   if (vehicles.length > 0 || hadVehicles) {
     post({ type: 'vehicles', topologyVersion: sim.topologyVersion, list: vehicles });
   }

@@ -127,4 +127,41 @@ describe('employment and commuting', () => {
     for (let i = 0; i < 300; i++) sim.world.step();
     expect(sim.world.isPoisoned()).toBe(false);
   });
+
+  it('survives massive topology destruction under in-flight vehicles (regression: stale edge ids)', () => {
+    // Regression for the dead-code refreshRoads(sim) bug: vehicles kept edge
+    // ids into the rebuilt (smaller) graph — silent teleports or a poisoned
+    // world once an id indexed past the shrunken edges array.
+    const sim = createCitySim({ seed: 7 });
+    const base = buildCommuterTown(sim);
+    stepUntil(sim, () => stats(sim).vehicles > 0, 1600);
+    expect(stats(sim).vehicles).toBeGreaterThan(0);
+
+    // Destroy the whole I-spine AND the connector: most edges vanish.
+    expect(
+      sim.world.submit('bulldozeRect', {
+        ax: base.x,
+        ay: base.y + 6,
+        bx: base.x + 15,
+        by: base.y + 14,
+      }),
+    ).toBe(true);
+    sim.world.step();
+
+    // Every surviving vehicle must reference a valid edge of the NEW graph.
+    for (const id of [...sim.world.query('vehicle')]) {
+      const data = sim.world.getComponent(id, 'vehicle');
+      if (!data) continue;
+      for (const leg of data.legs) {
+        expect(leg.edge).toBeLessThan(sim.roadGraph.edges.length);
+      }
+    }
+    // Edge counts stay consistent with live vehicles after the remap/culls.
+    let counted = 0;
+    for (const count of sim.edgeCounts.values()) counted += count;
+    expect(counted).toBe(stats(sim).vehicles);
+
+    for (let i = 0; i < 400; i++) sim.world.step();
+    expect(sim.world.isPoisoned()).toBe(false);
+  });
 });

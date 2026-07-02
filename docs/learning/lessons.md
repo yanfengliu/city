@@ -41,3 +41,23 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Fix commit | n/a — operational (preview_resize to explicit dimensions before pointer tests) |
 | Test added | n/a |
 | Behavior delta | `window.innerWidth === 1` collapses picking to one column. Always set an explicit viewport (e.g. 1440×900) and dispatch a `resize` event before scripted pointer verification. |
+
+## Optional parameters on load-bearing paths become silent dead code
+
+| Field | Value |
+|---|---|
+| Surfaced by | Final adversarial review (critical finding): all three road handlers called `refreshRoads(sim)` without the world arg, so the in-flight-vehicle remap, edge-bucket carry-over, and congestion-mirror write never ran on live road edits |
+| Reviewer findings | review workflow `final-adversarial-review`, CONFIRMED critical, reproduced live: stale edge ids teleported vehicles onto wrong streets, and shrinking the edge array poisoned the world permanently |
+| Fix commit | (this commit) |
+| Test added | tests/sim/traffic.test.ts > "survives massive topology destruction under in-flight vehicles (regression: stale edge ids)" |
+| Behavior delta | Before: bulldozing roads with traffic in flight either silently corrupted routes/congestion attribution or threw WorldTickFailureError and halted the sim forever. After: vehicles remap by edge geometry key or despawn as disconnected trips. Design lesson: `fn(sim, w?)` with an optional world made forgetting `w` compile fine — the remap had NO other caller, so nothing failed until the exact scenario hit. Prefer required parameters (or a separate in-tick function) for behavior that must run; the replay self-check cannot catch it because the corruption replays identically. |
+
+## Derived-state changes must be mirrored in BOTH the live mutation path and rebuildDerived
+
+| Field | Value |
+|---|---|
+| Surfaced by | Final adversarial review (major): power line crossing a road — bulldozing the road left the freed cell unowned live, but `refreshUtilities` re-owned it to the line after save/load, so zoning that cell succeeded live and failed after reload |
+| Reviewer findings | review workflow `final-adversarial-review`, CONFIRMED with an empirical repro (liveOccupied false vs reloadedOccupied true) |
+| Fix commit | (this commit) |
+| Test added | covered by the extended replay gate (tests/sim/replay.test.ts now exercises utilities/services/taxes/bulldozeRect with utilitiesEnabled) |
+| Behavior delta | Save/load observably changed which cells were buildable. Rule: every special case added to a live handler (here: "line cells under roads stay road-owned") needs its inverse handled on the OTHER side of the ownership transition (road removed → line re-owns) AND identical logic in the rebuild path; the replay gate only catches it if its scenario exercises those commands — keep the gate's command coverage in sync with the shipping feature set. |

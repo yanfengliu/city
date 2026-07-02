@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import type { CitySim } from '../../src/sim/city';
-import { cellIndex } from '../../src/sim/grid';
+import { cellIndex, lPathCells } from '../../src/sim/grid';
 import type { ZoneType } from '../../src/sim/types';
 
 /** Finds an all-land w×h region and returns its top-left cell. */
@@ -67,4 +67,32 @@ export function stats(sim: CitySim) {
     employed,
     disconnected: (w.getState('disconnectedTrips') as number) ?? 0,
   };
+}
+
+/**
+ * Water-adjacent land cell whose L-path to `target` stays entirely on land
+ * (so a pipe can be laid from the pump to a district in one command).
+ */
+export function findConnectablePumpSpot(
+  sim: CitySim,
+  target: { x: number; y: number },
+): { x: number; y: number } {
+  const { terrain } = sim;
+  for (let y = 1; y < terrain.height - 1; y++) {
+    for (let x = 1; x < terrain.width - 1; x++) {
+      const i = y * terrain.width + x;
+      if (terrain.water[i] === 1) continue;
+      const adjacent =
+        terrain.water[i - 1] === 1 ||
+        terrain.water[i + 1] === 1 ||
+        terrain.water[i - terrain.width] === 1 ||
+        terrain.water[i + terrain.width] === 1;
+      if (!adjacent) continue;
+      const path = lPathCells({ x, y }, target);
+      if (path.every((c) => terrain.water[c.y * terrain.width + c.x] === 0)) {
+        return { x, y };
+      }
+    }
+  }
+  throw new Error('no connectable pump spot');
 }

@@ -18,7 +18,6 @@ export const MAX_LEVEL = 3;
 export const LEVEL2_SCORE = 45;
 export const LEVEL3_SCORE = 70;
 export const LEVEL_UP_EVALS = 3;
-export const LEVEL_DOWN_SCORE = 25;
 export const ABANDON_SCORE = 12;
 export const ABANDON_EVALS = 10;
 /** Longer grace when only utilities are missing (player is mid-build). */

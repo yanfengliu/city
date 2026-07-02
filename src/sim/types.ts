@@ -121,6 +121,8 @@ export interface VehicleLeg {
 
 export interface VehicleComponent {
   citizen: number;
+  /** Owner's entity generation at spawn — guards against id recycling. */
+  citizenGen: number;
   legs: VehicleLeg[];
   legIndex: number;
   /** Progress along the current edge in [0, 1). */

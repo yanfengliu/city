@@ -96,7 +96,7 @@ export function registerRoadCommands(sim: CitySim): void {
       w,
       newCells.map((c) => cellIndex(c.x, c.y)),
     );
-    refreshRoads(sim);
+    refreshRoads(sim, w);
     w.emit('roadsChanged', {});
   });
 
@@ -111,7 +111,7 @@ export function registerRoadCommands(sim: CitySim): void {
       w,
       roadPath(data).map((c) => cellIndex(c.x, c.y)),
     );
-    refreshRoads(sim);
+    refreshRoads(sim, w);
     w.emit('roadsChanged', {});
   });
 }
@@ -131,6 +131,11 @@ function removeRoadCells(sim: CitySim, w: CityWorld, cells: number[]): number {
         removed++;
       }
     }
+    // A power line crossing this road survives the bulldoze; the freed cell
+    // becomes line-owned again (matches what refreshUtilities rebuilds on
+    // load — keeps live and restored derived state identical).
+    const line = sim.powerLineCells.get(i);
+    if (line !== undefined) sim.occupiedCells.set(i, line);
   }
   if (removed > 0) {
     w.setState(
@@ -182,7 +187,7 @@ export function registerBulldozeRect(sim: CitySim): void {
 
     const roadRemoved = removeRoadCells(sim, w, cells);
     if (roadRemoved > 0) {
-      refreshRoads(sim);
+      refreshRoads(sim, w);
       w.emit('roadsChanged', {});
     }
   });

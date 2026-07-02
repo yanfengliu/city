@@ -20,7 +20,14 @@ export function spawnVehicle(
   const firstEdge = sim.roadGraph.edges[legs[0].edge];
   const startCell = legs[0].reverse ? firstEdge.cells[firstEdge.cells.length - 1] : firstEdge.cells[0];
   w.setPosition(vehicle, { x: startCell % GRID_WIDTH, y: Math.floor(startCell / GRID_WIDTH) });
-  w.addComponent(vehicle, 'vehicle', { citizen, legs, legIndex: 0, t: 0, toWork });
+  w.addComponent(vehicle, 'vehicle', {
+    citizen,
+    citizenGen: w.getEntityGeneration(citizen),
+    legs,
+    legIndex: 0,
+    t: 0,
+    toWork,
+  });
   sim.edgeCounts.set(legs[0].edge, (sim.edgeCounts.get(legs[0].edge) ?? 0) + 1);
 }
 

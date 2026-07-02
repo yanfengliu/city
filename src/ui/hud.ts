@@ -193,9 +193,19 @@ export class Hud<TTool extends string> {
     this.treasuryEl.textContent = formatTreasury(state.treasury);
     this.populationEl.textContent = `👤 ${state.populationPeople.toLocaleString('en-US')}`;
     this.vehiclesEl.textContent = `🚗 ${state.vehicles.toLocaleString('en-US')}`;
+    const warnings: string[] = [];
+    const tips: string[] = [];
+    if (state.treasury < 0) {
+      warnings.push('⚠ BROKE');
+      tips.push('Treasury is negative — only power/water purchases are allowed until income recovers');
+    }
     if (state.disconnectedTrips > 0) {
-      this.warningEl.textContent = `⚠ ${state.disconnectedTrips.toLocaleString('en-US')}`;
-      this.warningEl.title = `${state.disconnectedTrips} trips could not find a route — check road connectivity`;
+      warnings.push(`⚠ ${state.disconnectedTrips.toLocaleString('en-US')}`);
+      tips.push(`${state.disconnectedTrips} trips could not find a route — check road connectivity`);
+    }
+    if (warnings.length > 0) {
+      this.warningEl.textContent = warnings.join('  ');
+      this.warningEl.title = tips.join('; ');
       this.warningEl.style.display = 'inline';
     } else {
       this.warningEl.style.display = 'none';

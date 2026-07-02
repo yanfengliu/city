@@ -28,7 +28,9 @@ function arrive(sim: CitySim, w: CityWorld, id: number, data: VehicleComponent):
   w.destroyEntity(id);
   const citizen = w.getComponent(data.citizen, 'citizen');
   if (!citizen) return;
-  if (data.toWork) {
+  // A workplace lost mid-commute (bulldozed/abandoned) sends the commuter
+  // home instead of stranding them in 'atWork' with no job to return from.
+  if (data.toWork && citizen.work !== null) {
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'atWork';
       c.waitUntil = w.tick + WORK_WAIT_BASE + Math.floor(w.random() * WORK_WAIT_VARIANCE);
@@ -48,9 +50,14 @@ export function vehicleSystem(sim: CitySim): (w: CityWorld) => void {
       const data = w.getComponent(id, 'vehicle');
       if (!data) continue;
 
-      // Owner gone (evicted) or workplace unassigned mid-commute → cull.
+      // Owner gone (evicted) → cull. Generation check guards against the
+      // engine recycling the destroyed owner's id for a new citizen.
       const citizen = w.getComponent(data.citizen, 'citizen');
-      if (!citizen || !w.isAlive(data.citizen)) {
+      if (
+        !citizen ||
+        !w.isAlive(data.citizen) ||
+        w.getEntityGeneration(data.citizen) !== data.citizenGen
+      ) {
         despawnVehicle(sim, w, id, data);
         continue;
       }

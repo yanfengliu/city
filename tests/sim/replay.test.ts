@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemorySink, SessionRecorder, SessionReplayer, type SessionBundle } from 'civ-engine';
 import { createCitySim, rebuildDerived, type CitySimConfig } from '../../src/sim/city';
-import { buildDistrict, findLandBlock, stats } from './helpers';
+import { buildDistrict, findConnectablePumpSpot, findLandBlock, stats } from './helpers';
 import type { CityCommands, CityEvents } from '../../src/sim/types';
 
 /**
@@ -12,8 +12,11 @@ import type { CityCommands, CityEvents } from '../../src/sim/types';
  * restored by rebuildDerived.
  */
 describe('session replay self-check', () => {
-  it('replays a recorded session identically', () => {
-    const config: CitySimConfig = { seed: 7, fieldsEnabled: true };
+  it('replays a recorded session identically', { timeout: 60_000 }, () => {
+    // Match the shipping worker's config (both feature flags on) so the gate
+    // covers fields, utilities, services, taxes, and bulldozeRect — not just
+    // roads and zoning.
+    const config: CitySimConfig = { seed: 7, fieldsEnabled: true, utilitiesEnabled: true };
     const sim = createCitySim(config);
     const sink = new MemorySink();
     const recorder = new SessionRecorder({ world: sim.world, sink });
@@ -24,11 +27,34 @@ describe('session replay self-check', () => {
     buildDistrict(sim, 'I', { x: base.x, y: base.y + 10 });
     const midX = base.x + 8;
     sim.world.submit('placeRoad', { ax: midX, ay: base.y + 2, bx: midX, by: base.y + 12 });
+    sim.world.submit('placePowerPlant', { kind: 'coal', x: base.x, y: base.y + 7 });
+    sim.world.submit('setTaxRate', { zone: 'R', rate: 12 });
+    sim.world.step();
+    sim.world.submit('placePowerLine', {
+      ax: base.x + 1,
+      ay: base.y + 6,
+      bx: base.x + 14,
+      by: base.y + 6,
+    });
+    sim.world.submit('placeService', { service: 'fireStation', x: base.x + 12, y: base.y + 5 });
+    sim.world.step();
+    const pump = findConnectablePumpSpot(sim, { x: midX, y: base.y + 2 });
+    sim.world.submit('placeWaterPump', { x: pump.x, y: pump.y });
+    sim.world.step();
+    sim.world.submit('placePipe', { ax: pump.x, ay: pump.y, bx: midX, by: base.y + 2 });
+    sim.world.submit('placePipe', { ax: midX, ay: base.y + 2, bx: midX, by: base.y + 12 });
     for (let i = 0; i < 700; i++) sim.world.step();
 
-    // Mid-run topology edit while traffic may be in flight.
+    // Mid-run topology edits while traffic may be in flight, plus a rect
+    // bulldoze that clears buildings/structures/utilities together.
     sim.world.submit('bulldozeRoad', { ax: midX, ay: base.y + 6, bx: midX, by: base.y + 6 });
     sim.world.submit('placeRoad', { ax: midX, ay: base.y + 6, bx: midX, by: base.y + 6 });
+    sim.world.submit('bulldozeRect', {
+      ax: base.x + 12,
+      ay: base.y + 5,
+      bx: base.x + 14,
+      by: base.y + 7,
+    });
     for (let i = 0; i < 500; i++) sim.world.step();
 
     expect(stats(sim).citizens).toBeGreaterThan(0);

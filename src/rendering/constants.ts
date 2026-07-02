@@ -148,4 +148,3 @@ export const PUMP_COLOR = 0x3f74c9;
 export const PIPE_COLOR = 0x2e4a5f;
 /** Pipes are underground; render as a faint hint just above the terrain. */
 export const PIPE_Y = 0.006;
-export const UTILITY_MESH_CAPACITY = 2048;

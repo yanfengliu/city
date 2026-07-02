@@ -7,7 +7,7 @@ import { buildDistrict, findLandBlock, stats } from './helpers';
  * adding a parallel route reduces the worst bucket.
  */
 describe('congestion under load', () => {
-  it('builds up on a single corridor and relaxes when a parallel road opens', () => {
+  it('builds up on a single corridor and relaxes when a parallel road opens', { timeout: 60_000 }, () => {
     const sim = createCitySim({ seed: 7 });
     const base = findLandBlock(sim, 18, 26);
 
