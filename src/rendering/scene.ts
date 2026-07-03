@@ -56,6 +56,9 @@ export class CityScene {
     this.controls.maxPolarAngle = Math.PI / 2.2;
     this.controls.minDistance = 8;
     this.controls.maxDistance = 220;
+    // Hold the middle (wheel) button and drag to orbit; the scroll wheel still
+    // zooms, so we repurpose the otherwise-redundant middle-drag dolly.
+    this.controls.mouseButtons.MIDDLE = MOUSE.ROTATE;
     this.controls.update();
 
     this.ambient = new AmbientLight(0xffffff, 0.7);
@@ -83,7 +86,7 @@ export class CityScene {
 
   /**
    * While a build tool is active, left-drag draws instead of panning; middle
-   * (zoom) and right (rotate) always stay with MapControls.
+   * and right (both rotate) always stay with MapControls.
    */
   setLeftDragEnabled(enabled: boolean): void {
     this.controls.mouseButtons.LEFT = enabled ? MOUSE.PAN : null;
