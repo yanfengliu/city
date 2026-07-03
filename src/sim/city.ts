@@ -1,5 +1,6 @@
 import { World } from 'civ-engine';
 import { BUDGET_INTERVAL_TICKS, GRID_HEIGHT, GRID_WIDTH, TPS } from './constants/map';
+import { HIGHWAY_CELLS } from './constants/highway';
 import { BUDGET_INTERVAL_OFFSET, STARTING_TREASURY } from './constants/economy';
 import {
   DEFAULT_LAND_VALUE,
@@ -59,7 +60,12 @@ import {
   readFieldMirrors,
   type CityFields,
 } from './fields';
-import { refreshRoads, registerBulldozeRect, registerRoadCommands } from './road/commands';
+import {
+  refreshRoads,
+  registerBulldozeRect,
+  registerRoadCommands,
+  seedHighway,
+} from './road/commands';
 import { refreshStructures, registerServiceCommands } from './services';
 import {
   powerSystem,
@@ -76,6 +82,8 @@ export interface CitySimConfig {
   fieldsEnabled?: boolean;
   /** Phase 5 flips this: real power/water connectivity gates buildings. */
   utilitiesEnabled?: boolean;
+  /** Seeds the fixed outside highway connection at the north edge (shipping on). */
+  highwayEnabled?: boolean;
 }
 
 /** Pluggable desirability/demand inputs — later phases replace the neutral defaults. */
@@ -167,6 +175,14 @@ function neutralScoreInputs(world: CityWorld): ScoreInputs {
  */
 export function createCitySim(config: CitySimConfig): CitySim {
   const terrain = generateTerrain(config.seed, GRID_WIDTH, GRID_HEIGHT);
+  // The highway is a solid-ground gateway: clear any water/trees under its
+  // footprint before fields bake terrain-derived state (done here, not later).
+  if (config.highwayEnabled) {
+    for (const i of HIGHWAY_CELLS) {
+      terrain.water[i] = 0;
+      terrain.trees[i] = 0;
+    }
+  }
   const world = new World({
     gridWidth: GRID_WIDTH,
     gridHeight: GRID_HEIGHT,
@@ -240,6 +256,9 @@ export function createCitySim(config: CitySimConfig): CitySim {
       watered: (entity) => world.getComponent(entity, 'building')?.watered ?? true,
     };
   }
+
+  // -- world entities: the fixed outside highway connection --
+  if (config.highwayEnabled) seedHighway(sim);
 
   // -- commands --
   registerRoadCommands(sim);

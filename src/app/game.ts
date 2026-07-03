@@ -9,6 +9,7 @@ import { GroundPicker } from '../rendering/picking';
 import { RadiusIndicator } from '../rendering/radius-indicator';
 import { LevelUpFx } from '../rendering/levelup-fx';
 import { RoadsView } from '../rendering/roads-mesh';
+import { HighwayView } from '../rendering/highway-mesh';
 import { StructuresView } from '../rendering/structures-mesh';
 import { buildTerrainMesh } from '../rendering/terrain-mesh';
 import { TreesView } from '../rendering/trees';
@@ -19,6 +20,7 @@ import { BudgetPanel } from '../ui/budget-panel';
 import { InspectPanel } from '../ui/inspect-panel';
 import { AdvisorPanel, type Advisory } from '../ui/advisor';
 import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
+import { HIGHWAY_CELL_SET, HIGHWAY_COLUMN, HIGHWAY_LENGTH } from '../sim/constants/highway';
 import { SERVICE_RADIUS } from '../sim/constants/services';
 import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
 import { CAPACITY_PER_CELL, PEOPLE_PER_CITIZEN } from '../sim/constants/zoning';
@@ -31,6 +33,7 @@ import {
   writeSave,
 } from '../persistence/save';
 import { attachInput } from './input';
+import { activeTips, isConnectedToHighway, type TipContext } from './tips';
 import { TOOL_GROUPS, Tools, type ToolName } from './tools';
 import type {
   BuildingView,
@@ -164,7 +167,7 @@ export class Game {
     this.advisor = new AdvisorPanel(container, (target) => this.focusProblem(target));
 
     this.ghost = new GhostView();
-    this.roadsView = new RoadsView(GRID_WIDTH);
+    this.roadsView = new RoadsView(GRID_WIDTH, HIGHWAY_CELL_SET);
     this.zonesView = new ZonesView(GRID_WIDTH);
     this.buildingsView = new BuildingsView();
     this.vehiclesView = new VehiclesView(GRID_WIDTH);
@@ -175,6 +178,7 @@ export class Game {
     this.networkOverlay = new NetworkOverlayView(GRID_WIDTH, GRID_HEIGHT);
     this.scene.add(
       this.ghost.mesh,
+      new HighwayView({ column: HIGHWAY_COLUMN, length: HIGHWAY_LENGTH }).group,
       this.roadsView.group,
       this.zonesView.mesh,
       this.buildingsView.group,
@@ -598,8 +602,9 @@ export class Game {
    */
   private computeAdvisories(): Advisory[] {
     const out: Advisory[] = [];
-    const live = [...this.buildings.values()].filter((b) => !b.abandoned);
-    const abandoned = this.buildings.size - live.length;
+    const all = [...this.buildings.values()];
+    const live = all.filter((b) => !b.abandoned);
+    const abandoned = all.length - live.length;
     const unpowered = live.filter((b) => !b.powered);
     const unwatered = live.filter((b) => !b.watered);
     // Deterministic "show me" target: the lowest-id matching building.
@@ -608,7 +613,6 @@ export class Game {
       for (const view of views) if (!best || view.id < best.id) best = view;
       return best ? { x: best.x, y: best.y } : undefined;
     };
-    const firstAbandoned = firstOf([...this.buildings.values()].filter((b) => b.abandoned));
 
     if (this.treasury < 0) {
       out.push({
@@ -616,47 +620,32 @@ export class Game {
         text: '💸 The city is broke — only power/water purchases are allowed until income recovers.',
       });
     }
-    if (this.roadCells.size === 0) {
-      out.push({ id: 'firstRoad', text: '🛣 Draw a Road to found your city — everything grows along roads.' });
-      return out;
-    }
-    if (this.zonedCells.size === 0 && this.buildings.size === 0) {
-      out.push({
-        id: 'firstZones',
-        text: '🏘 Paint Zone R (homes), Zone C (shops), and Zone I (jobs) within 2 cells of a road.',
-      });
-    }
-    if (!this.hasPlant && this.buildings.size > 0) {
-      out.push({
-        id: 'noPower',
-        text: '⚡ No power source — buildings will abandon. Place a Coal or Wind plant and drag Lines to your districts.',
-        target: firstOf(live),
-      });
-    } else if (unpowered.length > 0) {
-      out.push({
-        id: 'unpowered',
-        text: `⚡ ${unpowered.length} building${unpowered.length === 1 ? ' lacks' : 's lack'} power — extend Lines to within reach.`,
-        target: firstOf(unpowered),
-      });
-    }
-    if (!this.hasPump && this.buildings.size > 0) {
-      out.push({
-        id: 'noWater',
-        text: '💧 No water pump — buildings will abandon. Place a Pump beside water and drag Pipes to your districts.',
-        target: firstOf(live),
-      });
-    } else if (unwatered.length > 0) {
-      out.push({
-        id: 'unwatered',
-        text: `💧 ${unwatered.length} building${unwatered.length === 1 ? ' lacks' : 's lack'} water — extend Pipes to within reach.`,
-        target: firstOf(unwatered),
-      });
-    }
+
+    // Guided checklist tips (found the city, zone, power, water). Each stays
+    // until every step is checked off, then drops out on its own.
+    let playerRoadCells = 0;
+    for (const cell of this.roadCells) if (!HIGHWAY_CELL_SET.has(cell)) playerRoadCells++;
+    const ctx: TipContext = {
+      playerRoadCells,
+      connectedToHighway: isConnectedToHighway(this.roadCells),
+      zonedCells: this.zonedCells.size,
+      buildings: this.buildings.size,
+      hasPlant: this.hasPlant,
+      hasPump: this.hasPump,
+      unpowered: unpowered.length,
+      unwatered: unwatered.length,
+      firstUnpowered: firstOf(unpowered),
+      firstUnwatered: firstOf(unwatered),
+    };
+    out.push(...activeTips(ctx));
+    // Founding gate: nothing else competes until the city is linked out.
+    if (!ctx.connectedToHighway) return out;
+
     if (abandoned > 0) {
       out.push({
         id: 'abandoned',
         text: `🏚 ${abandoned} abandoned building${abandoned === 1 ? '' : 's'} — fix power, water, or nearby pollution and they recover on their own.`,
-        target: firstAbandoned,
+        target: firstOf(all.filter((b) => b.abandoned)),
       });
     }
     if (performance.now() - this.lastDisconnectAt < 15_000) {
@@ -729,6 +718,8 @@ export class Game {
       demand: { r: round2(this.demand.r), c: round2(this.demand.c), i: round2(this.demand.i) },
       activeTool: this.tools.activeTool,
       activeOverlay: this.activeOverlay,
+      // Includes the 10 seeded highway cells (they are real road cells);
+      // subtract HIGHWAY_CELLS.length for a player-built-road baseline.
       roadCellCount: this.roadsView.cellCount,
       bridgeCellCount: this.roadsView.bridgeCellCount,
       levelUpsCelebrated: this.levelUpFx.celebrated,

@@ -33,7 +33,7 @@ function post(message: WorkerToClient): void {
 // Fields drive desirability; power/water gate buildings. The sim is swappable:
 // loadSnapshot builds a fresh one and re-runs the boot sync.
 let currentSeed = 12345;
-let sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true });
+let sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true, highwayEnabled: true });
 let world = sim.world;
 
 let speed: GameSpeed = 1;
@@ -359,7 +359,7 @@ addEventListener('message', (event) => {
     case 'loadSnapshot': {
       world.stop();
       currentSeed = message.meta.seed;
-      sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true });
+      sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true, highwayEnabled: true });
       world = sim.world;
       world.applySnapshot(message.snapshot as Parameters<typeof world.applySnapshot>[0]);
       rebuildDerived(sim);

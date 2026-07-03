@@ -32,6 +32,23 @@ export const BRIDGE_PYLON_HALF_WIDTH = 0.14;
 /** Pylon bottom — below the water surface so pylons read as planted. */
 export const BRIDGE_PYLON_BOTTOM_Y = -0.4;
 
+// Highway (the fixed outside connection): near-black asphalt darker than city
+// roads, a dashed amber center line, and a wider ramp that fans out beyond the
+// map edge so it reads as arriving from outside. Static — built once.
+export const HIGHWAY_COLOR = 0x26282d;
+export const HIGHWAY_LINE_COLOR = 0xe6bf3f;
+/** Just above ROAD_SURFACE_Y so the highway wins at the road seam. */
+export const HIGHWAY_SURFACE_Y = 0.022;
+/** Center line sits above the asphalt; polygonOffset (below) hardens the seam at far zoom. */
+export const HIGHWAY_LINE_Y = 0.03;
+/** Cells the ramp extends past the edge (decorative; off the buildable grid). */
+export const HIGHWAY_OFFMAP_CELLS = 6;
+/** Half-width (cells) of the ramp mouth at its far, off-map end. */
+export const HIGHWAY_RAMP_HALF_WIDTH = 1.6;
+export const HIGHWAY_LINE_WIDTH = 0.09;
+export const HIGHWAY_DASH_LENGTH = 0.55;
+export const HIGHWAY_DASH_GAP = 0.55;
+
 // Trees.
 export const TREE_TRUNK_COLOR = 0x6b4a2f;
 export const TREE_CANOPY_COLOR = 0x2e7d3c;

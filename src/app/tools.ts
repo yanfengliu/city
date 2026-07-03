@@ -22,31 +22,36 @@ export type ToolName =
   | 'pump'
   | 'pipe';
 
-/** Toolbar layout: [Select] | [Road, Bulldoze, Dezone] | [Zone R, C, I] | [services x4] | [utilities x5]. */
-export const TOOL_GROUPS: { id: ToolName; label: string; title: string }[][] = [
-  [{ id: 'select', label: 'Select', title: 'Click a building for details; left-drag pans the camera' }],
+/**
+ * Toolbar layout: [Select] | [Road, Bulldoze, Dezone] | [Zone R, C, I] |
+ * [services x4] | [utilities x5]. Each tool has a single-key shortcut (shown
+ * as a badge on its button). R/C/I go to the zones per the classic mnemonic,
+ * so Road takes D (draw) and the rest fall to nearby unused letters.
+ */
+export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: string }[][] = [
+  [{ id: 'select', label: 'Select', key: 's', title: 'Click a building for details; left-drag pans the camera' }],
   [
-    { id: 'road', label: 'Road', title: 'Drag to draw a road ($10/cell; $40 over water as a bridge). Buildings grow along roads; traffic drives on them' },
-    { id: 'bulldoze', label: 'Bulldoze', title: 'Drag a rectangle to demolish roads, buildings, services, and utilities (25% road refund)' },
-    { id: 'dezone', label: 'Dezone', title: 'Drag a rectangle to erase zoning (does not touch grown buildings)' },
+    { id: 'road', label: 'Road', key: 'd', title: 'Drag to draw a road ($10/cell; $40 over water as a bridge). Buildings grow along roads; traffic drives on them' },
+    { id: 'bulldoze', label: 'Bulldoze', key: 'b', title: 'Drag a rectangle to demolish roads, buildings, services, and utilities (25% road refund)' },
+    { id: 'dezone', label: 'Dezone', key: 'x', title: 'Drag a rectangle to erase zoning (does not touch grown buildings)' },
   ],
   [
-    { id: 'zoneR', label: 'Zone R', title: 'Residential: homes grow here when demand is green. Zone within 2 cells of a road' },
-    { id: 'zoneC', label: 'Zone C', title: 'Commercial: shops with jobs. Zone within 2 cells of a road' },
-    { id: 'zoneI', label: 'Zone I', title: 'Industrial: jobs, but pollutes its surroundings. Keep away from homes' },
+    { id: 'zoneR', label: 'Zone R', key: 'r', title: 'Residential: homes grow here when demand is green. Zone within 2 cells of a road' },
+    { id: 'zoneC', label: 'Zone C', key: 'c', title: 'Commercial: shops with jobs. Zone within 2 cells of a road' },
+    { id: 'zoneI', label: 'Zone I', key: 'i', title: 'Industrial: jobs, but pollutes its surroundings. Keep away from homes' },
   ],
   [
-    { id: 'fire', label: 'Fire', title: 'Fire station ($400): raises land value within 24 cells' },
-    { id: 'police', label: 'Police', title: 'Police station ($400): raises land value within 24 cells' },
-    { id: 'clinic', label: 'Clinic', title: 'Clinic ($500): raises land value within 32 cells' },
-    { id: 'school', label: 'School', title: 'School ($500): raises land value within 32 cells and lets buildings reach level 3' },
+    { id: 'fire', label: 'Fire', key: 'f', title: 'Fire station ($400): raises land value within 24 cells' },
+    { id: 'police', label: 'Police', key: 'p', title: 'Police station ($400): raises land value within 24 cells' },
+    { id: 'clinic', label: 'Clinic', key: 'h', title: 'Clinic ($500): raises land value within 32 cells' },
+    { id: 'school', label: 'School', key: 'e', title: 'School ($500): raises land value within 32 cells and lets buildings reach level 3' },
   ],
   [
-    { id: 'coal', label: 'Coal ⚡', title: 'Coal plant ($800, 3x3): powers 400 units but pollutes. Buildings within 2 cells of the plant, a Line, or another powered building get power' },
-    { id: 'wind', label: 'Wind ⚡', title: 'Wind turbine ($300, 1x1): clean but small (40 units). Same 2-cell connection rule' },
-    { id: 'powerLine', label: 'Line', title: 'Power line ($4/cell): drag from a plant toward your districts; may cross roads. Anything within 2 cells connects' },
-    { id: 'pump', label: 'Pump 💧', title: 'Water pump ($500): place on land RIGHT NEXT to water. Supplies 300 units through Pipes' },
-    { id: 'pipe', label: 'Pipe', title: 'Water pipe ($3/cell): runs under roads and buildings. Anything within 2 cells of a pump-connected pipe gets water' },
+    { id: 'coal', label: 'Coal ⚡', key: 'g', title: 'Coal plant ($800, 3x3): powers 400 units but pollutes. Buildings within 2 cells of the plant, a Line, or another powered building get power' },
+    { id: 'wind', label: 'Wind ⚡', key: 'w', title: 'Wind turbine ($300, 1x1): clean but small (40 units). Same 2-cell connection rule' },
+    { id: 'powerLine', label: 'Line', key: 'l', title: 'Power line ($4/cell): drag from a plant toward your districts; may cross roads. Anything within 2 cells connects' },
+    { id: 'pump', label: 'Pump 💧', key: 'u', title: 'Water pump ($500): place on land RIGHT NEXT to water. Supplies 300 units through Pipes' },
+    { id: 'pipe', label: 'Pipe', key: 'j', title: 'Water pipe ($3/cell): runs under roads and buildings. Anything within 2 cells of a pump-connected pipe gets water' },
   ],
 ];
 

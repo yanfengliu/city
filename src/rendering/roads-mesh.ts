@@ -72,6 +72,8 @@ export class RoadsView {
   private readonly roadMesh: Mesh;
   private readonly bridgeMesh: Mesh;
   private readonly gridWidth: number;
+  /** Highway cells rendered by HighwayView — skipped here to avoid double-draw. */
+  private readonly highwayCells: ReadonlySet<number>;
   /** Terrain water mask; null until boot's `ready` message delivers it. */
   private water: Uint8Array | null = null;
   private lastCells: readonly number[] = [];
@@ -80,8 +82,9 @@ export class RoadsView {
   /** How many of those cells are bridges (road over water). */
   bridgeCellCount = 0;
 
-  constructor(gridWidth: number) {
+  constructor(gridWidth: number, highwayCells: ReadonlySet<number> = new Set()) {
     this.gridWidth = gridWidth;
+    this.highwayCells = highwayCells;
     this.roadMesh = new Mesh(new BufferGeometry(), new MeshLambertMaterial({ color: ROAD_COLOR }));
     this.bridgeMesh = new Mesh(
       new BufferGeometry(),
@@ -107,6 +110,8 @@ export class RoadsView {
     const bridges: number[] = [];
     const roads = new GeometryBuilder();
     for (const index of cells) {
+      // Highway cells are drawn distinctly by HighwayView.
+      if (this.highwayCells.has(index)) continue;
       if (this.water && this.water[index] === 1) {
         bridges.push(index);
         continue;

@@ -1,4 +1,5 @@
 import { GRID_HEIGHT, GRID_WIDTH } from '../constants/map';
+import { HIGHWAY_CELLS, HIGHWAY_CELL_SET } from '../constants/highway';
 import {
   BRIDGE_COST_PER_CELL,
   ROAD_BULLDOZE_REFUND,
@@ -142,14 +143,33 @@ export function registerRoadCommands(sim: CitySim): void {
   });
 
   world.registerHandler('bulldozeRoad', (data, w) => {
-    removeRoadCells(
+    const removed = removeRoadCells(
       sim,
       w,
       roadPath(data).map((c) => cellIndex(c.x, c.y)),
     );
-    refreshRoads(sim, w);
-    w.emit('roadsChanged', {});
+    // A path of only protected highway cells removes nothing — skip the
+    // rebuild (matches bulldozeRect's guard).
+    if (removed > 0) {
+      refreshRoads(sim, w);
+      w.emit('roadsChanged', {});
+    }
   });
+}
+
+/**
+ * Seeds the fixed outside highway as road cells at construction. Deterministic
+ * (identical entity order every build) and part of the serialized world — it
+ * comes back from the snapshot on load, and `rebuildDerived` re-includes it.
+ */
+export function seedHighway(sim: CitySim): void {
+  const { world } = sim;
+  for (const i of HIGHWAY_CELLS) {
+    const entity = world.createEntity();
+    world.setPosition(entity, { x: i % GRID_WIDTH, y: Math.floor(i / GRID_WIDTH) });
+    world.addComponent(entity, 'roadCell', {});
+  }
+  refreshRoads(sim);
 }
 
 /** Destroys road entities on the given cells and refunds part of their cost. */
@@ -158,6 +178,8 @@ function removeRoadCells(sim: CitySim, w: CityWorld, cells: number[]): number {
   let refundBase = 0;
   for (const i of cells) {
     if (!sim.roadCells.has(i)) continue;
+    // The outside highway connection is permanent — never bulldozable.
+    if (HIGHWAY_CELL_SET.has(i)) continue;
     const x = i % GRID_WIDTH;
     const y = Math.floor(i / GRID_WIDTH);
     const occupants = w.grid.getAt(x, y);

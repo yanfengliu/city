@@ -32,6 +32,8 @@ export interface HudToolSpec<TTool extends string> {
   label: string;
   /** Hover tooltip explaining what the tool does and how it connects. */
   title?: string;
+  /** Single-key shortcut (case-insensitive); shown as a badge on the button. */
+  key?: string;
 }
 
 export interface HudCallbacks<TTool extends string> {
@@ -136,13 +138,22 @@ export class Hud<TTool extends string> {
       this.speedButtons.set(speed, button);
     }
 
+    const keyToTool = new Map<string, TTool>();
     for (const group of toolGroups) {
       this.root.appendChild(this.makeDivider());
       for (const tool of group) {
-        const button = this.makeButton(tool.label, () => callbacks.onSelectTool(tool.id), tool.title);
+        const title = tool.key
+          ? `${tool.title ? `${tool.title}. ` : ''}Shortcut: ${tool.key.toUpperCase()}`
+          : tool.title;
+        const button = this.makeButton(tool.label, () => callbacks.onSelectTool(tool.id), title);
+        if (tool.key) {
+          button.appendChild(this.keyBadge(tool.key));
+          keyToTool.set(tool.key.toLowerCase(), tool.id);
+        }
         this.toolButtons.set(tool.id, button);
       }
     }
+    this.wireToolShortcuts(keyToTool, callbacks.onSelectTool);
 
     this.root.appendChild(this.makeDivider());
     const overlaysLabel = document.createElement('span');
@@ -199,6 +210,33 @@ export class Hud<TTool extends string> {
       this.demandFills.set(bar.key, fill);
     }
     return wrap;
+  }
+
+  /** Small keycap badge appended to a tool button showing its shortcut. */
+  private keyBadge(key: string): HTMLSpanElement {
+    const badge = document.createElement('span');
+    badge.textContent = key.toUpperCase();
+    badge.style.cssText =
+      'margin-left:5px;padding:0 3px;font-size:9px;font-weight:bold;line-height:13px;' +
+      'display:inline-block;min-width:9px;text-align:center;color:#bfe6ff;' +
+      'background:rgba(0,0,0,.28);border:1px solid rgba(143,224,255,.4);border-radius:3px';
+    return badge;
+  }
+
+  /** Global shortcut keys select tools, unless typing in a field or holding a modifier. */
+  private wireToolShortcuts(keyToTool: Map<string, TTool>, onSelectTool: (tool: TTool) => void): void {
+    window.addEventListener('keydown', (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      const tool = keyToTool.get(event.key.toLowerCase());
+      if (tool !== undefined) {
+        event.preventDefault();
+        onSelectTool(tool);
+      }
+    });
   }
 
   private makeButton(label: string, onClick: () => void, title?: string): HTMLButtonElement {

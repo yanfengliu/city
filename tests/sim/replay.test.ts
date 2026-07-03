@@ -22,7 +22,12 @@ describe('session replay self-check', () => {
     // Match the shipping worker's config (both feature flags on) so the gate
     // covers fields, utilities, services, taxes, and bulldozeRect — not just
     // roads and zoning.
-    const config: CitySimConfig = { seed: 7, fieldsEnabled: true, utilitiesEnabled: true };
+    const config: CitySimConfig = {
+      seed: 7,
+      fieldsEnabled: true,
+      utilitiesEnabled: true,
+      highwayEnabled: true,
+    };
     const sim = createCitySim(config);
     const sink = new MemorySink();
     const recorder = new SessionRecorder({ world: sim.world, sink });
