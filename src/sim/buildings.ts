@@ -242,8 +242,13 @@ export function levelSystem(sim: CitySim): (w: CityWorld) => void {
       const scoreBad = score < ABANDON_SCORE;
       const utilitiesBad = !utilitiesOk;
       if (scoreBad || utilitiesBad) {
+        // Missing utilities strip the +10 utility bonus, depressing the score;
+        // don't let that masquerade as a bad *location* and trip the fast (8s)
+        // score path. While utilities are missing, only the longer utility
+        // grace can abandon — the score path resumes once power/water connect
+        // (and the +10 bonus lifts a merely-depressed score back over the line).
         const abandonNow =
-          (scoreBad && building.badEvals + 1 >= ABANDON_EVALS) ||
+          (scoreBad && !utilitiesBad && building.badEvals + 1 >= ABANDON_EVALS) ||
           (utilitiesBad && building.badUtilityEvals + 1 >= UTILITY_ABANDON_EVALS);
         if (abandonNow) {
           w.patchComponent(id, 'building', (b) => {

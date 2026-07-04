@@ -68,6 +68,35 @@ describe('power network', () => {
     expect(poweredCounts(sim).abandoned).toBe(0);
   });
 
+  it('keeps the full utility grace where pollution depresses land value (onboarding)', () => {
+    // Regression: missing utilities drop the +10 utility bonus from the score;
+    // if pollution also lowers land value, the raw score falls below
+    // ABANDON_SCORE and the fast 8s score path pre-empts the 60s utility grace,
+    // mass-abandoning a fresh district before the player can wire power/water.
+    const sim = createCitySim({ seed: 7, fieldsEnabled: true, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 18);
+    buildDistrict(sim, 'R', base);
+    // Establish the unpowered district on neutral land — the grace holds here.
+    for (let i = 0; i < 400; i++) sim.world.step();
+    const grown = poweredCounts(sim);
+    expect(grown.powered + grown.unpowered).toBeGreaterThan(0);
+    expect(grown.powered).toBe(0); // no plant wired
+    expect(grown.abandoned).toBe(0);
+
+    // A coal plant beside the homes: a pollution source that depresses land
+    // value. We deliberately do NOT wire power — the ONLY faults are "missing
+    // utilities" (its own 75-eval grace) and pollution-lowered land value.
+    expect(sim.world.submit('placePowerPlant', { kind: 'coal', x: base.x + 6, y: base.y + 6 })).toBe(
+      true,
+    );
+
+    // Well past the fast score path (ABANDON_EVALS=10) but within the utility
+    // grace (UTILITY_ABANDON_EVALS=75): a still-unpowered building must not be
+    // abandoned yet — the grace owns the timeline while utilities are missing.
+    for (let i = 0; i < LEVEL_INTERVAL * 25; i++) sim.world.step();
+    expect(poweredCounts(sim).abandoned).toBe(0);
+  });
+
   it('brownout powers the ascending-id prefix deterministically', () => {
     const run = () => {
       const sim = createCitySim({ seed: 11, utilitiesEnabled: true });

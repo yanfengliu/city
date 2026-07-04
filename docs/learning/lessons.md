@@ -72,6 +72,16 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Test added | n/a |
 | Behavior delta | The screenshot transport can wedge independently of the page. Workaround that works because `preserveDrawingBuffer: true` is set: in preview_eval, force a frame (`s.controls.update(); s.camera.updateMatrixWorld(); s.renderer.render(s.scene, s.camera)`), stash `renderer.domElement.toDataURL('image/jpeg', 0.7)` on `window.__shot`, then return it in ~50k-char slices — oversized eval results are auto-saved to tool-result files; pad short tails (e.g. `+ '#'.repeat(20000)`) so every slice lands in a file instead of context. Concatenate the files, `tr -d '"\n#'`, strip the data-URL prefix, `base64 -d` → JPEG. Also remember rAF is throttled to zero in background tabs, so render_game_to_text camera-derived state and tweens freeze — set camera/controls directly instead of flyTo before capturing. |
 
+## The utility abandonment grace was silently bypassed by the score path
+
+| Field | Value |
+|---|---|
+| Surfaced by | Playtest round 8: following the onboarding tips (connect highway → zone → wait for buildings) mass-abandoned all 63 buildings to population 0 within ~9s of game time, far inside the "60s utility grace" that round 1 added to prevent exactly this |
+| Reviewer findings | n/a — surfaced by play, root-caused by reading the level system |
+| Fix commit | (this commit) |
+| Test added | tests/sim/utilities.test.ts > "keeps the full utility grace where pollution depresses land value (onboarding)" |
+| Behavior delta | The desirability `score` includes a `+10 if (powered && watered)` term. A building with missing utilities loses that +10, and if land value is even mildly depressed (pollution from early industry or a coal plant — coal emits 30, dropping land value 30→18 within ~6 cells), the raw score falls below `ABANDON_SCORE` (12). Abandonment then fired on the FAST score path (`ABANDON_EVALS`=10 ≈ 8s) instead of the intended `UTILITY_ABANDON_EVALS`=75 (≈60s) utility grace — so the grace was dead whenever land value was below 24, which is exactly the onboarding case (fresh district, no power yet, some industry nearby). Fix: gate the score path on `!utilitiesBad`, so a building with missing power/water can only abandon on the long utility grace; the score path resumes once utilities connect (and the restored +10 bonus lifts a merely-depressed score back over the line). Design lesson: when a single scalar (`score`) folds in an orthogonal concern (utility connection) that ALSO has its own dedicated timer/path, the two interact — the missing-utility penalty laundered into a "bad location" verdict. Keep the fast path measuring only what it names (location desirability); let the concern with its own grace own its own timeline. The pre-existing grace test never caught it because it used a pollution-free all-land R district (land value 30 → score 15 ≥ 12), so the score path never engaged.
+
 ## Never gate on a piped test run — the pipe eats the exit code
 
 | Field | Value |
