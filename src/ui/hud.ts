@@ -223,15 +223,21 @@ export class Hud<TTool extends string> {
     return badge;
   }
 
+  /** W/A/S/D belong to the camera (scene.ts) — they are never tool shortcuts,
+   * regardless of the keymap, so panning can never also fire a tool. */
+  private static readonly PAN_KEYS: ReadonlySet<string> = new Set(['w', 'a', 's', 'd']);
+
   /** Global shortcut keys select tools, unless typing in a field or holding a modifier. */
   private wireToolShortcuts(keyToTool: Map<string, TTool>, onSelectTool: (tool: TTool) => void): void {
     window.addEventListener('keydown', (event) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (Hud.PAN_KEYS.has(key)) return; // reserved for camera panning
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
         return;
       }
-      const tool = keyToTool.get(event.key.toLowerCase());
+      const tool = keyToTool.get(key);
       if (tool !== undefined) {
         event.preventDefault();
         onSelectTool(tool);
