@@ -5,10 +5,15 @@ import {
   MOUSE,
   PerspectiveCamera,
   Scene,
+  Vector3,
   WebGLRenderer,
 } from 'three';
-import type { Object3D, Vector3 } from 'three';
+import type { Object3D } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
+
+/** WASD pan speed as a fraction of the camera-to-target distance, per second
+ * (so panning is faster when zoomed out and slower when zoomed in). */
+const KEY_PAN_FACTOR = 0.9;
 
 /**
  * Owns the Three.js renderer, scene graph, camera, and MapControls. Grid
@@ -32,9 +37,16 @@ export class CityScene {
   private fps = 0;
   private frameCount = 0;
   private lastFpsSample = performance.now();
+  private lastFrameTime = performance.now();
   private readonly frameCallbacks: Array<() => void> = [];
+  /** Currently-held WASD keys, drained each frame into a camera pan. */
+  private readonly panKeys = new Set<string>();
+  private readonly gridWidth: number;
+  private readonly gridHeight: number;
 
   constructor(container: HTMLElement, gridWidth: number, gridHeight: number) {
+    this.gridWidth = gridWidth;
+    this.gridHeight = gridHeight;
     this.renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -71,6 +83,23 @@ export class CityScene {
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(container.clientWidth, container.clientHeight);
     });
+
+    // WASD pans the camera. Held keys accumulate here and are applied per frame;
+    // ignored while a modifier is down or a text field is focused (mirrors the
+    // tool-shortcut guard), and cleared on blur so a key can't get stuck held.
+    const typing = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+    window.addEventListener('keydown', (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || typing(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+        this.panKeys.add(key);
+        event.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', (event) => this.panKeys.delete(event.key.toLowerCase()));
+    window.addEventListener('blur', () => this.panKeys.clear());
 
     this.renderer.setAnimationLoop(() => this.renderFrame());
   }
@@ -131,13 +160,48 @@ export class CityScene {
     if (raw >= 1) this.flight = null;
   }
 
+  /**
+   * WASD nudges the camera across the ground plane, screen-relative (W = into
+   * the view, A/D = left/right of it), scaled by zoom distance and frame time.
+   * Interrupts any in-progress fly-to and keeps the focus over the map.
+   */
+  private applyKeyboardPan(dt: number): void {
+    const x = (this.panKeys.has('d') ? 1 : 0) - (this.panKeys.has('a') ? 1 : 0);
+    const z = (this.panKeys.has('w') ? 1 : 0) - (this.panKeys.has('s') ? 1 : 0);
+    if (x === 0 && z === 0) return;
+    this.flight = null; // live camera input wins over a tween
+    const forward = new Vector3().subVectors(this.controls.target, this.camera.position);
+    forward.y = 0;
+    if (forward.lengthSq() < 1e-6) return;
+    forward.normalize();
+    const right = new Vector3(-forward.z, 0, forward.x);
+    const speed = KEY_PAN_FACTOR * this.controls.getDistance() * dt;
+    const move = new Vector3()
+      .addScaledVector(forward, z * speed)
+      .addScaledVector(right, x * speed);
+    this.controls.target.add(move);
+    this.camera.position.add(move);
+    // Clamp the focus to the map, moving the camera by the same correction so
+    // the view angle/distance is preserved.
+    const cx = Math.max(0, Math.min(this.gridWidth, this.controls.target.x));
+    const cz = Math.max(0, Math.min(this.gridHeight, this.controls.target.z));
+    this.camera.position.x += cx - this.controls.target.x;
+    this.camera.position.z += cz - this.controls.target.z;
+    this.controls.target.x = cx;
+    this.controls.target.z = cz;
+  }
+
   private renderFrame(): void {
+    const now = performance.now();
+    // Clamp dt so a backgrounded tab (rAF paused) doesn't resume with a huge pan.
+    const dt = Math.min(0.05, (now - this.lastFrameTime) / 1000);
+    this.lastFrameTime = now;
     for (const callback of this.frameCallbacks) callback();
-    this.updateFlight(performance.now());
+    this.applyKeyboardPan(dt);
+    this.updateFlight(now);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
     this.frameCount++;
-    const now = performance.now();
     if (now - this.lastFpsSample >= 1000) {
       this.fps = Math.round((this.frameCount * 1000) / (now - this.lastFpsSample));
       this.frameCount = 0;

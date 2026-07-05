@@ -25,13 +25,14 @@ export type ToolName =
 /**
  * Toolbar layout: [Select] | [Road, Bulldoze, Dezone] | [Zone R, C, I] |
  * [services x4] | [utilities x5]. Each tool has a single-key shortcut (shown
- * as a badge on its button). R/C/I go to the zones per the classic mnemonic,
- * so Road takes D (draw) and the rest fall to nearby unused letters.
+ * as a badge on its button). W/A/S/D are reserved for camera panning, so the
+ * tools avoid them: R/C/I are the zones (classic mnemonic), Road takes Q,
+ * Select V, Wind K, and the rest fall to nearby unused letters.
  */
 export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: string }[][] = [
-  [{ id: 'select', label: 'Select', key: 's', title: 'Click a building for details; left-drag pans the camera' }],
+  [{ id: 'select', label: 'Select', key: 'v', title: 'Click a building for details; left-drag or WASD pans the camera' }],
   [
-    { id: 'road', label: 'Road', key: 'd', title: 'Drag to draw a road ($10/cell; $40 over water as a bridge). Buildings grow along roads; traffic drives on them' },
+    { id: 'road', label: 'Road', key: 'q', title: 'Drag to draw a road ($10/cell; $40 over water as a bridge). Buildings grow along roads; traffic drives on them' },
     { id: 'bulldoze', label: 'Bulldoze', key: 'b', title: 'Drag a rectangle to demolish roads, buildings, services, and utilities (25% road refund)' },
     { id: 'dezone', label: 'Dezone', key: 'x', title: 'Drag a rectangle to erase zoning (does not touch grown buildings)' },
   ],
@@ -48,7 +49,7 @@ export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: str
   ],
   [
     { id: 'coal', label: 'Coal ⚡', key: 'g', title: 'Coal plant ($800, 3x3): powers 400 units but pollutes. Buildings within 2 cells of the plant, a Line, or another powered building get power' },
-    { id: 'wind', label: 'Wind ⚡', key: 'w', title: 'Wind turbine ($300, 1x1): clean but small (40 units). Same 2-cell connection rule' },
+    { id: 'wind', label: 'Wind ⚡', key: 'k', title: 'Wind turbine ($300, 1x1): clean but small (40 units). Same 2-cell connection rule' },
     { id: 'powerLine', label: 'Line', key: 'l', title: 'Power line ($4/cell): drag from a plant toward your districts; may cross roads. Anything within 2 cells connects' },
     { id: 'pump', label: 'Pump 💧', key: 'u', title: 'Water pump ($500): place on land RIGHT NEXT to water. Supplies 300 units through Pipes' },
     { id: 'pipe', label: 'Pipe', key: 'j', title: 'Water pipe ($3/cell): runs under roads and buildings. Anything within 2 cells of a pump-connected pipe gets water' },
