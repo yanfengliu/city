@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# LLM playtest harness screenshot sink (dev-only, see vite.config.ts shotSink)
+.shots/

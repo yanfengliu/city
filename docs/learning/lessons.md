@@ -121,3 +121,13 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Fix commit | n/a — process (redirect to a file, check `$?`, then grep the file) |
 | Test added | n/a — process lesson |
 | Behavior delta | A red suite reached the remote. Pattern now: `npx vitest run > out 2>&1; echo exit=$?` and only proceed on 0. |
+
+## A headless playtest tab stops rAF — a "screenshot" must pump its own presentation frame
+
+| Field | Value |
+|---|---|
+| Surfaced by | Vision playtest: after batch-`advance()`ing a district that leveled 46 buildings, every "▲ Level N" celebration sprite was frozen on screen; `levelUpFx.group.children.length` stayed 46 across tens of seconds of real time, and `scene.fps` read 0 |
+| Reviewer findings | n/a — surfaced during a vision-harness playtest |
+| Fix commit | (this commit) |
+| Test added | n/a — WebGL isn't unit-testable in vitest; verified live (spawn a sprite timestamped 5s in the past → `player.screenshot()` → `group.children` 1→0, proving the capture ran the frame callbacks) |
+| Behavior delta | The render loop is `renderer.setAnimationLoop(renderFrame)` (rAF). A headless/automation browser tab isn't painting, so rAF is throttled to a full stop — `renderFrame` never runs, so the `onFrame` callbacks (view sync, `vehiclesView.updateFrame`, `levelUpFx.updateFrame`) never fire. `scene.screenshot()` forced a bare `renderer.render()` that BYPASSED those callbacks, so every capture was a stale frame: vehicles pinned at their last interpolated position, level-up labels accumulating forever (they fade on a wall-clock timer the callback advances), camera `flyTo` tweens stuck. The 46 "stuck labels" read as a game bug but were a capture artifact. Fix: `screenshot()` now pumps a full presentation frame (`presentFrame`: callbacks + flight + controls + render) before reading the buffer, so a capture reflects live animated state. General rule for driving a rendered app headless: never assume the rAF loop is running — anything time-based (interpolation, particle/FX lifetimes, tweens) is frozen unless the capture path pumps the frame itself. Capturing then IS the frame tick: animation advances by real wall-clock between successive screenshots, so two shots taken microseconds apart look identical even after a big `advance()`. |

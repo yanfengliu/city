@@ -199,12 +199,15 @@ export class CityScene {
     };
   }
 
-  /** Forces a render and returns the canvas as a JPEG data URL — a reliable
-   * "what the player sees" capture (preserveDrawingBuffer is on; independent of
-   * the throttled rAF loop). */
+  /** Renders and returns the canvas as a JPEG data URL — a live "what the player
+   * sees" capture. Pumps a full presentation frame first (view sync, vehicle
+   * interpolation, level-up FX, camera flight) so the capture reflects the
+   * current animated state even when the rAF loop is throttled — as it is in a
+   * headless playtest tab, where a bare render would freeze time-based visuals
+   * (stale vehicle positions, level-up labels that never fade). preserveDrawingBuffer
+   * keeps the buffer readable after the render. */
   screenshot(quality = 0.7): string {
-    this.camera.updateMatrixWorld();
-    this.renderer.render(this.scene, this.camera);
+    this.presentFrame(performance.now());
     return this.renderer.domElement.toDataURL('image/jpeg', quality);
   }
 
@@ -274,16 +277,23 @@ export class CityScene {
     this.controls.target.z = cz;
   }
 
+  /** One presentation pass: run frame callbacks (view sync, vehicle/FX
+   * interpolation), advance any camera flight, sync controls, render. Shared by
+   * the rAF loop and the on-demand `screenshot()` so both produce a live frame. */
+  private presentFrame(now: number): void {
+    for (const callback of this.frameCallbacks) callback();
+    this.updateFlight(now);
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+  }
+
   private renderFrame(): void {
     const now = performance.now();
     // Clamp dt so a backgrounded tab (rAF paused) doesn't resume with a huge pan.
     const dt = Math.min(0.05, (now - this.lastFrameTime) / 1000);
     this.lastFrameTime = now;
-    for (const callback of this.frameCallbacks) callback();
     this.applyKeyboardPan(dt);
-    this.updateFlight(now);
-    this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.presentFrame(now);
     this.frameCount++;
     if (now - this.lastFpsSample >= 1000) {
       this.fps = Math.round((this.frameCount * 1000) / (now - this.lastFpsSample));

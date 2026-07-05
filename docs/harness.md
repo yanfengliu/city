@@ -56,7 +56,7 @@ The async methods (`inspectAt` / `selfCheck` / `getBundle`) return a Promise **a
 
 | Method | Player action |
 |---|---|
-| `screenshot(q?)` | JPEG data URL of the rendered scene — the player's-eye view (forces a render; independent of the throttled rAF loop). |
+| `screenshot(q?)` | JPEG data URL of the rendered scene — the player's-eye view. Pumps a full presentation frame first (view sync, vehicle interpolation, level-up FX fade, camera flight) so the capture is a **live** frame, then renders. This matters headless: a playtest tab isn't painting, so the rAF loop is stopped — a bare render would freeze time-based visuals (stale vehicle positions, level-up labels that never fade). Capturing IS the frame tick, so animation advances by real wall-clock between successive screenshots, not on its own. |
 | `where(x, y)` | Screen pixels for the centre of sim cell (x, y) — aim clicks at map features. `onScreen` is false if off-view. |
 | `cellAt(sx, sy)` | The sim cell under a pixel (inverse of `where`). |
 | `hud(label)` | Click a HUD button by visible label — "Road", "Zone R", "Coal ⚡", "2×", "Pollution", "💰 Budget", "💾 Save"… |
