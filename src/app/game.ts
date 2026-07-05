@@ -55,6 +55,13 @@ import type {
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 
 const HUD_REFRESH_MS = 250;
+/**
+ * Day/night cycle is disabled for now — night was too dark to play. The sun is
+ * pinned to a bright late-morning angle (0 = midnight, 0.5 = noon) so the map
+ * stays clearly lit with pleasant angled shadows. The cycle + building-glow
+ * machinery is left intact behind this constant for an easy re-enable.
+ */
+const FIXED_DAY_FRACTION = 0.4;
 const ZONE_LABELS: Record<ZoneType, string> = {
   R: 'Residential',
   C: 'Commercial',
@@ -201,8 +208,9 @@ export class Game {
       const now = performance.now();
       this.vehiclesView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
-      const daylight = this.scene.setDayFraction((this.tick % TICKS_PER_DAY) / TICKS_PER_DAY);
-      this.buildingsView.setNightGlow(1 - daylight);
+      // Day/night cycle disabled for now (see FIXED_DAY_FRACTION): pin a bright
+      // sun and leave the buildings' night glow off.
+      this.scene.setDayFraction(FIXED_DAY_FRACTION);
     });
 
     this.tools = new Tools({
