@@ -39,13 +39,18 @@ import { TOOL_GROUPS, Tools, type ToolName } from './tools';
 import type {
   BuildingView,
   ClientToWorker,
+  CommandName,
   GameSpeed,
   StructureView,
   TerrainPayload,
   WorkerToClient,
 } from '../protocol/messages';
+import { normalizeFinding, type PlaytestFinding, type RecordedFinding } from '../harness/findings';
+import type { SelfCheckSummary } from '../harness/inspect';
+import type { SimSummary } from '../sim/summary';
 import type {
   BudgetReport,
+  CityCommands,
   DemandState,
   FieldName,
   ServiceType,
@@ -141,6 +146,16 @@ export class Game {
   private vehiclesOnScreen = 0;
   /** Last celebrated city rank (index into CITY_TITLES); -1 until first refresh. */
   private lastRank = -1;
+  // Playtest harness (docs/harness.md): findings recorded this session, plus the
+  // latest worker responses (read after triggering the matching request).
+  private harnessFindings: RecordedFinding[] = [];
+  lastBundle: { bundle: unknown; findings: RecordedFinding[] } | undefined;
+  lastSelfCheck: SelfCheckSummary | undefined;
+  lastInspection: { tick: number; summary: SimSummary | null } | undefined;
+  private harnessReqId = 0;
+  /** Correlates async harness replies to their request Promise (avoids the
+   * single-slot mis-correlation when two requests overlap). */
+  private readonly harnessPending = new Map<number, (value: unknown) => void>();
   /** Edge congestion buckets from the last traffic message (automation + overlays). */
   private congestionBuckets: ReadonlyMap<number, number> = new Map();
   private employed = 0;
@@ -369,6 +384,26 @@ export class Game {
         break;
       case 'commandRejected':
         this.hud.showToast(`Command rejected: ${message.message}`);
+        break;
+      case 'annotated':
+        this.harnessFindings.push({ tick: message.tick, ...message.finding });
+        break;
+      case 'bundle':
+        this.harnessFindings = message.findings.slice();
+        this.lastBundle = { bundle: message.bundle, findings: message.findings };
+        this.resolveHarness(message.id, this.lastBundle);
+        break;
+      case 'selfCheckResult':
+        this.lastSelfCheck = message.result ?? undefined;
+        this.resolveHarness(message.id, message.result);
+        break;
+      case 'inspection':
+        this.lastInspection = { tick: message.tick, summary: message.summary };
+        this.resolveHarness(message.id, {
+          tick: message.tick,
+          summary: message.summary,
+          error: message.error,
+        });
         break;
     }
   }
@@ -725,6 +760,54 @@ export class Game {
   /** Automation hook: advance the sim by wall-clock-equivalent ms at 1x. */
   advanceTime(ms: number): void {
     this.send({ type: 'advance', ticks: Math.max(1, Math.round(ms / TICK_MS)) });
+  }
+
+  // --- Playtest harness (docs/harness.md) ---
+
+  /** Submit any sim command by name (same path the tools use). */
+  harnessCommand<K extends CommandName>(name: K, data: CityCommands[K]): void {
+    this.send({ type: 'command', name, data } as ClientToWorker);
+  }
+
+  /** Record a finding as a marker at the current tick. */
+  annotate(finding: Partial<PlaytestFinding>): void {
+    this.send({ type: 'annotate', finding: normalizeFinding(finding) });
+  }
+
+  /** Findings recorded this session (populated as annotations round-trip). */
+  harnessFindingsList(): readonly RecordedFinding[] {
+    return this.harnessFindings;
+  }
+
+  private harnessRequest<T>(send: (id: number) => void): Promise<T> {
+    const id = ++this.harnessReqId;
+    return new Promise<T>((resolve) => {
+      this.harnessPending.set(id, resolve as (value: unknown) => void);
+      send(id);
+    });
+  }
+
+  private resolveHarness(id: number, value: unknown): void {
+    const resolve = this.harnessPending.get(id);
+    if (resolve) {
+      this.harnessPending.delete(id);
+      resolve(value);
+    }
+  }
+
+  /** Export the recorded session bundle; also stashed on `lastBundle`. */
+  requestBundle(): Promise<{ bundle: unknown; findings: RecordedFinding[] }> {
+    return this.harnessRequest((id) => this.send({ type: 'requestBundle', id }));
+  }
+
+  /** Replay to `tick` and return the exact state; also stashed on `lastInspection`. */
+  inspectAt(tick: number): Promise<{ tick: number; summary: SimSummary | null; error?: string }> {
+    return this.harnessRequest((id) => this.send({ type: 'inspectAt', id, tick }));
+  }
+
+  /** Verify the recorded session replays identically; also stashed on `lastSelfCheck`. */
+  requestSelfCheck(): Promise<SelfCheckSummary | null> {
+    return this.harnessRequest((id) => this.send({ type: 'selfCheck', id }));
   }
 
   /** Automation hook: coarse machine-readable game state. */

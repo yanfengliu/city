@@ -1,5 +1,9 @@
+import { MemorySink, SessionRecorder, snapshotAtTick, type SessionBundle } from 'civ-engine';
 import { footprintCells } from '../sim/buildings';
-import { createCitySim, getTreasury, rebuildDerived } from '../sim/city';
+import { createCitySim, getTreasury, rebuildDerived, type CitySimConfig } from '../sim/city';
+import { findingToMarker, findingsFromMarkers } from '../harness/findings';
+import { selfCheckBundle } from '../harness/inspect';
+import { simSummary } from '../sim/summary';
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
 import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
@@ -16,6 +20,8 @@ import type {
 import type {
   BudgetReport,
   BuildingComponent,
+  CityCommands,
+  CityEvents,
   DemandState,
   FieldName,
   StructureComponent,
@@ -32,9 +38,52 @@ function post(message: WorkerToClient): void {
 
 // Fields drive desirability; power/water gate buildings. The sim is swappable:
 // loadSnapshot builds a fresh one and re-runs the boot sync.
+const SIM_FLAGS: Omit<CitySimConfig, 'seed'> = {
+  fieldsEnabled: true,
+  utilitiesEnabled: true,
+  highwayEnabled: true,
+};
 let currentSeed = 12345;
-let sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true, highwayEnabled: true });
+let sim = createCitySim({ seed: currentSeed, ...SIM_FLAGS });
 let world = sim.world;
+
+// Playtest harness (docs/harness.md): every world is one recorded session, so
+// commands/ticks/snapshots/markers can be replayed and inspected deterministically.
+function makeRecorder(w: typeof world): SessionRecorder<CityEvents, CityCommands> {
+  return new SessionRecorder({ world: w, sink: new MemorySink() }) as SessionRecorder<
+    CityEvents,
+    CityCommands
+  >;
+}
+let recorder: ReturnType<typeof makeRecorder> | undefined;
+function startRecorder(): void {
+  // Recording is a dev/playtest tool: it accumulates every tick's diff, so it
+  // is off in production builds (the harness handlers no-op without a recorder).
+  if (!import.meta.env.DEV) return;
+  recorder = makeRecorder(world);
+  recorder.connect();
+}
+function recordedBundle(): SessionBundle<CityEvents, CityCommands> {
+  return recorder!.toBundle() as unknown as SessionBundle<CityEvents, CityCommands>;
+}
+
+/** Rebuild the world from a snapshot and start a fresh recording session (used
+ * by loadSnapshot and the harness replayTo). */
+function swapWorld(snapshot: Parameters<typeof world.applySnapshot>[0], seed: number): void {
+  recorder?.disconnect();
+  world.stop();
+  currentSeed = seed;
+  sim = createCitySim({ seed: currentSeed, ...SIM_FLAGS });
+  world = sim.world;
+  world.applySnapshot(snapshot);
+  rebuildDerived(sim);
+  attachWorldListeners();
+  startRecorder();
+  postBootSync();
+  if (speed === 0) world.pause();
+  else world.setSpeed(speed);
+  world.start();
+}
 
 let speed: GameSpeed = 1;
 let sentTopologyVersion = -1;
@@ -356,23 +405,60 @@ addEventListener('message', (event) => {
         meta: { saveVersion: 1, seed: currentSeed },
       });
       break;
-    case 'loadSnapshot': {
-      world.stop();
-      currentSeed = message.meta.seed;
-      sim = createCitySim({ seed: currentSeed, fieldsEnabled: true, utilitiesEnabled: true, highwayEnabled: true });
-      world = sim.world;
-      world.applySnapshot(message.snapshot as Parameters<typeof world.applySnapshot>[0]);
-      rebuildDerived(sim);
-      attachWorldListeners();
-      postBootSync();
-      if (speed === 0) world.pause();
-      else world.setSpeed(speed);
-      world.start();
+    case 'loadSnapshot':
+      swapWorld(message.snapshot as Parameters<typeof world.applySnapshot>[0], message.meta.seed);
+      break;
+    case 'annotate': {
+      if (!recorder) break;
+      const tick = world.tick;
+      recorder.addMarker(findingToMarker(message.finding, tick));
+      post({ type: 'annotated', tick, finding: message.finding });
+      break;
+    }
+    case 'requestBundle': {
+      if (!recorder) break;
+      const bundle = recordedBundle();
+      post({ type: 'bundle', id: message.id, bundle, findings: findingsFromMarkers(bundle.markers) });
+      break;
+    }
+    case 'inspectAt': {
+      if (!recorder) break;
+      // Clamp to the recorded range so a stale/out-of-range tick never throws,
+      // then fold to it in a throwaway probe sim (the live world is untouched).
+      // Always replies (null + error on failure) so the client Promise settles.
+      try {
+        const bundle = recordedBundle();
+        const start = bundle.metadata.startTick ?? 0;
+        const end = bundle.metadata.endTick ?? start;
+        const tick = Math.max(start, Math.min(end, message.tick));
+        const snap = snapshotAtTick(bundle, tick);
+        const probe = createCitySim({ seed: currentSeed, ...SIM_FLAGS });
+        probe.world.applySnapshot(snap as Parameters<typeof probe.world.applySnapshot>[0]);
+        rebuildDerived(probe);
+        post({ type: 'inspection', id: message.id, tick, summary: simSummary(probe.world) });
+      } catch (e) {
+        post({ type: 'inspection', id: message.id, tick: message.tick, summary: null, error: String(e) });
+      }
+      break;
+    }
+    case 'selfCheck': {
+      if (!recorder) break;
+      try {
+        // A connected recorder has only the initial + periodic snapshots, so
+        // selfCheck (which walks snapshot PAIRS) would skip every tick after the
+        // last one. Take a terminal snapshot to close the final segment.
+        recorder.takeSnapshot();
+        const result = selfCheckBundle(recordedBundle(), { seed: currentSeed, ...SIM_FLAGS });
+        post({ type: 'selfCheckResult', id: message.id, result });
+      } catch (e) {
+        post({ type: 'selfCheckResult', id: message.id, result: null, error: String(e) });
+      }
       break;
     }
   }
 });
 
 attachWorldListeners();
+startRecorder();
 postBootSync();
 world.start();

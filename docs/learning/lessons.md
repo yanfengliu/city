@@ -102,6 +102,16 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Test added | tests/sim/utilities.test.ts > "regaining utilities resets the utility-abandon streak (no premature abandon on flicker)" — RED (25 abandoned) → GREEN |
 | Behavior delta | A building that accumulated ~67 of the 75-eval utility grace while unpowered, then regained power for even one eval (healthy), then lost it again, abandoned within a few evals instead of getting a fresh 60s grace — because the healthy branch reset `upEvals`/`badEvals` but never `badUtilityEvals`. Reachable via brownout flicker on an undersized plant (the ascending-id-prefix brownout flips buildings powered/unpowered as capacity fluctuates). The doc already said the streak was "consecutive", but the code only enforced that for the score path. Rule: a counter documented as "N CONSECUTIVE evaluations of X" must be cleared on EVERY not-X branch — including the healthy fall-through — not just the terminal abandon/recover transitions; a reset that lives only on the transitions silently accumulates across brief recoveries. Found by a scale playtest that otherwise confirmed robustness (solvent economy, 0 disconnected trips, self-relieving rush-hour congestion, pollution appropriately mild) — the bug came from the review, not new play. |
 
+## The client mirror tick lags the worker tick — anchor harness annotations to the worker
+
+| Field | Value |
+|---|---|
+| Surfaced by | Building the playtest harness (docs/harness.md): `__harness.annotate` recorded a finding "at the current tick", but `render_game_to_text().tick` (read on the client) was ~40 ticks behind the worker's `world.tick`, so a naive `inspectAt(clientTick)` landed BEFORE the annotated command executed (showed roads=10 instead of the placed road) |
+| Reviewer findings | n/a — surfaced during browser verification of the harness |
+| Fix commit | (harness commit) |
+| Test added | tests/harness/replay-harness.test.ts pins the record→annotate→replay→inspect pipeline headlessly (no client/worker skew there) |
+| Behavior delta | The sim runs in a Web Worker; the client's `tick` is whatever the last `frame` message carried, which lags the worker by the async round-trip plus the live game-loop advance. So a tick the client reads is NOT the tick the worker is on. Annotations must anchor to the WORKER's `world.tick` (the marker's tick, echoed back via the `annotated` message and readable from `findings()`), and replay/inspect must use `finding.tick`, never a client-side tick. General rule for worker-hosted sims: any "at the current tick" operation belongs in the worker, and the tick it used must be reported back — the client's view of "now" is always stale. |
+
 ## Never gate on a piped test run — the pipe eats the exit code
 
 | Field | Value |

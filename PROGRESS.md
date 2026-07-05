@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes:
 
 ## Log
 
+### 2026-07-04 — LLM playtest → annotate → replay harness
+
+Built a harness (docs/harness.md) for an LLM to (1) playtest, (2) annotate findings tied to the exact tick, and (3) replay/inspect for debugging — after studying how the two sibling projects do it: **civ-engine** (`SessionRecorder`/`SessionReplayer`/`snapshotAtTick`/`Marker`/`selfCheck` + a read-only MCP corpus server) and **aoe2** (in-browser agent API, `SessionBundle` recorded in-browser, findings injected as engine markers, headless `replay-inspect`). The record/annotate/replay core is thin glue over civ-engine, so it serves interactive (Claude) and a future autonomous runner alike.
+
+Pieces: `src/sim/summary.ts` (`simSummary(world)` — headless text state); `src/harness/findings.ts` (`PlaytestFinding` ↔ engine `Marker`); `src/harness/inspect.ts` (`selfCheckBundle` + `inspectBundle` — replay + self-check + ground-truth summaries at every finding + a sampled timeline); `src/harness/api.ts` (`window.__harness`). The worker connects a `SessionRecorder` to the world at boot (gated to Vite DEV so prod carries no recording overhead), and gained `annotate` (marker), `requestBundle`, `inspectAt` (fold `snapshotAtTick` into a throwaway probe sim → return the exact state, guarded), and `selfCheck` handlers. Protocol + `game.ts` gained the round-trip. `swapWorld` (used by loadSnapshot) restarts a fresh recording session.
+
+Chose a headless `inspectAt(tick)` over a live world-swap "watch" (the client mirrors are additive, so a live swap needs careful view resets — deferred with the in-app replay UI). Verified: the pipeline test (record→annotate→replay→`selfCheck().ok`→inspect) is green, and browser end-to-end works — annotate anchors to the worker tick, `selfCheck` returns ok/0-divergences, `inspectAt` reproduces the exact deterministic state (roads=10 before a road command, 31 after), `getBundle` exports a real bundle through postMessage. 94 tests + typecheck/lint/build green. Non-obvious gotcha recorded in lessons.md (client tick lags the worker tick — anchor to `finding.tick`).
+
 ### 2026-07-04 — MVP polish loop (rounds 11–16): play → find → improve until satisfying
 
 Goal: "do not stop until you are satisfied with the MVP as a player." Six focused rounds, each played as a real player, each shipped with gates green:

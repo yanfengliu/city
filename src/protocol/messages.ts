@@ -7,6 +7,9 @@ import type {
   TaxRates,
   ZoneType,
 } from '../sim/types';
+import type { PlaytestFinding, RecordedFinding } from '../harness/findings';
+import type { SelfCheckSummary } from '../harness/inspect';
+import type { SimSummary } from '../sim/summary';
 
 /** Typed messages between the main thread and the sim worker. All payloads must be structured-clone-safe plain data. */
 
@@ -32,7 +35,16 @@ export type ClientToWorker =
   /** Rebuilds the sim from a saved snapshot, then re-runs the full boot sync. */
   | { type: 'loadSnapshot'; snapshot: unknown; meta: SaveMeta }
   /** Replaces the set of field overlays the client wants pushed on recompute. */
-  | { type: 'setFieldSubscriptions'; fields: FieldName[] };
+  | { type: 'setFieldSubscriptions'; fields: FieldName[] }
+  /** Playtest harness (see docs/harness.md): record a finding as a marker at
+   * the current tick. */
+  | { type: 'annotate'; finding: PlaytestFinding }
+  /** Export the recorded session bundle (with findings). `id` correlates the reply. */
+  | { type: 'requestBundle'; id: number }
+  /** Replay the recorded session to `tick` and return the exact state there. */
+  | { type: 'inspectAt'; id: number; tick: number }
+  /** Verify the recorded session replays identically (3-stream check). */
+  | { type: 'selfCheck'; id: number };
 
 export interface TerrainPayload {
   width: number;
@@ -150,4 +162,12 @@ export type WorkerToClient =
     }
   | { type: 'commandRejected'; name: CommandName; message: string }
   /** Save response: the serialized world + metadata for persistence. */
-  | { type: 'snapshot'; snapshot: unknown; meta: SaveMeta };
+  | { type: 'snapshot'; snapshot: unknown; meta: SaveMeta }
+  /** Harness: a finding was recorded, anchored to `tick`. */
+  | { type: 'annotated'; tick: number; finding: PlaytestFinding }
+  /** Harness: the exported session bundle + its findings (`id` correlates the request). */
+  | { type: 'bundle'; id: number; bundle: unknown; findings: RecordedFinding[] }
+  /** Harness: 3-stream determinism self-check result (null + error on failure). */
+  | { type: 'selfCheckResult'; id: number; result: SelfCheckSummary | null; error?: string }
+  /** Harness: ground-truth city state replayed to `tick` (null + error on failure). */
+  | { type: 'inspection'; id: number; tick: number; summary: SimSummary | null; error?: string };
