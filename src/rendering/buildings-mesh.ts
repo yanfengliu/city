@@ -142,6 +142,8 @@ export class BuildingsView {
     const mesh = new InstancedMesh(geometry, this.material, capacity);
     mesh.count = 0;
     mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     // Pre-allocate instance colors so write/copy paths never hit a null buffer.
     mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3);

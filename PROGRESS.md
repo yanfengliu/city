@@ -49,6 +49,19 @@ Plan / decisions:
 
 Outcome: all five shipped. 77 tests green (7 new highway contract tests incl. a no-double-seed-on-load assertion), typecheck/lint/build green. Browser-verified: highway visible via canvas-capture screenshot (dark ribbon + amber dashes + off-map ramp at north-center; trees cleared beneath), all 16 shortcuts switch tools (ctrl/input guards held), checklist tips render ○ → green ✓ live (step 1 flipped after a far road; whole tip collapsed to firstZones only after connecting to the highway), day counter tracks 4096 ticks/day. Adversarial review: 3 agents (correctness/determinism, rendering/engine-contract, UI logic) — no real bugs; fixed the two worthwhile LOWs (amber-line z-fight hardened with polygonOffset + bigger Y gap; bulldozeRoad now skips the graph rebuild when nothing was removed, matching bulldozeRect). Notes: `roadCellCount` in text state includes the 10 highway cells (subtract for player-road baselines); highway pays normal road upkeep ($1/interval — consistent, negligible); external-commuter sim (people actually driving in/out via the highway) deferred by user choice — natural next milestone.
 
+### 2026-07-04 — Graphics pass: sun shadows, filmic tone mapping, atmosphere, standard-material water
+
+Open-ended "improve graphics while keeping performance in mind." Art direction: stylized low-poly, lit better rather than modelled heavier — the win comes from lighting, not geometry, so the cheap instanced Lambert materials stay. All in `src/rendering/`:
+
+- **Renderer**: ACES filmic tone mapping (exposure 1.15) + soft PCF shadow map. Tone mapping alone richens the flat greens.
+- **Sun shadows**: the directional sun casts (2048 map, whole-grid ortho frustum, `normalBias` to kill acne); buildings/trees/structures/bridges cast, terrain/roads/water receive. Biggest depth win.
+- **Lighting**: flat `AmbientLight` → `HemisphereLight` (sky above, warm ground bounce) so verticals read; sun is the key light.
+- **Atmosphere**: distance `Fog` fades the map edges into the sky; a back-faced gradient **sky dome** (custom shader, horizon→zenith) replaces the flat clear colour.
+- **Water**: split out of the terrain's vertex-colored Lambert mesh into its own low-roughness `MeshStandardMaterial` so the sun leaves a specular sheen instead of flat blue (`buildTerrainMesh` now returns a group: land+shore Lambert + water Standard).
+- **Day/night**: `setDayFraction` now drives *everything* — sun colour (warm near the horizon) + intensity, hemisphere sky/ground + intensity (dim-but-readable night floor), fog + background + sky-dome colours — from one daylight lerp between explicit day/night palette endpoints.
+
+Performance: 10–45 draw calls and ~340k triangles even zoomed to the whole 128² map (instancing preserved; one shadow pass; no post-processing). Browser-verified across midday (crisp shadows), morning, warm sunset (long shadows), and night; no console/shader errors; 86 tests + typecheck/lint/build green. Boundary intact (rendering imports no sim).
+
 ### 2026-07-04 — Playtest feedback: advisor collapse gating + power lines through buildings
 
 Two user-reported bugs (both broke "full game working"), root-caused with systematic debugging + live repro before fixing.

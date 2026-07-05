@@ -92,6 +92,9 @@ export class RoadsView {
     );
     this.roadMesh.visible = false;
     this.bridgeMesh.visible = false;
+    this.roadMesh.receiveShadow = true;
+    this.bridgeMesh.castShadow = true;
+    this.bridgeMesh.receiveShadow = true;
     this.group = new Group();
     this.group.name = 'roads';
     this.group.add(this.roadMesh, this.bridgeMesh);

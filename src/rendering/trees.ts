@@ -74,6 +74,7 @@ export class TreesView {
     for (const mesh of [this.trunks, this.canopies]) {
       mesh.instanceMatrix.setUsage(DynamicDrawUsage);
       mesh.frustumCulled = false;
+      mesh.castShadow = true;
       this.group.add(mesh);
     }
     this.group.name = 'trees';

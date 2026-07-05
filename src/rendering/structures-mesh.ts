@@ -118,6 +118,8 @@ export class StructuresView {
     const mesh = new InstancedMesh(this.unitBox, material, capacity);
     mesh.count = 0;
     mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.group.add(mesh);
     return mesh;
