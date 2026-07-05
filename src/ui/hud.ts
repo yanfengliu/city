@@ -17,6 +17,8 @@ export interface HudState<TTool extends string> {
   treasury: number;
   /** Display population (citizens × people-per-citizen, computed by the app layer). */
   populationPeople: number;
+  /** Player-facing city rank title (Settlement…Metropolis), shown by the count. */
+  cityTitle: string;
   /** RCI demand in [-1, 1]; bars show only the positive part. */
   demand: { r: number; c: number; i: number };
   activeTool: TTool;
@@ -94,6 +96,8 @@ export class Hud<TTool extends string> {
   private readonly warningEl: HTMLSpanElement;
   private readonly statsEl: HTMLSpanElement;
   private readonly toastArea: HTMLDivElement;
+  private readonly milestoneEl: HTMLDivElement;
+  private milestoneTimer: number | undefined;
   private readonly speedButtons = new Map<GameSpeed, HTMLButtonElement>();
   private readonly toolButtons = new Map<TTool, HTMLButtonElement>();
   private readonly overlayButtons = new Map<OverlayName, HTMLButtonElement>();
@@ -177,6 +181,29 @@ export class Hud<TTool extends string> {
       'position:absolute;top:56px;left:50%;transform:translateX(-50%);display:flex;' +
       'flex-direction:column;gap:6px;align-items:center;z-index:11;pointer-events:none';
     container.appendChild(this.toastArea);
+
+    // Celebratory population-milestone banner (distinct from the red toasts).
+    this.milestoneEl = document.createElement('div');
+    this.milestoneEl.style.cssText =
+      'position:absolute;top:84px;left:50%;transform:translateX(-50%) translateY(-10px);' +
+      'padding:10px 24px;border-radius:11px;color:#fff2cf;font-size:17px;font-weight:bold;' +
+      'background:linear-gradient(180deg,rgba(42,64,44,.95),rgba(24,40,28,.95));' +
+      'border:1px solid rgba(255,214,110,.75);box-shadow:0 5px 20px rgba(0,0,0,.5);' +
+      'z-index:12;opacity:0;transition:opacity .45s ease,transform .45s ease;' +
+      'pointer-events:none;white-space:nowrap';
+    container.appendChild(this.milestoneEl);
+  }
+
+  /** A one-off, self-fading celebration banner (population milestones). */
+  showMilestone(text: string): void {
+    this.milestoneEl.textContent = text;
+    this.milestoneEl.style.opacity = '1';
+    this.milestoneEl.style.transform = 'translateX(-50%) translateY(0)';
+    if (this.milestoneTimer !== undefined) clearTimeout(this.milestoneTimer);
+    this.milestoneTimer = window.setTimeout(() => {
+      this.milestoneEl.style.opacity = '0';
+      this.milestoneEl.style.transform = 'translateX(-50%) translateY(-10px)';
+    }, 4500);
   }
 
   private makeDivider(): HTMLSpanElement {
@@ -257,7 +284,7 @@ export class Hud<TTool extends string> {
 
   update(state: HudState<TTool>): void {
     this.treasuryEl.textContent = formatTreasury(state.treasury);
-    this.populationEl.textContent = `👤 ${state.populationPeople.toLocaleString('en-US')}`;
+    this.populationEl.textContent = `👤 ${state.populationPeople.toLocaleString('en-US')} · ${state.cityTitle}`;
     this.vehiclesEl.textContent = `🚗 ${state.vehicles.toLocaleString('en-US')}`;
     const warnings: string[] = [];
     const tips: string[] = [];

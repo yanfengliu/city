@@ -34,6 +34,7 @@ import {
 } from '../persistence/save';
 import { attachInput } from './input';
 import { activeTips, isConnectedToHighway, type TipContext } from './tips';
+import { CITY_TITLES, cityRank } from './milestones';
 import { TOOL_GROUPS, Tools, type ToolName } from './tools';
 import type {
   BuildingView,
@@ -131,6 +132,8 @@ export class Game {
   private lastBudget: BudgetReport = { income: 0, expenses: 0 };
   private vehicles = 0;
   private vehiclesOnScreen = 0;
+  /** Last celebrated city rank (index into CITY_TITLES); -1 until first refresh. */
+  private lastRank = -1;
   /** Edge congestion buckets from the last traffic message (automation + overlays). */
   private congestionBuckets: ReadonlyMap<number, number> = new Map();
   private employed = 0;
@@ -581,11 +584,24 @@ export class Game {
   }
 
   private refreshHud(): void {
+    const populationPeople = this.citizens * PEOPLE_PER_CITIZEN;
+    const rank = cityRank(populationPeople);
+    // First refresh (or a loaded city) seeds the rank silently; later upward
+    // crossings fire a one-off celebration.
+    if (this.lastRank === -1) {
+      this.lastRank = rank;
+    } else if (rank > this.lastRank) {
+      this.lastRank = rank;
+      this.hud.showMilestone(
+        `🎉 Your city is now a ${CITY_TITLES[rank].title}! · ${populationPeople.toLocaleString('en-US')} residents`,
+      );
+    }
     this.hud.update({
       day: Math.floor(this.tick / TICKS_PER_DAY) + 1,
       speed: this.speed,
       treasury: this.treasury,
-      populationPeople: this.citizens * PEOPLE_PER_CITIZEN,
+      populationPeople,
+      cityTitle: CITY_TITLES[rank].title,
       demand: this.demand,
       activeTool: this.tools.activeTool,
       activeOverlay: this.activeOverlay,
