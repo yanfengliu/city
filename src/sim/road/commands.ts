@@ -55,9 +55,12 @@ function placeableRoadCells(
   if (newCells.length === 0) return null;
   for (const c of newCells) {
     const i = cellIndex(c.x, c.y);
-    // Water is buildable as a bridge (at a premium). Roads may cross power
-    // lines (symmetric with lines crossing roads); any other occupant blocks.
-    if (sim.occupiedCells.has(i) && !sim.powerLineCells.has(i)) return null;
+    // Water is buildable as a bridge (at a premium). Roads may cross a power
+    // line that OWNS the cell (symmetric with lines crossing roads); any other
+    // occupant — including a building shadowing a coexisting line — blocks.
+    if (sim.occupiedCells.has(i) && sim.occupiedCells.get(i) !== sim.powerLineCells.get(i)) {
+      return null;
+    }
   }
   const cost = roadCellsCost(sim, newCells);
   if (!purchaseAllowed(sim.world, cost, false)) return null;
@@ -239,6 +242,12 @@ export function registerBulldozeRect(sim: CitySim): void {
       if (building && position) {
         for (const cell of footprintCells(position.x, position.y, building.w, building.h)) {
           sim.occupiedCells.delete(cell);
+          // A power line running over this building keeps the freed cell (a
+          // line whose cell lay outside the rect survives bulldozeUtilities).
+          // Mirror removeRoadCells + the refreshUtilities rebuild, or the cell
+          // would read free live but line-owned after save/load.
+          const line = sim.powerLineCells.get(cell);
+          if (line !== undefined) sim.occupiedCells.set(cell, line);
           // Rubble: block regrowth briefly so the player can build on the
           // cleared cells without racing the growth system.
           rubble[String(cell)] = w.tick + REGROWTH_COOLDOWN_TICKS;

@@ -62,6 +62,16 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Test added | covered by the extended replay gate (tests/sim/replay.test.ts now exercises utilities/services/taxes/bulldozeRect with utilitiesEnabled) |
 | Behavior delta | Save/load observably changed which cells were buildable. Rule: every special case added to a live handler (here: "line cells under roads stay road-owned") needs its inverse handled on the OTHER side of the ownership transition (road removed → line re-owns) AND identical logic in the rebuild path; the replay gate only catches it if its scenario exercises those commands — keep the gate's command coverage in sync with the shipping feature set. |
 
+## "Coexists over an existing owner" needs re-ownership in EVERY demolition path, not just the one you were thinking about
+
+| Field | Value |
+|---|---|
+| Surfaced by | Adversarial review of "power lines coexist over buildings" (the reported feature: lines route through buildings). A line owns a cell only when otherwise free; over a road or building the existing owner keeps `occupiedCells`. This was mirrored in the live handler, `refreshUtilities`, AND `removeRoadCells` (road bulldoze re-owns the line) — but NOT the building-demolition pass of `bulldozeRect` |
+| Reviewer findings | review agent CONFIRMED with a live repro: bulldoze PART of a multi-cell building (rect covers one footprint cell) → the whole building is destroyed and all its footprint cells freed, but a coexisting line on a footprint cell OUTSIDE the rect was never seen by `bulldozeUtilities`, so it survived. `liveOccupied=false` (building deleted, line never owned it) vs `reloadOccupied=true` (`refreshUtilities` re-owns the freed cell to the surviving line). Same zone command accepted live, rejected after reload. |
+| Fix commit | (this commit) |
+| Test added | tests/sim/power-lines.test.ts > "bulldozing part of a multi-cell building re-owns a coexisting line (save/load parity)" |
+| Behavior delta | When you add "X coexists over an existing owner Y," audit EVERY path that removes a Y — road removal AND building removal (and service/plant removal if reachable) — each must re-own or destroy the coexisting X identically to what the rebuild (`refreshUtilities`) does. It is easy to fix the one demolition path in front of you (roads) and miss the others (buildings). The replay `selfCheck` is structurally blind (`occupiedCells` is a derived cache, never serialized; the orphan entity replays identically), and a single-cell bulldoze test dodges it — only a ≥2-cell owner whose coexisting cell lies OUTSIDE the demolition rect triggers the orphan. |
+
 ## preview_screenshot can hang while the page is healthy — capture the canvas yourself
 
 | Field | Value |

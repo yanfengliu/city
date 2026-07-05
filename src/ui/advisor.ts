@@ -67,6 +67,9 @@ export class AdvisorPanel {
     header.appendChild(this.countEl);
     header.appendChild(this.collapseButton);
     header.addEventListener('click', () => {
+      // A tip with unmet requirements pins the panel open — you cannot collapse
+      // guidance away until every requirement is checked off.
+      if (this.hasBlockingTip()) return;
       this.collapsed = !this.collapsed;
       this.render();
     });
@@ -96,6 +99,11 @@ export class AdvisorPanel {
     return this.advisories.filter((a) => !this.dismissed.has(a.text)).map((a) => a.text);
   }
 
+  /** A tip (advisory with steps) still has at least one unmet requirement. */
+  private hasBlockingTip(): boolean {
+    return this.advisories.some((a) => a.steps?.some((s) => !s.done) ?? false);
+  }
+
   private render(): void {
     const visible = this.advisories.filter((a) => !this.dismissed.has(a.text));
     if (visible.length === 0) {
@@ -104,6 +112,10 @@ export class AdvisorPanel {
     }
     this.root.style.display = 'block';
     this.countEl.textContent = `${visible.length} item${visible.length === 1 ? '' : 's'}`;
+    // An unmet tip pins the panel open and hides the collapse affordance.
+    const blocking = this.hasBlockingTip();
+    if (blocking) this.collapsed = false;
+    this.collapseButton.style.display = blocking ? 'none' : '';
     this.collapseButton.textContent = this.collapsed ? '▸' : '▾';
     this.listEl.style.display = this.collapsed ? 'none' : 'block';
     if (this.collapsed) return;

@@ -337,8 +337,9 @@ export class Tools {
   /**
    * Mirrors the sim validators so ghosts stay honest. Road: builds over water
    * as a bridge and crosses power lines; anything else occupying a cell
-   * (buildings, services, plants, pumps) blocks. Power line: additionally
-   * blocked by water. Pipe: only water blocks. Bulldoze: needs ≥1 demolishable
+   * (buildings, services, plants, pumps) blocks. Power line: runs over roads
+   * and buildings (overhead), blocked by water, services, and plants/pumps.
+   * Pipe: only water blocks. Bulldoze: needs ≥1 demolishable
    * cell (road, building, structure, plant/pump, line, or pipe). Dezone:
    * needs ≥1 zoned cell. Zone: needs ≥1 zoneable cell (land, non-road, within
    * ZONE_MAX_ROAD_DISTANCE of a road).
@@ -353,7 +354,14 @@ export class Tools {
       case 'road':
         return !cells.some(occupiedByNonLine);
       case 'powerLine':
-        return !cells.some((cell) => this.host.isWater(cell.x, cell.y) || occupiedByNonLine(cell));
+        // Lines run over buildings and cross roads; only water, service
+        // structures, and plants/pumps block them.
+        return !cells.some(
+          (cell) =>
+            this.host.isWater(cell.x, cell.y) ||
+            this.host.hasStructure(index(cell)) ||
+            this.host.hasUtilityFootprint(index(cell)),
+        );
       case 'pipe':
         // Pipes run under everything on land.
         return !cells.some((cell) => this.host.isWater(cell.x, cell.y));

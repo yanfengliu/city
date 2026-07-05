@@ -117,7 +117,8 @@ export interface CitySim {
   zoneEntities: Map<number, number>;
   /** Footprint cell → entity id: buildings, service structures, plants/pumps, power lines (derived). */
   occupiedCells: Map<number, number>;
-  /** Power line cell → entity id (derived; lines also claim occupiedCells). */
+  /** Power line cell → entity id (derived; a line claims occupiedCells only on
+   * an otherwise-free cell — over a road or building the existing owner keeps it). */
   powerLineCells: Map<number, number>;
   /** Pipe cell → entity id (derived; pipes are underground and never occupy). */
   pipeCells: Map<number, number>;
