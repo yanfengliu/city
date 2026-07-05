@@ -1,5 +1,5 @@
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
-import { HIGHWAY_CELLS, HIGHWAY_CELL_SET } from '../sim/constants/highway';
+import { HIGHWAY_CELLS, HIGHWAY_CELL_SET, HIGHWAY_COLUMN } from '../sim/constants/highway';
 import type { Advisory } from '../ui/advisor';
 
 /** Live client-mirror facts the tip checklists read. */
@@ -51,6 +51,7 @@ export function activeTips(ctx: TipContext): Advisory[] {
       {
         id: 'firstRoad',
         text: '🛣 Found your city — link a road to the highway gateway at the top of the map.',
+        target: { x: HIGHWAY_COLUMN, y: 5 },
         steps: [
           { text: 'Pick the Road tool and drag on grass to lay a street.', done: ctx.playerRoadCells >= 1 },
           { text: 'Extend it to touch the highway at the north edge.', done: ctx.connectedToHighway },

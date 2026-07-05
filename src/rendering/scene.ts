@@ -100,10 +100,13 @@ export class CityScene {
       0.1,
       1000,
     );
-    this.camera.position.set(gridWidth / 2, 60, gridHeight / 2 + 60);
+    // Boot looking at the highway gateway (top-centre) — that is where the
+    // player draws their first road, so it should be front-and-centre, not a
+    // speck across the map.
+    this.camera.position.set(gridWidth / 2 - 6, 34, 62);
 
     this.controls = new MapControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(gridWidth / 2, 0, gridHeight / 2);
+    this.controls.target.set(gridWidth / 2, 0, 18);
     this.controls.maxPolarAngle = Math.PI / 2.2;
     this.controls.minDistance = 8;
     this.controls.maxDistance = 220;
