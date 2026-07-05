@@ -13,11 +13,14 @@ import type { BufferGeometry } from 'three';
 import {
   BUILDING_ABANDONED_ROOF_COLOR,
   BUILDING_ABANDONED_WALL_COLOR,
+  BUILDING_FOOTPRINT_JITTER,
   BUILDING_FOOTPRINT_MARGIN,
   BUILDING_HEIGHT_JITTER,
   BUILDING_LEVEL_HEIGHTS,
   BUILDING_LEVEL_ROOF_LIGHTEN,
   BUILDING_LEVEL_WALL_LIGHTEN,
+  BUILDING_TINT_HUE_JITTER,
+  BUILDING_TINT_LIGHT_JITTER,
   BUILDING_ROOF_COLORS,
   BUILDING_ROOF_HEIGHTS,
   BUILDING_START_CAPACITY,
@@ -178,8 +181,9 @@ export class BuildingsView {
     const height = BUILDING_LEVEL_HEIGHTS[levelIndex] * jitter;
     const cx = view.x + view.w / 2;
     const cz = view.y + view.h / 2;
-    const sx = view.w * BUILDING_FOOTPRINT_MARGIN;
-    const sz = view.h * BUILDING_FOOTPRINT_MARGIN;
+    // Independent per-axis footprint shrink so neighbours don't read as clones.
+    const sx = view.w * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x1111) * BUILDING_FOOTPRINT_JITTER);
+    const sz = view.h * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x2222) * BUILDING_FOOTPRINT_JITTER);
 
     MATRIX.makeScale(sx, height, sz).setPosition(cx, 0, cz);
     archetype.walls.setMatrixAt(slot, MATRIX);
@@ -190,11 +194,15 @@ export class BuildingsView {
       archetype.walls.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_WALL_COLOR));
       archetype.roofs.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR));
     } else {
+      // Subtle per-building tint (walls and roof shift together) on top of the
+      // per-level lightening, so a district varies without losing its zone hue.
+      const hueJit = (cellHash01(view.id + 0x3333) - 0.5) * BUILDING_TINT_HUE_JITTER;
+      const lightJit = (cellHash01(view.id + 0x4444) - 0.5) * BUILDING_TINT_LIGHT_JITTER;
       COLOR.setHex(BUILDING_WALL_COLORS[view.zone]);
-      COLOR.offsetHSL(0, 0, BUILDING_LEVEL_WALL_LIGHTEN * levelIndex);
+      COLOR.offsetHSL(hueJit, 0, BUILDING_LEVEL_WALL_LIGHTEN * levelIndex + lightJit);
       archetype.walls.setColorAt(slot, COLOR);
       COLOR.setHex(BUILDING_ROOF_COLORS[view.zone]);
-      COLOR.offsetHSL(0, 0, BUILDING_LEVEL_ROOF_LIGHTEN * levelIndex);
+      COLOR.offsetHSL(hueJit, 0, BUILDING_LEVEL_ROOF_LIGHTEN * levelIndex + lightJit);
       archetype.roofs.setColorAt(slot, COLOR);
     }
     for (const mesh of [archetype.walls, archetype.roofs]) {

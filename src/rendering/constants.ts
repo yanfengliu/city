@@ -75,6 +75,13 @@ export const BUILDING_FOOTPRINT_MARGIN = 0.9;
 export const BUILDING_LEVEL_HEIGHTS: [number, number, number] = [0.9, 1.6, 2.6];
 /** Multiplicative height jitter range (1 ± JITTER/2), hashed from the building id. */
 export const BUILDING_HEIGHT_JITTER = 0.16;
+/** Per-building footprint shrink (each axis independently) so silhouettes vary
+ * — subtracted from the margin, keeping every building inside its cell. */
+export const BUILDING_FOOTPRINT_JITTER = 0.12;
+/** Subtle per-building tint jitter (keeps the zone colour readable, breaks up
+ * the row-of-clones look). */
+export const BUILDING_TINT_HUE_JITTER = 0.03;
+export const BUILDING_TINT_LIGHT_JITTER = 0.08;
 export const BUILDING_ROOF_HEIGHTS: Record<ZoneKind, number> = { R: 0.35, C: 0.1, I: 0.18 };
 export const BUILDING_WALL_COLORS: Record<ZoneKind, number> = {
   R: 0xd9cbaa,
