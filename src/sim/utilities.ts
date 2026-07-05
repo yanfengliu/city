@@ -14,7 +14,6 @@ import {
 import { footprintCells } from './buildings';
 import { purchaseAllowed } from './economy';
 import { cellFromIndex, cellIndex, inBounds, lPathCells } from './grid';
-import { dezoneCells } from './zoning';
 import type { CitySim } from './city';
 import type { CityWorld, RoadEndpoints } from './types';
 
@@ -37,9 +36,10 @@ function pathIndices(data: RoadEndpoints): number[] {
 }
 
 /**
- * Re-registers plant/turbine/pump footprints and power line cells into
- * sim.occupiedCells (pipes are underground and never occupy) and rebuilds the
- * line/pipe cell caches. Must run after refreshStructures in rebuildDerived.
+ * Re-registers plant/turbine/pump footprints into sim.occupiedCells and rebuilds
+ * the power-line/pipe cell caches. Lines and pipes are thin overlays (overhead
+ * cabling / underground pipe) that never occupy — a building can grow under
+ * either. Must run after refreshStructures in rebuildDerived.
  */
 export function refreshUtilities(sim: CitySim): void {
   const w = sim.world;
@@ -48,13 +48,7 @@ export function refreshUtilities(sim: CitySim): void {
   for (const id of w.query('powerLine', 'position')) {
     const position = w.getComponent(id, 'position');
     if (!position) continue;
-    const i = cellIndex(position.x, position.y);
-    lines.set(i, id);
-    // Mirror placePowerLine: a line only owns an otherwise-free cell (runs
-    // over roads and buildings, which keep ownership). refreshUtilities runs
-    // after refreshOccupancy/refreshStructures, so buildings/services are
-    // already claimed here.
-    if (!sim.roadCells.has(i) && !sim.occupiedCells.has(i)) sim.occupiedCells.set(i, id);
+    lines.set(cellIndex(position.x, position.y), id);
   }
   for (const id of w.query('pipe', 'position')) {
     const position = w.getComponent(id, 'position');
@@ -81,22 +75,6 @@ export function refreshUtilities(sim: CitySim): void {
 function footprintPlaceable(sim: CitySim, cells: number[]): boolean {
   for (const i of cells) {
     if (sim.terrain.water[i] === 1 || sim.roadCells.has(i) || sim.occupiedCells.has(i)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Power-line variant: lines may CROSS roads (poles beside the roadway) and run
- * OVER buildings (overhead cables), coexisting without taking the cell. Water
- * and other player infrastructure — service structures, plants, pumps — reject.
- */
-function lineRunPlaceable(sim: CitySim, cells: number[]): boolean {
-  for (const i of cells) {
-    if (sim.terrain.water[i] === 1) return false;
-    const occupant = sim.occupiedCells.get(i);
-    if (occupant !== undefined && sim.world.getComponent(occupant, 'building') === undefined) {
       return false;
     }
   }
@@ -165,9 +143,11 @@ export function registerUtilityCommands(sim: CitySim): void {
     if (!endpointsInBounds(data)) return false;
     const newCells = pathIndices(data).filter((i) => !sim.powerLineCells.has(i));
     if (newCells.length === 0) return false;
-    // Lines claim their cell like roads do — but may cross roads (the pole
-    // stands beside the roadway); water and occupied cells reject.
-    if (!lineRunPlaceable(sim, newCells)) return false;
+    // A line is a thin overhead overlay — like a pipe, only water rejects. It
+    // runs over roads, buildings, and anything else on land without taking it.
+    for (const i of newCells) {
+      if (sim.terrain.water[i] === 1) return false;
+    }
     return purchaseAllowed(world, newCells.length * POWER_LINE_COST_PER_CELL, true);
   });
 
@@ -177,14 +157,11 @@ export function registerUtilityCommands(sim: CitySim): void {
       const entity = w.createEntity();
       w.setPosition(entity, cellFromIndex(i));
       w.addComponent(entity, 'powerLine', {});
+      // Overlay only: the line conducts via powerLineCells and never touches
+      // occupiedCells or the zone map, so a building can grow under the wire.
       sim.powerLineCells.set(i, entity);
-      // A line only OWNS an otherwise-free cell. Over a road or a building it
-      // coexists (that owner keeps the cell) and still conducts via
-      // powerLineCells — so it never displaces what's already there.
-      if (!sim.roadCells.has(i) && !sim.occupiedCells.has(i)) sim.occupiedCells.set(i, entity);
     }
     w.setState('treasury', treasury(w) - newCells.length * POWER_LINE_COST_PER_CELL);
-    dezoneCells(sim, w, newCells);
     w.emit('utilitiesChanged', {});
   });
 
@@ -228,8 +205,7 @@ export function bulldozeUtilities(sim: CitySim, w: CityWorld, cells: number[]): 
     ) {
       doomed.add(occupant);
     }
-    // Lines are found via their own map (a line over a building is shadowed in
-    // occupiedCells by the building, so it wouldn't appear as the occupant).
+    // Lines live only in powerLineCells (they never occupy), so find them there.
     const line = sim.powerLineCells.get(i);
     if (line !== undefined) doomed.add(line);
     const pipe = sim.pipeCells.get(i);
@@ -248,11 +224,8 @@ export function bulldozeUtilities(sim: CitySim, w: CityWorld, cells: number[]): 
           sim.occupiedCells.delete(cell);
         }
       } else if (w.getComponent(id, 'powerLine')) {
+        // Overlay only — the line never owned occupiedCells; just drop it.
         sim.powerLineCells.delete(i);
-        // Only release the cell if the line actually owned it (on a free cell);
-        // a line over a building never owned the cell, so leave the building's
-        // entry for the building pass to clear.
-        if (sim.occupiedCells.get(i) === id) sim.occupiedCells.delete(i);
       } else if (w.getComponent(id, 'pipe')) {
         sim.pipeCells.delete(i);
       } else if (w.getComponent(id, 'waterPump')) {

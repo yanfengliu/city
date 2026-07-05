@@ -57,8 +57,9 @@ export function refreshZones(sim: CitySim): void {
 }
 
 /**
- * Destroys zone entities under freshly claimed cells — roads and power lines
- * may be placed over zoned land and dezone it as they land.
+ * Destroys zone entities under freshly claimed cells — a road may be placed
+ * over zoned land and dezones it as it lands. (Power lines and pipes are thin
+ * overlays and deliberately do NOT dezone — a building grows under them.)
  */
 export function dezoneCells(sim: CitySim, w: CityWorld, cells: number[]): void {
   let changed = false;

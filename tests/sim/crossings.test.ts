@@ -22,13 +22,15 @@ describe('road/line crossings are symmetric', () => {
     // The crossing cell is road-owned, not blocked for future roads.
     expect(sim.occupiedCells.has(crossing)).toBe(false);
 
-    // Bulldozing the road re-owns the cell to the surviving line.
+    // Bulldozing the road leaves the line intact; the cell stays free (a line
+    // is a thin overlay that never owns occupiedCells).
     expect(
       w.submit('bulldozeRoad', { ax: base.x + 5, ay: base.y + 4, bx: base.x + 5, by: base.y + 4 }),
     ).toBe(true);
     w.step();
     expect(sim.roadCells.has(crossing)).toBe(false);
-    expect(sim.occupiedCells.get(crossing)).toBe(sim.powerLineCells.get(crossing));
+    expect(sim.powerLineCells.has(crossing)).toBe(true);
+    expect(sim.occupiedCells.has(crossing)).toBe(false);
   });
 });
 

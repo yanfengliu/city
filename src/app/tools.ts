@@ -77,7 +77,7 @@ export interface ToolHost {
   hasStructure(index: number): boolean;
   /** Power plant or water pump footprint (occupies like a building). */
   hasUtilityFootprint(index: number): boolean;
-  /** Power line cell (occupies unless under a road; roads/lines cross freely). */
+  /** Power line cell (a thin overhead overlay; only relevant to bulldoze). */
   hasPowerLine(index: number): boolean;
   /** Water pipe cell (underground; only relevant to bulldoze). */
   hasPipe(index: number): boolean;
@@ -309,7 +309,7 @@ export class Tools {
       if (this.host.hasUtilityFootprint(index)) {
         return 'A plant or pump is in the way — bulldoze first';
       }
-      if (this.host.hasPowerLine(index)) return 'A power line is in the way — bulldoze first';
+      // A power line is a thin overhead overlay — it never blocks a stamp.
     }
     if (SERVICE_BY_TOOL[this.activeTool]) {
       const touchesRoad = cells.some((cell) =>
@@ -338,12 +338,11 @@ export class Tools {
   /**
    * Mirrors the sim validators so ghosts stay honest. Road: builds over water
    * as a bridge and crosses power lines; anything else occupying a cell
-   * (buildings, services, plants, pumps) blocks. Power line: runs over roads
-   * and buildings (overhead), blocked by water, services, and plants/pumps.
-   * Pipe: only water blocks. Bulldoze: needs ≥1 demolishable
-   * cell (road, building, structure, plant/pump, line, or pipe). Dezone:
-   * needs ≥1 zoned cell. Zone: needs ≥1 zoneable cell (land, non-road, within
-   * ZONE_MAX_ROAD_DISTANCE of a road).
+   * (buildings, services, plants, pumps) blocks. Power line and pipe: thin
+   * overlays that run over everything on land — only water blocks. Bulldoze:
+   * needs ≥1 demolishable cell (road, building, structure, plant/pump, line,
+   * or pipe). Dezone: needs ≥1 zoned cell. Zone: needs ≥1 zoneable cell (land,
+   * non-road, within ZONE_MAX_ROAD_DISTANCE of a road).
    */
   private isSelectionValid(cells: Cell[]): boolean {
     const index = (cell: Cell): number => cellIndex(cell.x, cell.y, this.host.gridWidth);
@@ -355,14 +354,9 @@ export class Tools {
       case 'road':
         return !cells.some(occupiedByNonLine);
       case 'powerLine':
-        // Lines run over buildings and cross roads; only water, service
-        // structures, and plants/pumps block them.
-        return !cells.some(
-          (cell) =>
-            this.host.isWater(cell.x, cell.y) ||
-            this.host.hasStructure(index(cell)) ||
-            this.host.hasUtilityFootprint(index(cell)),
-        );
+        // A line is a thin overhead overlay (like a pipe): it runs over
+        // everything on land and only water blocks it.
+        return !cells.some((cell) => this.host.isWater(cell.x, cell.y));
       case 'pipe':
         // Pipes run under everything on land.
         return !cells.some((cell) => this.host.isWater(cell.x, cell.y));

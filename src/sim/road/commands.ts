@@ -55,12 +55,10 @@ function placeableRoadCells(
   if (newCells.length === 0) return null;
   for (const c of newCells) {
     const i = cellIndex(c.x, c.y);
-    // Water is buildable as a bridge (at a premium). Roads may cross a power
-    // line that OWNS the cell (symmetric with lines crossing roads); any other
-    // occupant — including a building shadowing a coexisting line — blocks.
-    if (sim.occupiedCells.has(i) && sim.occupiedCells.get(i) !== sim.powerLineCells.get(i)) {
-      return null;
-    }
+    // Water is buildable as a bridge (at a premium). Power lines are thin
+    // overlays that never own a cell, so roads cross them freely; any real
+    // occupant (building, service, plant, pump) blocks.
+    if (sim.occupiedCells.has(i)) return null;
   }
   const cost = roadCellsCost(sim, newCells);
   if (!purchaseAllowed(sim.world, cost, false)) return null;
@@ -125,10 +123,8 @@ export function registerRoadCommands(sim: CitySim): void {
       const entity = w.createEntity();
       w.setPosition(entity, { x: cell.x, y: cell.y });
       w.addComponent(entity, 'roadCell', {});
-      // Crossing a power line: the cell becomes road-owned; the line entity
-      // survives and keeps conducting (bulldozing the road re-owns it).
-      const i = cellIndex(cell.x, cell.y);
-      if (sim.powerLineCells.has(i)) sim.occupiedCells.delete(i);
+      // A power line under the new road is an overlay — it survives untouched
+      // and keeps conducting; there is no occupancy to transfer.
     }
     w.setState('treasury', treasury(w) - placement.cost);
     dezoneCells(
@@ -194,11 +190,8 @@ function removeRoadCells(sim: CitySim, w: CityWorld, cells: number[]): number {
         refundBase += roadCellCost(sim, i);
       }
     }
-    // A power line crossing this road survives the bulldoze; the freed cell
-    // becomes line-owned again (matches what refreshUtilities rebuilds on
-    // load — keeps live and restored derived state identical).
-    const line = sim.powerLineCells.get(i);
-    if (line !== undefined) sim.occupiedCells.set(i, line);
+    // A power line crossing this road is an overlay — it survives untouched
+    // and never owned the cell, so there is nothing to re-own.
   }
   if (removed > 0) {
     w.setState('treasury', treasury(w) + Math.floor(refundBase * ROAD_BULLDOZE_REFUND));
@@ -213,7 +206,12 @@ export function registerBulldozeRect(sim: CitySim): void {
     if (!validRect(data)) return false;
     return rectCells(data).some((c) => {
       const i = cellIndex(c.x, c.y);
-      return sim.roadCells.has(i) || sim.occupiedCells.has(i) || sim.pipeCells.has(i);
+      return (
+        sim.roadCells.has(i) ||
+        sim.occupiedCells.has(i) ||
+        sim.powerLineCells.has(i) ||
+        sim.pipeCells.has(i)
+      );
     });
   });
 
@@ -242,12 +240,8 @@ export function registerBulldozeRect(sim: CitySim): void {
       if (building && position) {
         for (const cell of footprintCells(position.x, position.y, building.w, building.h)) {
           sim.occupiedCells.delete(cell);
-          // A power line running over this building keeps the freed cell (a
-          // line whose cell lay outside the rect survives bulldozeUtilities).
-          // Mirror removeRoadCells + the refreshUtilities rebuild, or the cell
-          // would read free live but line-owned after save/load.
-          const line = sim.powerLineCells.get(cell);
-          if (line !== undefined) sim.occupiedCells.set(cell, line);
+          // A power line running over this building is an overlay — it never
+          // owned the cell, so the freed cell simply stays free.
           // Rubble: block regrowth briefly so the player can build on the
           // cleared cells without racing the growth system.
           rubble[String(cell)] = w.tick + REGROWTH_COOLDOWN_TICKS;

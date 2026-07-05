@@ -24,6 +24,25 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Utilities as thin overlays: power lines never occupy building space + sparse poles/wires
+
+User request:
+> The water pipe and power line should not occupy building space. Pipe goes underground and power lines are so thin they should be able to take any space as long as it is not right on top of the building. And power lines should be able to stretch for long distance without needing another pole.
+
+Findings (3 parallel Explore agents, all confirmed against live code):
+- **Pipes already comply**: they write only `pipeCells`, never `occupiedCells`; growth checks only `occupiedCells` → buildings already grow over pipes. Rendered at PIPE_Y=0.006 (ground hint). No sim change needed — verify + pin with a test.
+- **Power lines are the culprit**: on an otherwise-free cell a line claims `occupiedCells` (`utilities.ts:57,184`) AND `placePowerLine` **dezones** the run (`:187`). Both block a building from growing under a line.
+- **No pole-spacing/max-length exists in the sim** — conduction just needs orthogonally-contiguous line cells. But the renderer draws **one pole per cell** with **no wire geometry** (`networks-mesh.ts:78`), so a drawn line looks like a fence of poles. "needs another pole" = a rendering-density issue.
+
+Plan:
+1. **Power lines → pure overlay (like pipes).** Never write `occupiedCells`; never dezone; placement rejects only water (mirror `placePipe`). This deletes the whole fragile coexist-ownership machinery the lessons log flags (re-own in `removeRoadCells`/`bulldozeRect`/`placeRoad`, the `placeableRoadCells` line-exception, the conditional release in `bulldozeUtilities`). Add `powerLineCells` to the `bulldozeRect` validator so a lone line stays bulldozable. Mirror on the client ghost (`tools.ts` powerLine ghost → water-only; drop the "power line in the way" block for plant/pump/service stamps).
+2. **Sparse poles + spanning wires** in `networks-mesh.ts` (rendering-only; browser-verified). Poles at ends/corners/junctions + every N cells; wires along every orthogonal adjacency. Trees clear under actual poles, not the whole run.
+3. Docs (`game-design.md` power-line paragraph) + this log + a lessons entry on the simplification.
+
+TDD RED tests (power-lines.test.ts / crossings.test.ts): building grows on a line cell; line claims no occupiedCells; line does not dezone; plant/pump may sit on a line cell; road-bulldoze leaves the crossing free (line survives). Guards: bulldoze a lone line; building grows on a pipe cell.
+
+**Result (shipped).** All three done, TDD throughout (6 RED → GREEN + 5 pure-geometry tests). Sim: `placePowerLine` mirrors `placePipe` (water-only reject, no `occupiedCells`, no dezone); the coexist-ownership machinery in `road/commands.ts` (`placeableRoadCells` line-exception, the re-own in `removeRoadCells`/`bulldozeRect`/`placeRoad`) and `bulldozeUtilities`' conditional release were all **deleted** — a net simplification. `powerLineCells` added to the `bulldozeRect` validator so a lone line stays bulldozable. `lineRunPlaceable`/the `dezoneCells` import removed. Client `tools.ts` ghost mirrors it (line ghost = water-only; plant/pump/service stamps no longer blocked by a line). Rendering: `deriveLineGeometry` (new pure module `src/rendering/line-geometry.ts`) turns the line-cell set into sparse poles (ends/corners/junctions + every `POLE_SPACING`=6 on straights) + an overhead wire (`eastWires`/`southWires` instanced boxes at `WIRE_Y`=0.82); trees now clear under actual poles only, not the whole run. Browser-verified live: a line laid across a zoned row grew **24 buildings on its 26 cells** (was 0 — fully blocked); a 121-cell straight line renders as **29 poles / 145 wire spans** (a transmission line, not a fence); line ghost valid over a building, rejects water; a coal-plant stamp is no longer blocked by a line. All four gates green (110 tests, +11). Docs: game-design.md power paragraph rewritten; lessons.md entry on the simplification.
+
 ### 2026-07-05 — /goal "satisfied as a player": proactive utility onboarding + traffic confirmed lively
 
 Continued the vision loop under a satisfaction goal. One more shipped fix, one investigation that (correctly) ended in NOT changing anything.

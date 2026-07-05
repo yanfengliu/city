@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createCitySim, rebuildDerived } from '../../src/sim/city';
 import type { CitySim } from '../../src/sim/city';
 import { GRID_WIDTH } from '../../src/sim/constants/map';
+import { cellIndex } from '../../src/sim/grid';
 import { buildDistrict, findLandBlock } from './helpers';
 
 /** A cell owned by a grown building, plus its building entity id. */
@@ -92,14 +93,19 @@ describe('power lines route through buildings', () => {
     expect(sim.world.submit('placePowerLine', { ax: wx, ay: wy, bx: wx, by: wy })).toBe(false);
   });
 
-  it('keeps plants and pumps blocked on a line cell', () => {
+  it('lets a plant be placed on a line cell (lines occupy nothing)', () => {
     const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
     const base = findLandBlock(sim, 18, 10);
     // Bare land line, no buildings.
     expect(sim.world.submit('placePowerLine', { ax: base.x, ay: base.y, bx: base.x + 4, by: base.y })).toBe(true);
     sim.world.step();
-    // A wind turbine on a line cell must still be rejected.
-    expect(sim.world.submit('placePowerPlant', { kind: 'wind', x: base.x + 2, y: base.y })).toBe(false);
+    const lineCell = cellIndex(base.x + 2, base.y);
+    expect(sim.powerLineCells.has(lineCell)).toBe(true);
+    // A line is a thin overhead overlay — a wind turbine can sit under it.
+    expect(sim.world.submit('placePowerPlant', { kind: 'wind', x: base.x + 2, y: base.y })).toBe(true);
+    sim.world.step();
+    expect(sim.occupiedCells.get(lineCell)).toBeDefined(); // the plant owns the cell
+    expect(sim.powerLineCells.has(lineCell)).toBe(true); // the line coexists and still conducts
   });
 
   it('lets a road cross a line-only cell but not a building+line cell', () => {
@@ -119,7 +125,7 @@ describe('power lines route through buildings', () => {
     expect(sim.world.submit('placeRoad', { ax: bx, ay: by, bx: bx, by: by })).toBe(false);
   });
 
-  it('bulldozing part of a multi-cell building re-owns a coexisting line (save/load parity)', () => {
+  it('a coexisting line survives a partial building bulldoze (freed cell stays free, save/load parity)', () => {
     const { sim } = grownRDistrict();
     // A multi-cell building whose line cell we can leave OUTSIDE the bulldoze rect.
     let px = -1;
@@ -174,5 +180,94 @@ describe('power lines route through buildings', () => {
     sim.world.step();
     expect(sim.powerLineCells.has(cell)).toBe(false); // line gone
     expect(sim.occupiedCells.has(cell)).toBe(false); // building gone, cell free
+  });
+});
+
+/** Any building cell that also carries the given overlay, or null. */
+function overlaidBuildingCell(sim: CitySim, overlay: ReadonlyMap<number, number>): number | null {
+  for (const [cell, id] of sim.occupiedCells) {
+    if (sim.world.getComponent(id, 'building') && overlay.has(cell)) return cell;
+  }
+  return null;
+}
+
+describe('utilities never occupy building space', () => {
+  /**
+   * Zones an R band on both sides of a road WITHOUT stepping growth, then lays
+   * the given overlay along the road-adjacent row `base.y + 1` (where 1×1
+   * buildings actually grow) and grows the district. Returns the overlay row.
+   */
+  function zoneThenOverlay(sim: CitySim, base: { x: number; y: number }, command: 'placePowerLine' | 'placePipe'): number {
+    const w = sim.world;
+    expect(w.submit('placeRoad', { ax: base.x, ay: base.y + 2, bx: base.x + 15, by: base.y + 2 })).toBe(true);
+    w.step();
+    // Zones + overlay drain in one tick, so growth first runs with the overlay
+    // already present — no building can predate it on the overlay row.
+    w.submit('zone', { zone: 'R', ax: base.x, ay: base.y, bx: base.x + 15, by: base.y + 1 });
+    w.submit('zone', { zone: 'R', ax: base.x, ay: base.y + 3, bx: base.x + 15, by: base.y + 4 });
+    const row = base.y + 1;
+    expect(w.submit(command, { ax: base.x, ay: row, bx: base.x + 14, by: row })).toBe(true);
+    w.step();
+    for (let i = 0; i < 400; i++) w.step();
+    return row;
+  }
+
+  it('a building grows on a zoned cell that carries a power line', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 10);
+    zoneThenOverlay(sim, base, 'placePowerLine');
+    expect(overlaidBuildingCell(sim, sim.powerLineCells)).not.toBeNull();
+  });
+
+  it('a building grows on a zoned cell that carries a water pipe', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 10);
+    zoneThenOverlay(sim, base, 'placePipe');
+    expect(overlaidBuildingCell(sim, sim.pipeCells)).not.toBeNull();
+  });
+
+  it('a power line claims no occupiedCells even on bare land', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 10);
+    const cell = cellIndex(base.x, base.y);
+    expect(
+      sim.world.submit('placePowerLine', { ax: base.x, ay: base.y, bx: base.x + 4, by: base.y }),
+    ).toBe(true);
+    sim.world.step();
+    expect(sim.powerLineCells.has(cell)).toBe(true);
+    expect(sim.occupiedCells.has(cell)).toBe(false); // pure overlay — never owns a cell
+  });
+
+  it('placing a power line does not dezone the cells it runs over', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 10);
+    const w = sim.world;
+    w.submit('placeRoad', { ax: base.x, ay: base.y + 1, bx: base.x + 14, by: base.y + 1 });
+    w.step();
+    w.submit('zone', { zone: 'R', ax: base.x, ay: base.y, bx: base.x + 14, by: base.y });
+    w.step();
+    const cell = cellIndex(base.x, base.y);
+    expect(sim.zoneCells.get(cell)).toBe('R');
+    expect(w.submit('placePowerLine', { ax: base.x, ay: base.y, bx: base.x + 14, by: base.y })).toBe(
+      true,
+    );
+    w.step();
+    expect(sim.zoneCells.get(cell)).toBe('R'); // still zoned — a building may grow under the wire
+  });
+
+  it('bulldozes a lone power line on bare ground', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 10);
+    const cell = cellIndex(base.x, base.y);
+    expect(
+      sim.world.submit('placePowerLine', { ax: base.x, ay: base.y, bx: base.x + 3, by: base.y }),
+    ).toBe(true);
+    sim.world.step();
+    expect(sim.powerLineCells.has(cell)).toBe(true);
+    expect(sim.world.submit('bulldozeRect', { ax: base.x, ay: base.y, bx: base.x, by: base.y })).toBe(
+      true,
+    );
+    sim.world.step();
+    expect(sim.powerLineCells.has(cell)).toBe(false);
   });
 });

@@ -185,6 +185,15 @@ export const PUMP_COLOR = 0x3f74c9;
 export const PIPE_COLOR = 0x2e4a5f;
 /** Pipes are underground; render as a faint hint just above the terrain. */
 export const PIPE_Y = 0.006;
+/** Overhead cable strung between poles (near-black), just below the pole cap. */
+export const WIRE_COLOR = 0x232323;
+export const WIRE_Y = 0.82;
+/**
+ * A power line is a thin overhead cable — poles support it only at its ends,
+ * corners, and junctions, plus one every POLE_SPACING cells along a straight
+ * run, so a long line spans far without a pole on every cell.
+ */
+export const POLE_SPACING = 6;
 
 // Level-up celebration (floating "▲ Level N" sprite above the building).
 export const LEVELUP_DURATION_MS = 1600;
