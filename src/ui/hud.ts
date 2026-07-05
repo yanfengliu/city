@@ -192,6 +192,16 @@ export class Hud<TTool extends string> {
       'z-index:12;opacity:0;transition:opacity .45s ease,transform .45s ease;' +
       'pointer-events:none;white-space:nowrap';
     container.appendChild(this.milestoneEl);
+
+    // Subtle, always-on camera legend — new players otherwise have no cue for
+    // how to move the view (tool keys are discoverable via button badges).
+    const controlsHint = document.createElement('div');
+    controlsHint.textContent = 'Camera:  WASD move  ·  scroll zoom  ·  right-drag rotate';
+    controlsHint.style.cssText =
+      'position:absolute;bottom:10px;left:12px;color:#cfe0ea;font-size:11px;' +
+      'background:rgba(10,20,30,.5);padding:3px 9px;border-radius:5px;' +
+      'user-select:none;pointer-events:none;z-index:9;opacity:.72';
+    container.appendChild(controlsHint);
   }
 
   /** A one-off, self-fading celebration banner (population milestones). */
