@@ -183,6 +183,32 @@ export class CityScene {
   }
 
   /**
+   * Projects a ground point (world x, z at y=0) to CSS client pixels — the
+   * inverse of GroundPicker. Lets an automated player aim real pointer events
+   * at a sim cell. `onScreen` is false when the point is behind the camera or
+   * outside the viewport.
+   */
+  worldToScreen(x: number, z: number): { sx: number; sy: number; onScreen: boolean } {
+    this.camera.updateMatrixWorld(); // background tabs throttle rAF → stale matrices
+    const ndc = new Vector3(x, 0, z).project(this.camera);
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return {
+      sx: rect.left + (ndc.x * 0.5 + 0.5) * rect.width,
+      sy: rect.top + (-ndc.y * 0.5 + 0.5) * rect.height,
+      onScreen: ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1,
+    };
+  }
+
+  /** Forces a render and returns the canvas as a JPEG data URL — a reliable
+   * "what the player sees" capture (preserveDrawingBuffer is on; independent of
+   * the throttled rAF loop). */
+  screenshot(quality = 0.7): string {
+    this.camera.updateMatrixWorld();
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL('image/jpeg', quality);
+  }
+
+  /**
    * Smoothly flies the camera to look at world cell (x, z) — used by the
    * advisor's click-to-locate. Eased tween of both controls target and
    * camera position over ~700ms; any user camera input after arrival wins.

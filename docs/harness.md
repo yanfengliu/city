@@ -50,6 +50,23 @@ Installed **only in the dev build** (`import.meta.env.DEV`), matching the DEV-ga
 
 The async methods (`inspectAt` / `selfCheck` / `getBundle`) return a Promise **and** stash their result on `last*`, so an automation eval can trigger then read the stash a beat later (Promises don't survive a `preview_eval` boundary). Each reply is **id-correlated**, so overlapping calls resolve to their own request rather than mis-matching.
 
+### See & control like a player — `__harness.player`
+
+`command` submits sim commands directly, skipping the UI. To playtest the *actual player experience* — and catch UI bugs (picking, ghost validity, tool state, buttons, shortcuts) that the backdoor masks — drive the game through `__harness.player`, which dispatches **real** pointer / keyboard / click events on the live DOM and returns a screenshot of exactly what the player sees.
+
+| Method | Player action |
+|---|---|
+| `screenshot(q?)` | JPEG data URL of the rendered scene — the player's-eye view (forces a render; independent of the throttled rAF loop). |
+| `where(x, y)` | Screen pixels for the centre of sim cell (x, y) — aim clicks at map features. `onScreen` is false if off-view. |
+| `cellAt(sx, sy)` | The sim cell under a pixel (inverse of `where`). |
+| `hud(label)` | Click a HUD button by visible label — "Road", "Zone R", "Coal ⚡", "2×", "Pollution", "💰 Budget", "💾 Save"… |
+| `key(k)` | Press a key — a tool shortcut, `w`/`a`/`s`/`d` camera pan, `Escape`. |
+| `dragMap(from, to)` | Left-drag across the map (roads, zones, lines, pipes, bulldoze, dezone). Select the tool with `hud`/`key` first. |
+| `tapMap(cell)` | Left-click one cell — place a service/plant/pump, or inspect with Select. |
+| `clickAt(sx,sy)` / `dragAt(sx1,sy1,sx2,sy2,button?)` | Raw-pixel gestures. |
+
+The camera must **frame** a cell for `where`/`dragMap`/`tapMap` to reach it — you can't click what's off-screen, same as a human — so position the camera (and set an explicit viewport; a 0-size canvas makes projection NaN) before acting. Map gestures round-trip through the real `GroundPicker` (pixel → cell), so the screen↔world mapping is exact. Sim commands are async — read `state()` a beat after acting, not in the same tick.
+
 ## Finding format (`PlaytestFinding`)
 
 ```ts

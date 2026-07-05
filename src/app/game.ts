@@ -47,6 +47,7 @@ import type {
 } from '../protocol/messages';
 import { normalizeFinding, type PlaytestFinding, type RecordedFinding } from '../harness/findings';
 import type { SelfCheckSummary } from '../harness/inspect';
+import { createPlayerInput, type PlayerInput } from '../harness/player';
 import type { SimSummary } from '../sim/summary';
 import type {
   BudgetReport,
@@ -156,6 +157,7 @@ export class Game {
   /** Correlates async harness replies to their request Promise (avoids the
    * single-slot mis-correlation when two requests overlap). */
   private readonly harnessPending = new Map<number, (value: unknown) => void>();
+  private playerInputInstance: PlayerInput | undefined;
   /** Edge congestion buckets from the last traffic message (automation + overlays). */
   private congestionBuckets: ReadonlyMap<number, number> = new Map();
   private employed = 0;
@@ -767,6 +769,12 @@ export class Game {
   /** Submit any sim command by name (same path the tools use). */
   harnessCommand<K extends CommandName>(name: K, data: CityCommands[K]): void {
     this.send({ type: 'command', name, data } as ClientToWorker);
+  }
+
+  /** Real-input player driver (screenshot + mouse/keyboard/buttons); lazily built. */
+  playerInput(): PlayerInput {
+    (this.playerInputInstance ??= createPlayerInput(this.scene));
+    return this.playerInputInstance;
   }
 
   /** Record a finding as a marker at the current tick. */

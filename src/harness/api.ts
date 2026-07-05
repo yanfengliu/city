@@ -4,6 +4,7 @@ import type { CityCommands } from '../sim/types';
 import type { SimSummary } from '../sim/summary';
 import type { PlaytestFinding, RecordedFinding } from './findings';
 import type { SelfCheckSummary } from './inspect';
+import type { PlayerInput } from './player';
 
 /**
  * `window.__harness` — the LLM playtest surface (see docs/harness.md). Drive
@@ -12,6 +13,12 @@ import type { SelfCheckSummary } from './inspect';
  * automation eval can trigger then read the stash a beat later.
  */
 export interface HarnessApi {
+  /**
+   * See + control the game exactly as a player does — screenshot, real pointer
+   * events on the canvas, keyboard, and HUD button clicks (vs. `command`, which
+   * bypasses the UI). Use this to playtest the actual player experience.
+   */
+  player: PlayerInput;
   /** Bounded machine-readable game state (alias of render_game_to_text). */
   state(): Record<string, unknown>;
   /** Step the sim forward by wall-clock-equivalent ms at 1x. */
@@ -35,6 +42,7 @@ export interface HarnessApi {
 
 export function createHarness(game: Game): HarnessApi {
   return {
+    player: game.playerInput(),
     state: () => game.getTextState(),
     advance: (ms) => game.advanceTime(ms),
     command: (name, data) => game.harnessCommand(name, data),
