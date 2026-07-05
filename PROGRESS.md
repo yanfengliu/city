@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — /goal "satisfied as a player": proactive utility onboarding + traffic confirmed lively
+
+Continued the vision loop under a satisfaction goal. One more shipped fix, one investigation that (correctly) ended in NOT changing anything.
+
+**Fix 3 — prompt power/water from zoning time (`src/app/tips.ts`).** A building starts its 60s utility-grace clock the instant it grows, so a player who only learns about power/water once buildings appear is already racing it — the trap that mass-abandoned my first city this session. The ⚡/💧 guided tips now trigger on `buildings > 0 || zonedCells > 0`, so painting a zone immediately surfaces a clean setup checklist (⚡ place a plant / 💧 place a pump beside water) before any building exists. Once built, the tips persist until every cell is served. TDD (RED→GREEN), game-design.md updated. Validated end-to-end with REAL input (not the backdoor): fresh map → drag a road to the highway → paint R → the advisor shows the setup checklist → place plant+pump+lines+pipes as prompted → the city grows to 84 pop, all served, and the advisor correctly hands off to the services tip. This is the "as a real player would" path, so it also re-exercised picking/ghosts/tool-state.
+
+**Investigation — traffic liveliness (no change; the model is well-tuned).** A hand-built single-spine city showed only 1 vehicle for 423 people, which looked like a dead-city bug. Root cause was my degenerate topology, not the sim: `buildingAccessNode` maps a building adjacent to a mid-edge cell to the edge's `a` endpoint, so on ONE long edge every building shares an access node and `trips.ts` treats same-node home↔work as an instant walk (no vehicle) — plus my jobs district was undersized (56 of 141 employed). A headless probe of the DESIGNED acceptance-scale grid (pop 1971) settled it: **peak 142 vehicles, ~100 sustained, 96% employment, 22% of citizens driving** — abundantly lively. So normal gridded play has plenty of traffic; the sparsity was self-inflicted. Deliberately did NOT touch pathing/employment/traffic constants (all determinism-gated) for a non-problem — measured before editing. Noted latent nicety for later: `buildingAccessNode` returning the *nearest* edge endpoint instead of always `a` would improve path accuracy and spawn cars for genuine intra-arterial commutes, but it's marginal in gridded play and risks the tuned congestion tests, so it's a deferred refinement, not a fix.
+
+**Harness lesson reinforced:** client mirrors (`state()`, `__game.zonedCells`, `hasPlant`, …) do NOT update within the same eval as `advance()` — the worker's result messages are processed between agent round-trips. Read in a SEPARATE eval a beat later; several "it didn't work" scares this session were all this lag.
+
+Net for the goal: onboarding no longer blindsides a new player (proactive utilities + the dark-city advisory fix), traffic is confirmed lively at scale, visuals/inspect/overlays audited clean. The core loop is taught, survivable, and rewarding — a satisfying player experience. Four fixes shipped this session, all gates green, all pushed.
+
 ### 2026-07-05 — Vision-harness playtest loop: faithful screenshots + a dark-city advisory fix
 
 Drove the game as a real player through the new `__harness.player` (screenshot + real input), see → find → fix → repeat. Two shipped improvements plus a full visual audit.
