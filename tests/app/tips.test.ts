@@ -32,6 +32,25 @@ describe('guided tips progression', () => {
     expect(ids({ ...base, hasPump: false })).toContain('water');
   });
 
+  it('surfaces power/water tips proactively at zoning time, before any building grows', () => {
+    // Just zoned — no buildings yet, no utilities. The player should learn to
+    // pre-wire NOW so the first buildings grow already-served, instead of being
+    // put on the 60s utility-grace clock the moment they appear.
+    const justZoned: TipContext = {
+      ...base,
+      buildings: 0,
+      zonedCells: 5,
+      hasPlant: false,
+      hasPump: false,
+      unpowered: 0,
+      unwatered: 0,
+    };
+    const shown = ids(justZoned);
+    expect(shown).toContain('firstZones');
+    expect(shown).toContain('power');
+    expect(shown).toContain('water');
+  });
+
   it('teaches services once powered+watered, and drops the tip when a school lands', () => {
     // Newly stable city, no services yet → the level-up lesson appears.
     expect(ids(base)).toContain('services');

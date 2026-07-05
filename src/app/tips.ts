@@ -121,7 +121,12 @@ export function activeTips(ctx: TipContext): Advisory[] {
       ],
     });
   }
-  if (ctx.buildings > 0 && (!ctx.hasPlant || ctx.unpowered > 0)) {
+  // Surface the utility tips from ZONING time, not just once buildings exist:
+  // buildings start a 60s utility-grace clock the moment they grow, so a player
+  // who only learns about power/water then is already racing it. Prompting at
+  // zoning lets them pre-wire so the first buildings grow already-served.
+  const zonedOrBuilt = ctx.buildings > 0 || ctx.zonedCells > 0;
+  if (zonedOrBuilt && (!ctx.hasPlant || ctx.unpowered > 0)) {
     tips.push({
       id: 'power',
       text: '⚡ Power your city — buildings go dark without it.',
@@ -132,7 +137,7 @@ export function activeTips(ctx: TipContext): Advisory[] {
       ],
     });
   }
-  if (ctx.buildings > 0 && (!ctx.hasPump || ctx.unwatered > 0)) {
+  if (zonedOrBuilt && (!ctx.hasPump || ctx.unwatered > 0)) {
     tips.push({
       id: 'water',
       text: '💧 Supply water — dry buildings are abandoned.',
