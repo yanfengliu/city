@@ -22,6 +22,53 @@ export interface TipContext {
   firstUnwatered?: { x: number; y: number };
 }
 
+/** A building reduced to what the utility tips read. */
+export interface UtilityBuildingView {
+  id: number;
+  x: number;
+  y: number;
+  powered: boolean;
+  watered: boolean;
+}
+
+/**
+ * Utility-tip inputs derived from EVERY building — abandoned ones included. A
+ * building that went dark or dry and then abandoned still needs power/water to
+ * recover, so it must keep the power/water tip alive (and keep `utilitiesSettled`
+ * false). Counting only live buildings makes a mass-abandoned city read as
+ * "fully powered+watered", which hides the actual fix and wrongly surfaces the
+ * services/level-up tip at the worst moment. The flood-fill keeps `powered`/
+ * `watered` current on abandoned buildings, so their flags are trustworthy here.
+ * The fly-to target is the lowest-id affected building (deterministic).
+ */
+export function utilityTipFacts(buildings: readonly UtilityBuildingView[]): {
+  unpowered: number;
+  unwatered: number;
+  firstUnpowered?: { x: number; y: number };
+  firstUnwatered?: { x: number; y: number };
+} {
+  let unpowered = 0;
+  let unwatered = 0;
+  let firstUnpowered: UtilityBuildingView | undefined;
+  let firstUnwatered: UtilityBuildingView | undefined;
+  for (const b of buildings) {
+    if (!b.powered) {
+      unpowered++;
+      if (!firstUnpowered || b.id < firstUnpowered.id) firstUnpowered = b;
+    }
+    if (!b.watered) {
+      unwatered++;
+      if (!firstUnwatered || b.id < firstUnwatered.id) firstUnwatered = b;
+    }
+  }
+  return {
+    unpowered,
+    unwatered,
+    firstUnpowered: firstUnpowered && { x: firstUnpowered.x, y: firstUnpowered.y },
+    firstUnwatered: firstUnwatered && { x: firstUnwatered.x, y: firstUnwatered.y },
+  };
+}
+
 /** True once any non-highway road cell touches the highway (the outside link). */
 export function isConnectedToHighway(roadCells: ReadonlySet<number>): boolean {
   for (const h of HIGHWAY_CELLS) {

@@ -33,7 +33,7 @@ import {
   writeSave,
 } from '../persistence/save';
 import { attachInput } from './input';
-import { activeTips, isConnectedToHighway, type TipContext } from './tips';
+import { activeTips, isConnectedToHighway, utilityTipFacts, type TipContext } from './tips';
 import { CITY_TITLES, cityRank } from './milestones';
 import { TOOL_GROUPS, Tools, type ToolName } from './tools';
 import type {
@@ -667,8 +667,12 @@ export class Game {
     const all = [...this.buildings.values()];
     const live = all.filter((b) => !b.abandoned);
     const abandoned = all.length - live.length;
-    const unpowered = live.filter((b) => !b.powered);
-    const unwatered = live.filter((b) => !b.watered);
+    // Utility health counts EVERY building, not just live ones: a building that
+    // went dark/dry and abandoned still needs power/water to recover, so it must
+    // keep the power/water tips up (and `utilitiesSettled` down). Counting only
+    // live buildings let a mass-abandoned dark city read as fully supplied,
+    // hiding the fix and surfacing the wrong "add services" tip.
+    const util = utilityTipFacts(all);
     // Deterministic "show me" target: the lowest-id matching building.
     const firstOf = (views: BuildingView[]): { x: number; y: number } | undefined => {
       let best: BuildingView | null = null;
@@ -694,10 +698,10 @@ export class Game {
       buildings: this.buildings.size,
       hasPlant: this.hasPlant,
       hasPump: this.hasPump,
-      unpowered: unpowered.length,
-      unwatered: unwatered.length,
-      firstUnpowered: firstOf(unpowered),
-      firstUnwatered: firstOf(unwatered),
+      unpowered: util.unpowered,
+      unwatered: util.unwatered,
+      firstUnpowered: util.firstUnpowered,
+      firstUnwatered: util.firstUnwatered,
       structureCount: this.structures.size,
       hasSchool: [...this.structures.values()].some((s) => s.service === 'school'),
     };
