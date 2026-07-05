@@ -24,6 +24,19 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes:
 
 ## Log
 
+### 2026-07-04 — MVP polish loop (rounds 11–16): play → find → improve until satisfying
+
+Goal: "do not stop until you are satisfied with the MVP as a player." Six focused rounds, each played as a real player, each shipped with gates green:
+
+- **R11 — onboarding discoverability.** The founding tip pointed at a speck (camera booted at map centre, highway a dark stub 64 cells away). Boot camera now frames the highway gateway at a build-friendly 3/4 angle; the tip gained a 📍 fly-to target.
+- **R12 — teach the growth lever.** Guided tips stopped after power/water, so players never learned services→land-value→level-up and plateaued at L1. Added a fourth guided tip ("services raise land value…", steps: place a service / add a School) that appears once powered+watered and drops when a service+school exist. TDD: tests/app/tips.test.ts.
+- **R13 — progression + goals.** Population was just a number. Added city rank titles (Settlement→…→Metropolis) in the HUD and a self-fading celebration banner on each upward crossing. src/app/milestones.ts (pure, tested).
+- **R14 — building variety.** Districts read as identical clones. Per-building footprint + tint jitter (still fully instanced, no new draw calls) → organic districts.
+- **R15 — controls hint.** New players had no camera cue. Subtle always-on legend: "Camera: WASD move · scroll zoom · right-drag rotate".
+- **R16 — night comes alive.** The city vanished into near-black at night. Buildings now carry a warm emissive that ramps with darkness (one material uniform); setDayFraction returns daylight, the frame loop drives setNightGlow(1−daylight). Midnight now reads as a warm lit town.
+
+Capstone verification: fresh onboarding → guided tips carry a new player through road→zone→power→water→services; the city grows, all buildings reach L3, population crosses 150 → HUD reads "243 · Hamlet"; daytime hero shot shows varied shadowed towers + civic buildings + atmospheric depth; midnight shows the lit town. 93 tests + typecheck/lint/build green throughout; no sim regressions (all rounds were rendering/HUD/app-layer). Assessment: the core loop is complete and taught, progression is rewarding, and the game is beautiful day and night — a satisfying city-builder MVP.
+
 ### 2026-07-04 — Playtest round 8 (highway onboarding) → utility-grace bypass fix
 
 Played the new highway onboarding as a fresh player via the automation hooks: connected a road up to the highway gateway (founding tip auto-completed → firstZones, exactly as designed), then followed the tips (zone → wait for buildings). Result: 54 buildings / 141 pop grew, then the whole city mass-abandoned to population 0 within ~9s of game time — inside the 60s "utility grace" round 1 added to stop precisely this. (Two red herrings ruled out along the way: demand C = −1 was correct oversupply from my lopsided C-zoning, and the dead power network was my own line routed across a lake — power lines correctly can't bridge water; the honest ghost/Power overlay would guide a human.)
