@@ -269,6 +269,16 @@ export function levelSystem(sim: CitySim): (w: CityWorld) => void {
         continue;
       }
 
+      // Utilities are OK on this path (we passed the fault guard above), so the
+      // utility-abandon streak must clear — otherwise a building that regains
+      // power near the end of its grace would abandon on the very next flicker
+      // (e.g. brownout on an undersized plant) instead of getting a fresh grace.
+      if (building.badUtilityEvals !== 0) {
+        w.patchComponent(id, 'building', (b) => {
+          b.badUtilityEvals = 0;
+        });
+      }
+
       const nextLevelScore = building.level === 1 ? LEVEL2_SCORE : LEVEL3_SCORE;
       const educationOk =
         building.level < 2 || inputs.educated(position.x, position.y);

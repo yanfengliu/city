@@ -68,6 +68,40 @@ describe('power network', () => {
     expect(poweredCounts(sim).abandoned).toBe(0);
   });
 
+  it('regaining utilities resets the utility-abandon streak (no premature abandon on flicker)', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    // Drive the utility signal directly so we can flicker it precisely; the
+    // score is otherwise healthy (default land value, no pollution).
+    let hasPower = true;
+    const baseInputs = sim.scoreInputs;
+    sim.scoreInputs = { ...baseInputs, powered: () => hasPower, watered: () => true };
+    const base = findLandBlock(sim, 18, 8);
+    buildDistrict(sim, 'R', base);
+    for (let i = 0; i < 400; i++) sim.world.step();
+    // Grown + healthy via the override (b.powered stays false — no real plant).
+    expect(poweredCounts(sim).unpowered).toBeGreaterThan(0);
+    expect(poweredCounts(sim).abandoned).toBe(0);
+
+    // Cut utilities and accumulate the utility-abandon streak to just under the
+    // grace (never crossing it).
+    hasPower = false;
+    for (let i = 0; i < LEVEL_INTERVAL * (UTILITY_ABANDON_EVALS - 8); i++) sim.world.step();
+    expect(poweredCounts(sim).abandoned).toBe(0);
+
+    // Restore utilities briefly — the buildings are fully healthy again, which
+    // must clear the utility-abandon streak.
+    hasPower = true;
+    for (let i = 0; i < LEVEL_INTERVAL * 3; i++) sim.world.step();
+    expect(poweredCounts(sim).abandoned).toBe(0);
+
+    // Lose utilities again: with a *fresh* grace, nothing abandons within a
+    // dozen evals. Without the reset the streak resumed near the cap and would
+    // cross UTILITY_ABANDON_EVALS almost immediately.
+    hasPower = false;
+    for (let i = 0; i < LEVEL_INTERVAL * 12; i++) sim.world.step();
+    expect(poweredCounts(sim).abandoned).toBe(0);
+  });
+
   it('keeps the full utility grace where pollution depresses land value (onboarding)', () => {
     // Regression: missing utilities drop the +10 utility bonus from the score;
     // if pollution also lowers land value, the raw score falls below
