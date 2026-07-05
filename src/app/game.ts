@@ -636,6 +636,8 @@ export class Game {
       unwatered: unwatered.length,
       firstUnpowered: firstOf(unpowered),
       firstUnwatered: firstOf(unwatered),
+      structureCount: this.structures.size,
+      hasSchool: [...this.structures.values()].some((s) => s.service === 'school'),
     };
     out.push(...activeTips(ctx));
     // Founding gate: nothing else competes until the city is linked out.

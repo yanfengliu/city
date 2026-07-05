@@ -14,6 +14,9 @@ export interface TipContext {
   hasPump: boolean;
   unpowered: number;
   unwatered: number;
+  /** Placed service buildings, and whether any is a school (gates level 3). */
+  structureCount: number;
+  hasSchool: boolean;
   /** First affected building, for the fly-to target on power/water tips. */
   firstUnpowered?: { x: number; y: number };
   firstUnwatered?: { x: number; y: number };
@@ -90,6 +93,20 @@ export function activeTips(ctx: TipContext): Advisory[] {
       steps: [
         { text: 'Place a Pump on land right next to water.', done: ctx.hasPump },
         { text: 'Drag Pipes until no building lacks water.', done: ctx.hasPump && ctx.unwatered === 0 },
+      ],
+    });
+  }
+  // Once the city is stably powered and watered, teach the growth lever:
+  // services raise land value, and buildings only level up when it's high.
+  const utilitiesSettled =
+    ctx.hasPlant && ctx.unpowered === 0 && ctx.hasPump && ctx.unwatered === 0;
+  if (ctx.buildings > 0 && utilitiesSettled && (ctx.structureCount === 0 || !ctx.hasSchool)) {
+    tips.push({
+      id: 'services',
+      text: '🏛 Grow up, not just out — services raise land value so buildings can level up.',
+      steps: [
+        { text: 'Place a Fire, Police, or Clinic beside a road.', done: ctx.structureCount >= 1 },
+        { text: 'Add a School — it lets buildings reach level 3.', done: ctx.hasSchool },
       ],
     });
   }
