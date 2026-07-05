@@ -80,8 +80,8 @@ export function activeTips(ctx: TipContext): Advisory[] {
       text: '⚡ Power your city — buildings go dark without it.',
       target: ctx.firstUnpowered,
       steps: [
-        { text: 'Place a Coal or Wind plant on empty ground.', done: ctx.hasPlant },
-        { text: 'Drag Lines until no building lacks power.', done: ctx.hasPlant && ctx.unpowered === 0 },
+        { text: 'Place a Coal or Wind plant — it powers buildings within 2 cells of it.', done: ctx.hasPlant },
+        { text: 'Drag Lines to carry power to any buildings farther than that.', done: ctx.hasPlant && ctx.unpowered === 0 },
       ],
     });
   }
@@ -91,8 +91,8 @@ export function activeTips(ctx: TipContext): Advisory[] {
       text: '💧 Supply water — dry buildings are abandoned.',
       target: ctx.firstUnwatered,
       steps: [
-        { text: 'Place a Pump on land right next to water.', done: ctx.hasPump },
-        { text: 'Drag Pipes until no building lacks water.', done: ctx.hasPump && ctx.unwatered === 0 },
+        { text: 'Place a Pump beside water — it supplies buildings within 2 cells of it.', done: ctx.hasPump },
+        { text: 'Drag Pipes to carry water to any buildings farther than that.', done: ctx.hasPump && ctx.unwatered === 0 },
       ],
     });
   }
