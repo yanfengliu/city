@@ -143,6 +143,8 @@ export class Game {
   private treasury = 0;
   private taxRates: TaxRates = { r: DEFAULT_TAX_RATE, c: DEFAULT_TAX_RATE, i: DEFAULT_TAX_RATE };
   private lastBudget: BudgetReport = { income: 0, expenses: 0 };
+  private power = { supply: 0, demand: 0 };
+  private water = { supply: 0, demand: 0 };
   private vehicles = 0;
   private vehiclesOnScreen = 0;
   /** Last celebrated city rank (index into CITY_TITLES); -1 until first refresh. */
@@ -383,6 +385,8 @@ export class Game {
           this.lastDisconnectAt = performance.now();
         }
         this.disconnectedTrips = message.stats.disconnectedTrips;
+        this.power = message.stats.power;
+        this.water = message.stats.water;
         break;
       case 'commandRejected':
         this.hud.showToast(`Command rejected: ${message.message}`);
@@ -653,6 +657,8 @@ export class Game {
       activeOverlay: this.activeOverlay,
       vehicles: this.vehicles,
       disconnectedTrips: this.disconnectedTrips,
+      power: this.power,
+      water: this.water,
     });
     this.budgetPanel.update(this.taxRates, this.lastBudget);
     this.advisor.update(this.computeAdvisories());
@@ -836,6 +842,8 @@ export class Game {
       taxRates: this.taxRates,
       lastBudget: { income: round2(this.lastBudget.income), expenses: round2(this.lastBudget.expenses) },
       budgetPanelOpen: this.budgetPanel.visible,
+      power: this.power,
+      water: this.water,
       populationPeople: this.citizens * PEOPLE_PER_CITIZEN,
       demand: { r: round2(this.demand.r), c: round2(this.demand.c), i: round2(this.demand.i) },
       activeTool: this.tools.activeTool,

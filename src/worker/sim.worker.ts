@@ -7,6 +7,7 @@ import { simSummary } from '../sim/summary';
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
 import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
+import { utilityTotals } from '../sim/utilities';
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 import { cellIndex } from '../sim/grid';
 import type {
@@ -77,6 +78,11 @@ function swapWorld(snapshot: Parameters<typeof world.applySnapshot>[0], seed: nu
   world = sim.world;
   world.applySnapshot(snapshot);
   rebuildDerived(sim);
+  // A loaded city is a different world — drop the per-interval stat caches so
+  // the HUD shows its numbers (employment, utility totals) on the first frame,
+  // not the previous city's until the next 8-tick recompute.
+  cachedEmployed = -1;
+  cachedUtilityTotals = { power: { supply: 0, demand: 0 }, water: { supply: 0, demand: 0 } };
   attachWorldListeners();
   startRecorder();
   postBootSync();
@@ -97,6 +103,10 @@ const dirtyFields = new Set<FieldName>();
 const knownStructures = new Set<number>();
 const EMPLOYED_STAT_INTERVAL = 8;
 let cachedEmployed = -1;
+let cachedUtilityTotals: ReturnType<typeof utilityTotals> = {
+  power: { supply: 0, demand: 0 },
+  water: { supply: 0, demand: 0 },
+};
 
 function attachWorldListeners(): void {
   world.on('zonesChanged', () => {
@@ -303,13 +313,14 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
     const leg = data.legs[data.legIndex];
     vehicles.push({ id, edge: leg.edge, t: data.t, reverse: leg.reverse });
   }
-  // O(population) scan — refresh on a small cadence, not every tick.
+  // O(population)/O(buildings) scans — refresh on a small cadence, not every tick.
   if (world.tick % EMPLOYED_STAT_INTERVAL === 0 || cachedEmployed < 0) {
     cachedEmployed = 0;
     for (const id of world.query('citizen')) {
       const citizen = world.getComponent(id, 'citizen');
       if (citizen?.work !== null && citizen?.work !== undefined) cachedEmployed++;
     }
+    cachedUtilityTotals = utilityTotals(world);
   }
   const employed = cachedEmployed;
   if (vehicles.length > 0 || hadVehicles) {
@@ -349,6 +360,8 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
         i: DEFAULT_TAX_RATE,
       },
       lastBudget,
+      power: cachedUtilityTotals.power,
+      water: cachedUtilityTotals.water,
     },
   });
   postRoadsIfChanged();

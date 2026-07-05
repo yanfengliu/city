@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop: power/water capacity meters (add-a-plant vs wire-it-up signal)
+
+User asked to keep looping on the game. Round 1 of the self-paced play→find→improve loop.
+
+**Playtest (backdoor, block-city).** Built a 54-building R block with a power line running across it; verified the just-shipped overlay change looks right (buildings grow under wires, poles/wires render). The "dark boxes" that first looked like a bug were the intended `BUILDING_ABANDONED_*` grey mid-cascade (I'd placed no pump → all 69 abandoned) — not a defect. Confirmed abandoned coloring and the coexistence visuals are fine.
+
+**Shipped — utility capacity meters (`⚡`/`💧` in the HUD).** Addresses the long-standing documented gap: a city couldn't tell whether "unpowered/unwatered" meant *build another plant* (over capacity) or *wire it up* (capacity fine, not connected). New pure `utilityTotals(world)` in `src/sim/utilities.ts` → `{power,water}:{supply,demand}` (supply = Σ plant/pump capacity; demand = Σ level×footprint over EVERY building, abandoned included so it never blanks when a city goes dark). Threaded through FrameStats (worker caches it on the 8-tick `EMPLOYED_STAT_INTERVAL`, pure read — no world-state write, zero determinism impact) → `game.ts` → HUD meters + `render_game_to_text`. Meter shows `load/capacity`, green when covered, warm when over capacity, hidden until there's load or a source. TDD (2 RED→GREEN in `utility-totals.test.ts`). Verified live via DOM inspection in all three states: empty (hidden), wind-only `⚡ 54/40` warm, +coal `⚡ 54/440` green while water `💧 54/0` stays warm. All four gates green (112 tests). game-design.md HUD paragraph updated.
+
+Next loop ideas (not yet done): refine the ⚡/💧 advisor *tip text* to use supply/demand (say "add a plant" vs "drag lines") now that the signal exists; consider whether a wire crossing a building should clear its roof (currently WIRE_Y 0.82 < L1 height ~1.25, mostly occluded).
+
 ### 2026-07-05 — Utilities as thin overlays: power lines never occupy building space + sparse poles/wires
 
 User request:

@@ -466,6 +466,42 @@ export function powerSystem(sim: CitySim, enabled: boolean): (w: CityWorld) => v
   };
 }
 
+/** Capacity vs. load for one utility network. */
+export interface UtilityTotals {
+  /** Installed capacity — sum of plant/pump capacities. */
+  supply: number;
+  /** Total draw — level x footprint over EVERY building (abandoned too, so the
+   * signal never reads 0 the instant a city goes dark and needs it most). */
+  demand: number;
+}
+
+/**
+ * City-wide power/water capacity vs. load, for the HUD's "add a plant" vs.
+ * "connect it up" signal. Pure read over entities (no flood-fill, no mutation),
+ * so it never affects conduction or determinism. Power and water share the same
+ * per-building demand formula, so demand is identical across the two.
+ */
+export function utilityTotals(world: CityWorld): { power: UtilityTotals; water: UtilityTotals } {
+  let demand = 0;
+  for (const id of world.query('building')) {
+    const b = world.getComponent(id, 'building');
+    if (b) demand += UTILITY_DEMAND_PER_CELL_LEVEL * b.level * b.w * b.h;
+  }
+  let powerSupply = 0;
+  for (const id of world.query('powerPlant')) {
+    const plant = world.getComponent(id, 'powerPlant');
+    if (plant) powerSupply += POWER_PLANT_CAPACITY[plant.kind];
+  }
+  let waterSupply = 0;
+  for (const id of world.query('waterPump')) {
+    if (world.getComponent(id, 'waterPump')) waterSupply += WATER_PUMP_CAPACITY;
+  }
+  return {
+    power: { supply: powerSupply, demand },
+    water: { supply: waterSupply, demand },
+  };
+}
+
 /** Water flood-fill (interval 8, offset 1) — same shape as power. */
 export function waterSystem(sim: CitySim, enabled: boolean): (w: CityWorld) => void {
   return (w) => {

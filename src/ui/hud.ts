@@ -27,6 +27,9 @@ export interface HudState<TTool extends string> {
   vehicles: number;
   /** Cumulative trips that found no route — shows a warning badge when > 0. */
   disconnectedTrips: number;
+  /** Installed capacity vs total building load per utility (the HUD meters). */
+  power: { supply: number; demand: number };
+  water: { supply: number; demand: number };
 }
 
 export interface HudToolSpec<TTool extends string> {
@@ -93,6 +96,8 @@ export class Hud<TTool extends string> {
   private readonly treasuryEl: HTMLSpanElement;
   private readonly populationEl: HTMLSpanElement;
   private readonly vehiclesEl: HTMLSpanElement;
+  private readonly powerEl: HTMLSpanElement;
+  private readonly waterEl: HTMLSpanElement;
   private readonly warningEl: HTMLSpanElement;
   private readonly statsEl: HTMLSpanElement;
   private readonly toastArea: HTMLDivElement;
@@ -125,6 +130,11 @@ export class Hud<TTool extends string> {
     this.vehiclesEl = document.createElement('span');
     this.vehiclesEl.title = 'Vehicles on the road';
     this.root.appendChild(this.vehiclesEl);
+
+    this.powerEl = document.createElement('span');
+    this.root.appendChild(this.powerEl);
+    this.waterEl = document.createElement('span');
+    this.root.appendChild(this.waterEl);
 
     this.warningEl = document.createElement('span');
     this.warningEl.style.cssText =
@@ -296,6 +306,8 @@ export class Hud<TTool extends string> {
     this.treasuryEl.textContent = formatTreasury(state.treasury);
     this.populationEl.textContent = `👤 ${state.populationPeople.toLocaleString('en-US')} · ${state.cityTitle}`;
     this.vehiclesEl.textContent = `🚗 ${state.vehicles.toLocaleString('en-US')}`;
+    this.renderUtilityMeter(this.powerEl, '⚡', 'Power', state.power);
+    this.renderUtilityMeter(this.waterEl, '💧', 'Water', state.water);
     const warnings: string[] = [];
     const tips: string[] = [];
     if (state.treasury < 0) {
@@ -327,6 +339,28 @@ export class Hud<TTool extends string> {
     for (const [overlay, button] of this.overlayButtons) {
       button.style.background = overlay === state.activeOverlay ? ACTIVE_BG : IDLE_BG;
     }
+  }
+
+  /** ⚡/💧 meter: "icon load/capacity", green when capacity covers the load,
+   * warm when the network is over capacity (build another plant/pump). Hidden
+   * until the city has buildings drawing or a source installed. */
+  private renderUtilityMeter(
+    el: HTMLSpanElement,
+    icon: string,
+    noun: string,
+    t: { supply: number; demand: number },
+  ): void {
+    if (t.supply === 0 && t.demand === 0) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'inline';
+    el.textContent = `${icon} ${t.demand.toLocaleString('en-US')}/${t.supply.toLocaleString('en-US')}`;
+    const covered = t.supply >= t.demand;
+    el.style.color = covered ? '#9fdf9f' : '#ff8a6a';
+    el.title = covered
+      ? `${noun}: ${t.demand} used of ${t.supply} capacity`
+      : `${noun} over capacity (${t.demand} needed / ${t.supply}) — build another ${noun === 'Power' ? 'plant' : 'pump'}`;
   }
 
   /** Transient toast, e.g. "Command rejected: not enough money". */

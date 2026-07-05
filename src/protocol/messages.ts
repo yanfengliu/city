@@ -75,6 +75,10 @@ export interface FrameStats {
   taxRates: TaxRates;
   /** Latest budget interval's totals; {income: 0, expenses: 0} before the first. */
   lastBudget: BudgetReport;
+  /** Installed capacity vs total building load — the "add a plant" vs "wire it
+   * up" signal. demand counts every building (abandoned included). */
+  power: { supply: number; demand: number };
+  water: { supply: number; demand: number };
 }
 
 export interface VehicleView {
