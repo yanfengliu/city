@@ -19,6 +19,8 @@ import {
   BUILDING_LEVEL_HEIGHTS,
   BUILDING_LEVEL_ROOF_LIGHTEN,
   BUILDING_LEVEL_WALL_LIGHTEN,
+  BUILDING_NIGHT_GLOW_COLOR,
+  BUILDING_NIGHT_GLOW_MAX,
   BUILDING_TINT_HUE_JITTER,
   BUILDING_TINT_LIGHT_JITTER,
   BUILDING_ROOF_COLORS,
@@ -67,7 +69,11 @@ export class BuildingsView {
   private readonly slots = new Map<number, { zone: ZoneKind; slot: number }>();
   private readonly unitBox: BufferGeometry;
   private readonly pyramidRoof: BufferGeometry;
-  private readonly material = new MeshLambertMaterial({ color: 0xffffff });
+  private readonly material = new MeshLambertMaterial({
+    color: 0xffffff,
+    emissive: BUILDING_NIGHT_GLOW_COLOR,
+    emissiveIntensity: 0,
+  });
 
   constructor() {
     this.group.name = 'buildings';
@@ -85,6 +91,12 @@ export class BuildingsView {
 
   get count(): number {
     return this.slots.size;
+  }
+
+  /** Ramps the shared warm emissive with darkness (night ∈ [0,1]) so the city
+   * lights up at night instead of vanishing. Cheap — one material uniform. */
+  setNightGlow(night: number): void {
+    this.material.emissiveIntensity = Math.max(0, Math.min(1, night)) * BUILDING_NIGHT_GLOW_MAX;
   }
 
   upsert(view: BuildingRenderView): void {

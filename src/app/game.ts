@@ -201,7 +201,8 @@ export class Game {
       const now = performance.now();
       this.vehiclesView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
-      this.scene.setDayFraction((this.tick % TICKS_PER_DAY) / TICKS_PER_DAY);
+      const daylight = this.scene.setDayFraction((this.tick % TICKS_PER_DAY) / TICKS_PER_DAY);
+      this.buildingsView.setNightGlow(1 - daylight);
     });
 
     this.tools = new Tools({

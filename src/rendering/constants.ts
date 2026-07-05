@@ -98,6 +98,10 @@ export const BUILDING_LEVEL_WALL_LIGHTEN = 0.03;
 export const BUILDING_LEVEL_ROOF_LIGHTEN = 0.07;
 export const BUILDING_ABANDONED_WALL_COLOR = 0x6f6f6f;
 export const BUILDING_ABANDONED_ROOF_COLOR = 0x585858;
+/** Warm emissive glow ramped up at night so the city lights up instead of
+ * vanishing into the dark (material-level; intensity = night × MAX). */
+export const BUILDING_NIGHT_GLOW_COLOR = 0xffca7a;
+export const BUILDING_NIGHT_GLOW_MAX = 0.55;
 
 // Ghost drag preview. Capacity covers the longest L-path on a 128x128 grid (255
 // cells) and rect drags up to 1024 cells; larger rect previews clip (the command

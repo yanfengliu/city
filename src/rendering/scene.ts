@@ -306,8 +306,10 @@ export class CityScene {
    * Day/night: the sun orbits with the sim's day fraction (0 = midnight) and
    * drives every lit/atmospheric colour. Night dims (and cools) rather than
    * blacks out so the city stays readable; low sun goes warm for sunrise/sunset.
+   * Returns the daylight factor (0 at night → 1 at noon) so callers can drive
+   * night-only effects (e.g. building window glow).
    */
-  setDayFraction(fraction: number): void {
+  setDayFraction(fraction: number): number {
     const angle = (fraction - 0.25) * Math.PI * 2; // sunrise at 0.25
     const height = Math.sin(angle);
     this.sun.position.set(
@@ -333,6 +335,7 @@ export class CityScene {
     (this.scene.background as Color).copy(horizon);
     this.sky.material.uniforms.horizonColor.value.copy(horizon);
     this.sky.material.uniforms.topColor.value.copy(PALETTE.skyTopNight).lerp(PALETTE.skyTopDay, daylight);
+    return daylight;
   }
 
   getFps(): number {
