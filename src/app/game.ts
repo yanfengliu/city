@@ -8,6 +8,7 @@ import { NetworkOverlayView } from '../rendering/network-overlay';
 import { GroundPicker } from '../rendering/picking';
 import { RadiusIndicator } from '../rendering/radius-indicator';
 import { LevelUpFx } from '../rendering/levelup-fx';
+import { UtilityIconsFx } from '../rendering/utility-icons-fx';
 import { RoadsView } from '../rendering/roads-mesh';
 import { HighwayView } from '../rendering/highway-mesh';
 import { StructuresView } from '../rendering/structures-mesh';
@@ -107,6 +108,7 @@ export class Game {
   /** Coverage square shown while a service building is inspected. */
   private readonly inspectCoverage = new RadiusIndicator();
   private readonly levelUpFx = new LevelUpFx();
+  private readonly utilityIconsFx = new UtilityIconsFx();
   private readonly inspectPanel: InspectPanel;
   private readonly budgetPanel: BudgetPanel;
   private readonly advisor: AdvisorPanel;
@@ -221,12 +223,14 @@ export class Game {
       this.radiusIndicator.group,
       this.inspectCoverage.group,
       this.levelUpFx.group,
+      this.utilityIconsFx.group,
     );
     this.scene.onFrame(() => {
       this.flushDirtyViews();
       const now = performance.now();
       this.vehiclesView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
+      this.utilityIconsFx.updateFrame(now);
       // Day/night cycle disabled for now (see FIXED_DAY_FRACTION): pin a bright
       // sun and leave the buildings' night glow off.
       this.scene.setDayFraction(FIXED_DAY_FRACTION);
@@ -501,6 +505,7 @@ export class Game {
       this.occupancyDirty = true;
     }
     this.buildingsView.upsert(view);
+    this.utilityIconsFx.sync(view);
   }
 
   /** The removal stream covers all destroyed entities (citizens too) — ignore non-buildings. */
@@ -510,6 +515,7 @@ export class Game {
     this.setFootprintOwner(previous, null);
     this.buildings.delete(id);
     this.buildingsView.remove(id);
+    this.utilityIconsFx.remove(id);
     this.occupancyDirty = true;
   }
 
@@ -855,6 +861,7 @@ export class Game {
       roadCellCount: this.roadsView.cellCount,
       bridgeCellCount: this.roadsView.bridgeCellCount,
       levelUpsCelebrated: this.levelUpFx.celebrated,
+      utilityIconsShown: this.utilityIconsFx.count,
       zonedCellCount: this.zonedCells.size,
       buildingCount: this.buildings.size,
       structureCount: this.structures.size,

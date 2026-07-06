@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 3): floating ⚡/💧 problem icons over struggling buildings
+
+Visual playtest of a healthy vs. struggling city. Confirmed my prior overlay change looks fine (wire over roofs reads acceptably; not worth a risky height change). The real find: game-design.md claimed unpowered/unwatered buildings "render a bounce icon (⚡/💧) like the reference game" — but the renderer only ever consumed `abandoned` (grey); the `powered`/`watered` flags drove nothing in-world except the optional Power/Water overlay. So the documented at-a-glance signal was never built — a player couldn't see which buildings were in trouble without opening an overlay or clicking each one.
+
+**Shipped — `UtilityIconsFx` (`src/rendering/utility-icons-fx.ts`).** Floating, gently-bobbing ⚡/💧 sprites over LIVE buildings missing a utility (⚡ no power, 💧 no water, ⚡💧 both), billboarded, always-on. Cleared the instant a building is served or abandons (a dead grey building shows nothing — the advisor covers the dark-city case). Mirrors the `LevelUpFx` sprite pattern: cached canvas-texture per icon key, per-entry material, reconciled via `sync(view)` on each building upsert (the flood-fill re-upserts only buildings whose flags flipped) and `remove(id)` on removal, bobbed in the onFrame callback. The pure decision `utilityIconKey` lives in a three-free module (`utility-icon-key.ts`) and is unit-tested (3 cases incl. abandoned→null). `render_game_to_text` exposes `utilityIconsShown`. Verified live in every state: a no-utility district shows ⚡💧 over all 17 live buildings (screenshot), a coal-powered-but-dry district shows 💧-only over all 6 (screenshot), and once they abandon the count drops to 0 (icons gone). Four gates green (119 tests). game-design.md abandonment line corrected from aspirational to implemented.
+
+Aside noted in passing (not touched): the day/night cycle is currently pinned to a fixed bright day (`FIXED_DAY_FRACTION` in game.ts) — a deliberate-looking earlier decision, not a regression to chase now.
+
 ### 2026-07-05 — Play→improve loop (round 2): utility tips name the real bottleneck
 
 Continuation of the self-paced loop. The prior round shipped the supply/demand signal (HUD meters); this round spends it where it matters — the guided ⚡/💧 advisor tips.

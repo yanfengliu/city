@@ -195,6 +195,13 @@ export const WIRE_Y = 0.82;
  */
 export const POLE_SPACING = 6;
 
+// Utility-problem icon (floating ⚡/💧 above a live building missing a utility).
+export const UTILITY_ICON_SCALE = 0.6;
+/** Vertical bob amplitude (units) so the icon reads as an alert, not decor. */
+export const UTILITY_ICON_BOUNCE = 0.12;
+/** Gap above the building's roof top where the icon floats. */
+export const UTILITY_ICON_Y_GAP = 0.5;
+
 // Level-up celebration (floating "▲ Level N" sprite above the building).
 export const LEVELUP_DURATION_MS = 1600;
 export const LEVELUP_RISE_UNITS = 1.6;
