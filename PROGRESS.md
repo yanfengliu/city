@@ -24,6 +24,12 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 9): integration verification (no code change)
+
+An honest verification tick rather than a new feature. Built a fully-served city — R district + coal plant + power lines + pump + pipes on a shore site — and confirmed the eight improvements shipped this session work TOGETHER with no regressions: all 29 buildings powered AND watered, 0 problem icons (served → no ⚡/💧), meters green (⚡ 44/400, 💧 44/300), the building inspect panel reads "Power: connected / Water: connected", the overlay legend + spacebar-pause behave, and the healthy city renders correctly in the re-enabled day/night lighting (day hero shot in `.shots`). No genuine improvement surfaced worth shipping — the game is well-polished and the remaining candidates (demand-bar oversupply hint, overlay keyboard shortcuts, leveling/growth re-tuning) are either too marginal or determinism-gated design, so nothing was changed (forcing marginal edits would lower quality).
+
+**Water-setup recipe (finally reliable), for future playtests:** on lake-heavy maps, pipes/roads across water are correctly rejected, which repeatedly broke earlier attempts. The reliable approach: find an all-land block, then search for a water-adjacent land cell whose STRAIGHT vertical land run reaches the district (pump there, pipe straight up on land) — don't route pipes across the lake. Also: `hasPlant`/`hasPump` and `buildings.size` are client mirrors that lag the worker, so read them in a SEPARATE eval from the command/advance; and step between a road and a zone that depends on it (same-eval zone validates before the road applies → silently rejected).
+
 ### 2026-07-05 — Play→improve loop (round 8): Space bar pauses/resumes
 
 Small, conflict-free usability win found by reading the input wiring. Tools have keyboard shortcuts and camera has WASD, but the near-universal **Space = pause/resume** convention was missing — only Escape (cancel drag) and WASD (pan) were bound, so Space was free. (Considered overlay shortcuts too, but number keys clash with the 1×/2×/4× speed mental model and the letters are mostly taken by tools — not a clean win, so skipped.)
