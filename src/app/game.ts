@@ -706,6 +706,8 @@ export class Game {
       hasPump: this.hasPump,
       unpowered: util.unpowered,
       unwatered: util.unwatered,
+      powerOverCapacity: this.power.supply < this.power.demand,
+      waterOverCapacity: this.water.supply < this.water.demand,
       firstUnpowered: util.firstUnpowered,
       firstUnwatered: util.firstUnwatered,
       structureCount: this.structures.size,

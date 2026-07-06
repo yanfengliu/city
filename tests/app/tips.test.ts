@@ -12,6 +12,8 @@ const base: TipContext = {
   hasPump: true,
   unpowered: 0,
   unwatered: 0,
+  powerOverCapacity: false,
+  waterOverCapacity: false,
   structureCount: 0,
   hasSchool: false,
 };
@@ -63,6 +65,37 @@ describe('guided tips progression', () => {
   it('does not surface the services tip while power/water are still unresolved', () => {
     expect(ids({ ...base, unpowered: 3 })).not.toContain('services');
     expect(ids({ ...base, hasPump: false })).not.toContain('services');
+  });
+});
+
+describe('utility tips name the real bottleneck (capacity vs connectivity)', () => {
+  const step2 = (ctx: TipContext, id: string): string =>
+    activeTips(ctx).find((t) => t.id === id)?.steps?.[1]?.text ?? '';
+
+  it('says "add another plant" when power is over capacity, not "drag lines"', () => {
+    const ctx: TipContext = { ...base, hasPlant: true, unpowered: 3, powerOverCapacity: true };
+    expect(step2(ctx, 'power')).toMatch(/another plant/i);
+    expect(step2(ctx, 'power')).not.toMatch(/line/i);
+  });
+
+  it('says "drag lines" when power capacity covers the load but buildings are unconnected', () => {
+    const ctx: TipContext = { ...base, hasPlant: true, unpowered: 3, powerOverCapacity: false };
+    expect(step2(ctx, 'power')).toMatch(/line/i);
+    expect(step2(ctx, 'power')).not.toMatch(/another plant/i);
+  });
+
+  it('mirrors the capacity/connectivity split for water (pump vs pipes)', () => {
+    const over: TipContext = { ...base, hasPump: true, unwatered: 3, waterOverCapacity: true };
+    const under: TipContext = { ...base, hasPump: true, unwatered: 3, waterOverCapacity: false };
+    expect(step2(over, 'water')).toMatch(/another pump/i);
+    expect(step2(under, 'water')).toMatch(/pipe/i);
+  });
+
+  it('does not say "another plant" before the first plant exists (over capacity with none placed)', () => {
+    // supply 0 < demand reads as over-capacity, but with no plant yet step 1
+    // already covers placing one — step 2 should still teach lines, not "another".
+    const ctx: TipContext = { ...base, hasPlant: false, unpowered: 3, powerOverCapacity: true };
+    expect(step2(ctx, 'power')).not.toMatch(/another plant/i);
   });
 });
 

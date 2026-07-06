@@ -24,6 +24,12 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 2): utility tips name the real bottleneck
+
+Continuation of the self-paced loop. The prior round shipped the supply/demand signal (HUD meters); this round spends it where it matters — the guided ⚡/💧 advisor tips.
+
+**Shipped — capacity-aware tip guidance (`src/app/tips.ts`).** The power/water tips' second step used to always say "Drag Lines/Pipes" even when the real problem was capacity (a player could drag lines forever against an exhausted plant). Now, once a plant/pump exists but buildings stay unserved, the step reads the new `power`/`water` supply-vs-demand from the frame stats and names the actual fix: over capacity → "Add another plant/pump — your buildings need more than you generate/supply"; capacity fine but unconnected → "Drag Lines/Pipes …". `TipContext` gained `powerOverCapacity`/`waterOverCapacity` (game.ts derives them `supply < demand`); gated on `hasPlant`/`hasPump` so it never says "another" before the first one exists. TDD: 4 tests in `tips.test.ts` (over→"another plant", covered→"lines", water mirror, no-plant guard). Client-only (no sim/protocol/determinism surface), so self-reviewed rather than a full agent fan-out — proportionate to a conditional-string change. Verified live: a highway-linked R district with a single wind turbine (supply 40 ≥ demand 33 but only the east side reached) correctly renders "Drag Lines" in the advisor DOM — the connectivity branch end-to-end; the over-capacity branch is unit-tested (couldn't push demand past 40 in play — the demand model zeroes I once zoned — but the render path is identical, only the tested boolean flips the string). Four gates green (116 tests). game-design.md advisor paragraph updated.
+
 ### 2026-07-05 — Play→improve loop: power/water capacity meters (add-a-plant vs wire-it-up signal)
 
 User asked to keep looping on the game. Round 1 of the self-paced play→find→improve loop.

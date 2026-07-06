@@ -14,6 +14,10 @@ export interface TipContext {
   hasPump: boolean;
   unpowered: number;
   unwatered: number;
+  /** Installed capacity is below total load — the fix is another plant/pump, not
+   * more lines/pipes. Lets the power/water tip name the real bottleneck. */
+  powerOverCapacity: boolean;
+  waterOverCapacity: boolean;
   /** Placed service buildings, and whether any is a school (gates level 3). */
   structureCount: number;
   hasSchool: boolean;
@@ -133,7 +137,15 @@ export function activeTips(ctx: TipContext): Advisory[] {
       target: ctx.firstUnpowered,
       steps: [
         { text: 'Place a Coal or Wind plant — it powers buildings within 2 cells of it.', done: ctx.hasPlant },
-        { text: 'Drag Lines to carry power to any buildings farther than that.', done: ctx.hasPlant && ctx.unpowered === 0 },
+        {
+          // Once a plant exists but buildings stay dark, name the real fix: if
+          // the network is over capacity, more lines won't help — add a plant.
+          text:
+            ctx.hasPlant && ctx.powerOverCapacity
+              ? 'Add another plant — your buildings need more power than you generate.'
+              : 'Drag Lines to carry power to any buildings farther than that.',
+          done: ctx.hasPlant && ctx.unpowered === 0,
+        },
       ],
     });
   }
@@ -144,7 +156,13 @@ export function activeTips(ctx: TipContext): Advisory[] {
       target: ctx.firstUnwatered,
       steps: [
         { text: 'Place a Pump beside water — it supplies buildings within 2 cells of it.', done: ctx.hasPump },
-        { text: 'Drag Pipes to carry water to any buildings farther than that.', done: ctx.hasPump && ctx.unwatered === 0 },
+        {
+          text:
+            ctx.hasPump && ctx.waterOverCapacity
+              ? 'Add another pump — your buildings need more water than you supply.'
+              : 'Drag Pipes to carry water to any buildings farther than that.',
+          done: ctx.hasPump && ctx.unwatered === 0,
+        },
       ],
     });
   }
