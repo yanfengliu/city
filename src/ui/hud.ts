@@ -81,6 +81,9 @@ export interface HudState<TTool extends string> {
   /** Installed capacity vs total building load per utility (the HUD meters). */
   power: { supply: number; demand: number };
   water: { supply: number; demand: number };
+  /** A building/structure is being inspected (its panel occupies the bottom-left,
+   * so the overlay legend hops above it). */
+  inspectOpen: boolean;
 }
 
 export interface HudToolSpec<TTool extends string> {
@@ -274,14 +277,17 @@ export class Hud<TTool extends string> {
     container.appendChild(this.legendEl);
   }
 
-  /** Shows a colour key for the active overlay (or hides it for 'none'). */
-  private renderOverlayLegend(overlay: OverlayName): void {
+  /** Shows a colour key for the active overlay (or hides it for 'none'). The
+   * legend sits just above the camera hint, but hops above the inspect panel
+   * when one is open (both share the bottom-left corner). */
+  private renderOverlayLegend(overlay: OverlayName, inspectOpen: boolean): void {
     const spec = OVERLAY_LEGENDS[overlay];
     if (!spec) {
       this.legendEl.style.display = 'none';
       return;
     }
     this.legendEl.replaceChildren();
+    this.legendEl.style.bottom = inspectOpen ? '180px' : '36px';
     this.legendEl.style.display = 'block';
     const title = document.createElement('div');
     title.textContent = spec.title;
@@ -437,7 +443,7 @@ export class Hud<TTool extends string> {
     for (const [overlay, button] of this.overlayButtons) {
       button.style.background = overlay === state.activeOverlay ? ACTIVE_BG : IDLE_BG;
     }
-    this.renderOverlayLegend(state.activeOverlay);
+    this.renderOverlayLegend(state.activeOverlay, state.inspectOpen);
   }
 
   /** ⚡/💧 meter: "icon load/capacity", green when capacity covers the load,

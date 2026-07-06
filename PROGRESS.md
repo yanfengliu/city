@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 7): inspect panel shows power/water + legend anti-overlap
+
+Two related bottom-left UI fixes found by reading the inspect/HUD code.
+
+**Shipped — power/water in the building inspect panel (`game.ts`).** game-design.md claimed the inspect panel shows "powered/watered, score inputs", but it only ever showed footprint + residents/jobs — a player clicking a struggling building couldn't see WHY. Added `⚡ Power: connected/not connected` and `💧 Water: …` lines from the client `BuildingView` flags (no protocol change). Verified live: a powered-but-dry building reads "Power: connected / Water: not connected", matching its flags. Doc drift fixed (removed the never-built "score inputs" claim).
+
+**Shipped — overlay legend no longer hidden by the inspect panel (`hud.ts` + `game.ts`).** Round 6's legend sat bottom-left (bottom 36px) — the same corner as the inspect panel (bottom 8px, higher z-index), so selecting a building with an overlay active fully occluded the legend (verified: rects intersect, legend inside the inspect rect). Threaded an `inspectOpen` flag through HudState; the legend now hops to bottom 180px (clear above the ~146px inspect panel) while a building is inspected, and returns to 36px otherwise. Verified live: overlap=false when inspecting, bottoms toggle 180↔36.
+
+Self-contained DOM (no sim/protocol); self-reviewed. Four gates green (119 tests). game-design.md inspect-panel line corrected.
+
 ### 2026-07-05 — Play→improve loop (round 6): overlay colour-key legend
 
 Went to audit the overlays and found the concrete gap by reading the code first: the map overlays (pollution/noise/land value/traffic/power/water) render heatmaps but there was **no legend** — the only "legend" in the UI was the camera-controls hint. A player toggling an overlay saw colours with no scale.

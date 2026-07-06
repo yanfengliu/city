@@ -627,7 +627,12 @@ export class Game {
     }
     this.inspectPanel.show({
       title: `${ZONE_LABELS[view.zone]} — Level ${view.level}`,
-      lines: [`Footprint: ${view.w}×${view.h} cells`, this.occupancyLine(view)],
+      lines: [
+        `Footprint: ${view.w}×${view.h} cells`,
+        this.occupancyLine(view),
+        `⚡ Power: ${view.powered ? 'connected' : 'not connected'}`,
+        `💧 Water: ${view.watered ? 'connected' : 'not connected'}`,
+      ],
       abandoned: view.abandoned,
     });
   }
@@ -669,6 +674,7 @@ export class Game {
       disconnectedTrips: this.disconnectedTrips,
       power: this.power,
       water: this.water,
+      inspectOpen: this.inspected !== null,
     });
     this.budgetPanel.update(this.taxRates, this.lastBudget);
     this.advisor.update(this.computeAdvisories());
