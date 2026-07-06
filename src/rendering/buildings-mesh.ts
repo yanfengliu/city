@@ -203,8 +203,12 @@ export class BuildingsView {
     archetype.roofs.setMatrixAt(slot, MATRIX);
 
     if (view.abandoned) {
-      archetype.walls.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_WALL_COLOR));
-      archetype.roofs.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR));
+      // Per-building shade jitter so a derelict block reads as varied, weathered
+      // stock rather than a wall of identical grey clones. Lightness only (grey
+      // stays grey) and slightly stronger than the live jitter for visible decay.
+      const decayJit = (cellHash01(view.id + 0x5555) - 0.5) * BUILDING_TINT_LIGHT_JITTER * 1.5;
+      archetype.walls.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_WALL_COLOR).offsetHSL(0, 0, decayJit));
+      archetype.roofs.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
     } else {
       // Subtle per-building tint (walls and roof shift together) on top of the
       // per-level lightening, so a district varies without losing its zone hue.

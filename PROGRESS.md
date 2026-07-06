@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 4): audit (healthy) + abandoned-building shade variation
+
+Broad playtest rather than a targeted fix. Built a mixed R/C/I city with power, a pump, and services to audit the overlays, inspect panel, and leveling. Two honest takeaways: (1) no bug found — the game is in good shape and the utility feedback shipped this session (capacity meters, capacity-aware tips, ⚡/💧 problem icons) has closed the main gaps I kept hitting; (2) my setup kept fighting a lake-split site (a stub road bridged the lake, so lakeside pipes were correctly rejected for crossing water — the honest ghost handles this for a real player), so the leveling/overlay audit stayed shallow. A fuller healthy-city leveling+overlay audit on a clean shore site is the natural next tick.
+
+**Shipped — abandoned buildings vary in shade (`buildings-mesh.ts`).** The one concrete, repeatedly-observed rough edge: abandoned buildings used a single flat grey for every instance (the per-building tint jitter was applied only on the non-abandoned path), so a dead block read as a wall of identical grey clones. Added deterministic per-building lightness jitter (grey stays grey, ~1.5× the live jitter) so a derelict district looks like weathered, varied stock. Rendering-only, browser-verified (varied greys across a 32-building abandoned block), four gates green (119 tests). Trivial 5-line tweak — no separate review.
+
+**Reminder reinforced (no code):** chased a false "icons=0 on unpowered buildings" regression that was just the time-passing-between-evals gotcha — the buildings had abandoned between reads (abandoned → no icon, by design). Always re-read `abandoned` in the SAME eval as `powered`/`utilityIconsShown`.
+
 ### 2026-07-05 — Play→improve loop (round 3): floating ⚡/💧 problem icons over struggling buildings
 
 Visual playtest of a healthy vs. struggling city. Confirmed my prior overlay change looks fine (wire over roofs reads acceptably; not worth a risky height change). The real find: game-design.md claimed unpowered/unwatered buildings "render a bounce icon (⚡/💧) like the reference game" — but the renderer only ever consumed `abandoned` (grey); the `powered`/`watered` flags drove nothing in-world except the optional Power/Water overlay. So the documented at-a-glance signal was never built — a player couldn't see which buildings were in trouble without opening an overlay or clicking each one.
