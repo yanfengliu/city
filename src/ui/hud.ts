@@ -10,6 +10,57 @@ export type OverlayName =
   | 'power'
   | 'water';
 
+interface OverlayLegendItem {
+  color: string;
+  label: string;
+}
+interface OverlayLegend {
+  title: string;
+  /** Gradient overlays (fields): a low→high colour bar with end labels. */
+  gradient?: [string, string];
+  lowLabel?: string;
+  highLabel?: string;
+  /** Discrete overlays (traffic/power/water): labelled colour swatches. */
+  items?: OverlayLegendItem[];
+}
+
+/**
+ * Colour key shown while a map overlay is active, so the heatmap has a scale.
+ * Colours mirror the canonical ramps in rendering/constants.ts (FIELD_RAMPS,
+ * TRAFFIC_BUCKET_COLORS) and network-overlay.ts — duplicated here as hex strings
+ * so the UI layer needn't import from rendering. Keep in sync if those change.
+ */
+const OVERLAY_LEGENDS: Partial<Record<OverlayName, OverlayLegend>> = {
+  pollution: { title: 'Pollution', gradient: ['#46a34a', '#5f4726'], lowLabel: 'Clean', highLabel: 'Heavy' },
+  noise: { title: 'Noise', gradient: ['#46a34a', '#7a3fae'], lowLabel: 'Quiet', highLabel: 'Loud' },
+  landValue: { title: 'Land value', gradient: ['#d9483f', '#3fae4a'], lowLabel: 'Low', highLabel: 'High' },
+  traffic: {
+    title: 'Traffic',
+    items: [
+      { color: '#69a869', label: 'Flowing' },
+      { color: '#e3cf4a', label: 'Busy' },
+      { color: '#f2953b', label: 'Heavy' },
+      { color: '#e0453a', label: 'Jammed' },
+    ],
+  },
+  power: {
+    title: 'Power',
+    items: [
+      { color: '#ffdc50', label: 'Network' },
+      { color: '#78d278', label: 'Powered' },
+      { color: '#eb3c32', label: 'No power' },
+    ],
+  },
+  water: {
+    title: 'Water',
+    items: [
+      { color: '#5ab4ff', label: 'Pipes' },
+      { color: '#78c8dc', label: 'Watered' },
+      { color: '#eb3c32', label: 'No water' },
+    ],
+  },
+};
+
 export interface HudState<TTool extends string> {
   /** In-game day number (player-facing time; raw tick/fps stay in the automation state only). */
   day: number;
@@ -100,6 +151,8 @@ export class Hud<TTool extends string> {
   private readonly waterEl: HTMLSpanElement;
   private readonly warningEl: HTMLSpanElement;
   private readonly statsEl: HTMLSpanElement;
+  /** Colour-key panel for the active map overlay (bottom-left, above the camera hint). */
+  private readonly legendEl: HTMLDivElement;
   private readonly toastArea: HTMLDivElement;
   private readonly milestoneEl: HTMLDivElement;
   private milestoneTimer: number | undefined;
@@ -212,6 +265,51 @@ export class Hud<TTool extends string> {
       'background:rgba(10,20,30,.5);padding:3px 9px;border-radius:5px;' +
       'user-select:none;pointer-events:none;z-index:9;opacity:.72';
     container.appendChild(controlsHint);
+
+    this.legendEl = document.createElement('div');
+    this.legendEl.style.cssText =
+      'position:absolute;bottom:36px;left:12px;min-width:104px;color:#eaf0f4;font-size:12px;' +
+      'background:rgba(10,20,30,.74);padding:7px 10px;border-radius:6px;' +
+      'user-select:none;pointer-events:none;z-index:9;display:none';
+    container.appendChild(this.legendEl);
+  }
+
+  /** Shows a colour key for the active overlay (or hides it for 'none'). */
+  private renderOverlayLegend(overlay: OverlayName): void {
+    const spec = OVERLAY_LEGENDS[overlay];
+    if (!spec) {
+      this.legendEl.style.display = 'none';
+      return;
+    }
+    this.legendEl.replaceChildren();
+    this.legendEl.style.display = 'block';
+    const title = document.createElement('div');
+    title.textContent = spec.title;
+    title.style.cssText = 'font-weight:bold;margin-bottom:5px';
+    this.legendEl.appendChild(title);
+    if (spec.gradient) {
+      const bar = document.createElement('div');
+      bar.style.cssText = `height:10px;border-radius:2px;background:linear-gradient(to right, ${spec.gradient[0]}, ${spec.gradient[1]})`;
+      const ends = document.createElement('div');
+      ends.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;opacity:.8;margin-top:3px';
+      const lo = document.createElement('span');
+      lo.textContent = spec.lowLabel ?? '';
+      const hi = document.createElement('span');
+      hi.textContent = spec.highLabel ?? '';
+      ends.append(lo, hi);
+      this.legendEl.append(bar, ends);
+    } else if (spec.items) {
+      for (const item of spec.items) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:7px;line-height:1.5';
+        const swatch = document.createElement('span');
+        swatch.style.cssText = `width:12px;height:12px;border-radius:2px;flex:none;background:${item.color}`;
+        const label = document.createElement('span');
+        label.textContent = item.label;
+        row.append(swatch, label);
+        this.legendEl.appendChild(row);
+      }
+    }
   }
 
   /** A one-off, self-fading celebration banner (population milestones). */
@@ -339,6 +437,7 @@ export class Hud<TTool extends string> {
     for (const [overlay, button] of this.overlayButtons) {
       button.style.background = overlay === state.activeOverlay ? ACTIVE_BG : IDLE_BG;
     }
+    this.renderOverlayLegend(state.activeOverlay);
   }
 
   /** ⚡/💧 meter: "icon load/capacity", green when capacity covers the load,

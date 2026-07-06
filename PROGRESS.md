@@ -24,6 +24,12 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 6): overlay colour-key legend
+
+Went to audit the overlays and found the concrete gap by reading the code first: the map overlays (pollution/noise/land value/traffic/power/water) render heatmaps but there was **no legend** — the only "legend" in the UI was the camera-controls hint. A player toggling an overlay saw colours with no scale.
+
+**Shipped — overlay legend (`src/ui/hud.ts`).** A bottom-left colour-key panel that appears while an overlay is active and hides for 'none'. Field overlays show a low→high gradient bar with end labels (Pollution Clean→Heavy, Noise Quiet→Loud, Land value Low→High); traffic and power/water show labelled swatches (Flowing→Jammed; Network/Powered/No power, Pipes/Watered/No water). `OVERLAY_LEGENDS` keeps the colours as hex strings that mirror the canonical `FIELD_RAMPS`/`TRAFFIC_BUCKET_COLORS`/network-overlay values, so the UI layer needn't import from rendering (boundary kept; comment flags the sync point). Rendered with `createElement` + `replaceChildren` (codebase style, no innerHTML). Self-contained DOM (no sim/protocol) — self-reviewed. Verified live via DOM across all six overlays: each shows the right title + scale + canonical colours, hides for 'none', and sits clear of the camera hint (bottom 36px vs 10px). Four gates green (119 tests). game-design.md overlays paragraph updated.
+
 ### 2026-07-05 — Play→improve loop (round 5): re-enable the day/night cycle (properly)
 
 The day/night cycle had been disabled (commit 97a7a7e pinned `FIXED_DAY_FRACTION = 0.4`) for two real reasons: night was too dark to play, and a fresh game booted at tick 0 = fraction 0 = midnight (started in the dark). The atmospheric cycle (warm sunsets, a lit night city) was a shipped feature worth restoring — so rather than leave it off or naively revert, re-enabled it while fixing both root problems.
