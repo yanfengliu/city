@@ -160,6 +160,9 @@ export class Hud<TTool extends string> {
   private readonly milestoneEl: HTMLDivElement;
   private milestoneTimer: number | undefined;
   private readonly speedButtons = new Map<GameSpeed, HTMLButtonElement>();
+  /** Live speed, and the last non-zero speed to resume to when Space unpauses. */
+  private currentSpeed: GameSpeed = 1;
+  private resumeSpeed: GameSpeed = 1;
   private readonly toolButtons = new Map<TTool, HTMLButtonElement>();
   private readonly overlayButtons = new Map<OverlayName, HTMLButtonElement>();
   private readonly demandFills = new Map<'r' | 'c' | 'i', HTMLDivElement>();
@@ -224,6 +227,7 @@ export class Hud<TTool extends string> {
       }
     }
     this.wireToolShortcuts(keyToTool, callbacks.onSelectTool);
+    this.wireSpeedShortcut(callbacks.onSetSpeed);
 
     this.root.appendChild(this.makeDivider());
     const overlaysLabel = document.createElement('span');
@@ -262,7 +266,7 @@ export class Hud<TTool extends string> {
     // Subtle, always-on camera legend — new players otherwise have no cue for
     // how to move the view (tool keys are discoverable via button badges).
     const controlsHint = document.createElement('div');
-    controlsHint.textContent = 'Camera:  WASD move  ·  scroll zoom  ·  right-drag rotate';
+    controlsHint.textContent = 'Camera:  WASD move  ·  scroll zoom  ·  right-drag rotate  ·  Space pause';
     controlsHint.style.cssText =
       'position:absolute;bottom:10px;left:12px;color:#cfe0ea;font-size:11px;' +
       'background:rgba(10,20,30,.5);padding:3px 9px;border-radius:5px;' +
@@ -379,6 +383,20 @@ export class Hud<TTool extends string> {
   private static readonly PAN_KEYS: ReadonlySet<string> = new Set(['w', 'a', 's', 'd']);
 
   /** Global shortcut keys select tools, unless typing in a field or holding a modifier. */
+  /** Space toggles pause ⇄ resume (to the last non-zero speed) — a near-universal
+   * game convention. Guards modifiers/text fields and preventDefaults the page scroll. */
+  private wireSpeedShortcut(onSetSpeed: (speed: GameSpeed) => void): void {
+    window.addEventListener('keydown', (event) => {
+      if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      event.preventDefault();
+      onSetSpeed(this.currentSpeed === 0 ? this.resumeSpeed : 0);
+    });
+  }
+
   private wireToolShortcuts(keyToTool: Map<string, TTool>, onSelectTool: (tool: TTool) => void): void {
     window.addEventListener('keydown', (event) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -434,6 +452,8 @@ export class Hud<TTool extends string> {
       const fill = this.demandFills.get(bar.key);
       if (fill) fill.style.height = `${Math.round(Math.max(0, state.demand[bar.key]) * 100)}%`;
     }
+    this.currentSpeed = state.speed;
+    if (state.speed !== 0) this.resumeSpeed = state.speed;
     for (const [speed, button] of this.speedButtons) {
       button.style.background = speed === state.speed ? ACTIVE_BG : IDLE_BG;
     }

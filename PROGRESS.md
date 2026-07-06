@@ -24,6 +24,12 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 8): Space bar pauses/resumes
+
+Small, conflict-free usability win found by reading the input wiring. Tools have keyboard shortcuts and camera has WASD, but the near-universal **Space = pause/resume** convention was missing — only Escape (cancel drag) and WASD (pan) were bound, so Space was free. (Considered overlay shortcuts too, but number keys clash with the 1×/2×/4× speed mental model and the letters are mostly taken by tools — not a clean win, so skipped.)
+
+**Shipped — Space toggles pause ⇄ resume (`hud.ts`).** The HUD (which already owns tool shortcuts) tracks the live speed and the last non-zero speed; a `keydown` handler on Space calls `onSetSpeed(currentSpeed === 0 ? resumeSpeed : 0)`, guarding modifiers/text fields and `preventDefault`ing the page scroll. Resumes to the PRIOR speed, not always 1× (paused from 4× → resumes to 4×). Controls hint updated to advertise it. Verified live through the real keydown path: 1×→pause→1×, and 4×→pause→4× (resume-to-prior confirmed). Self-contained DOM (no sim/protocol) — self-reviewed. Four gates green (119 tests). game-design.md controls line updated.
+
 ### 2026-07-05 — Play→improve loop (round 7): inspect panel shows power/water + legend anti-overlap
 
 Two related bottom-left UI fixes found by reading the inspect/HUD code.
