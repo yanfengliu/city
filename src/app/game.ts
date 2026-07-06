@@ -63,12 +63,12 @@ import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 
 const HUD_REFRESH_MS = 250;
 /**
- * Day/night cycle is disabled for now — night was too dark to play. The sun is
- * pinned to a bright late-morning angle (0 = midnight, 0.5 = noon) so the map
- * stays clearly lit with pleasant angled shadows. The cycle + building-glow
- * machinery is left intact behind this constant for an easy re-enable.
+ * Render-side phase offset for the day/night cycle so a fresh game (tick 0)
+ * boots in bright late morning instead of at midnight (0 = midnight, 0.5 = noon)
+ * — the boot-in-the-dark problem that first got the cycle disabled. Purely
+ * visual: the "Day N" counter derives from the raw tick, unaffected.
  */
-const FIXED_DAY_FRACTION = 0.4;
+const DAY_START_FRACTION = 0.4;
 const ZONE_LABELS: Record<ZoneType, string> = {
   R: 'Residential',
   C: 'Commercial',
@@ -231,9 +231,13 @@ export class Game {
       this.vehiclesView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
       this.utilityIconsFx.updateFrame(now);
-      // Day/night cycle disabled for now (see FIXED_DAY_FRACTION): pin a bright
-      // sun and leave the buildings' night glow off.
-      this.scene.setDayFraction(FIXED_DAY_FRACTION);
+      // Day/night cycle: the sun orbits with game time (phase-offset so boot is
+      // daytime), and the buildings' warm window-glow ramps up as it darkens so
+      // a night city stays lit and readable.
+      const daylight = this.scene.setDayFraction(
+        (this.tick / TICKS_PER_DAY + DAY_START_FRACTION) % 1,
+      );
+      this.buildingsView.setNightGlow(1 - daylight);
     });
 
     this.tools = new Tools({

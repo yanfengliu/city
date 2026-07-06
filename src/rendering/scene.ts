@@ -38,7 +38,7 @@ const PALETTE = {
   hemiSkyDay: new Color(0xbcd8f2),
   hemiSkyNight: new Color(0x25334d),
   hemiGroundDay: new Color(0x6a6a45),
-  hemiGroundNight: new Color(0x1d2118),
+  hemiGroundNight: new Color(0x323a2b),
   sunDay: new Color(0xfff3da),
   sunLow: new Color(0xffb066), // warm, near the horizon (sunrise/sunset)
 };
@@ -358,10 +358,12 @@ export class CityScene {
     // Sun: warm and dim near the horizon, bright and neutral when high.
     const warmth = 1 - Math.min(1, Math.max(0, height) / 0.4);
     this.sun.color.copy(PALETTE.sunDay).lerp(PALETTE.sunLow, warmth);
-    this.sun.intensity = 0.15 + 2.6 * daylight;
+    this.sun.intensity = 0.5 + 2.3 * daylight; // moonlight floor so night keeps some shape
 
-    // Hemisphere fill — the floor keeps night dim-but-readable, not black.
-    this.hemi.intensity = 0.38 + 0.62 * daylight;
+    // Hemisphere fill — a high night floor keeps the ground clearly readable
+    // (paired with the buildings' warm glow) so a night city stays playable:
+    // night reads as a lit dusk, not a black-out.
+    this.hemi.intensity = 0.9 + 0.2 * daylight;
     this.hemi.color.copy(PALETTE.hemiSkyNight).lerp(PALETTE.hemiSkyDay, daylight);
     this.hemi.groundColor.copy(PALETTE.hemiGroundNight).lerp(PALETTE.hemiGroundDay, daylight);
 

@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-05 — Play→improve loop (round 5): re-enable the day/night cycle (properly)
+
+The day/night cycle had been disabled (commit 97a7a7e pinned `FIXED_DAY_FRACTION = 0.4`) for two real reasons: night was too dark to play, and a fresh game booted at tick 0 = fraction 0 = midnight (started in the dark). The atmospheric cycle (warm sunsets, a lit night city) was a shipped feature worth restoring — so rather than leave it off or naively revert, re-enabled it while fixing both root problems.
+
+**Shipped — day/night back on, playable.** `game.ts` frame loop now drives `setDayFraction((tick/TICKS_PER_DAY + DAY_START_FRACTION) % 1)` and `buildingsView.setNightGlow(1 - daylight)`. `DAY_START_FRACTION = 0.4` phase-offsets the RENDER fraction so tick 0 boots in bright late morning (fixing boot-in-the-dark); it's purely visual — the "Day N" counter still uses the raw tick. `scene.setDayFraction` night floor raised so night is a readable dusk, not a black-out: `sun 0.15→0.5` floor, `hemi 0.38→0.9` floor, `hemiGroundNight` lightened (0x1d2118→0x323a2b) — paired with the re-driven warm building glow (`BUILDING_NIGHT_GLOW_MAX` 0.55). Tuned by eye across three night-brightness passes.
+
+Rendering-only (no sim/protocol/determinism). Browser-verified end to end: the cycle is genuinely tick-driven (pumped the real onFrame callback — at tick 1613 → fraction 0.794 → night, lighting reads hemi 0.9 / sun 0.5 / glow 0.55), boot (tick 0 → fraction 0.4) is daytime, a healthy district glows warm against a readable dark-green countryside at night, and day is bright/normal. Four gates green (119 tests). game-design.md day/night paragraph rewritten from "DISABLED" to the live behavior. Adversarial review clean.
+
 ### 2026-07-05 — Play→improve loop (round 4): audit (healthy) + abandoned-building shade variation
 
 Broad playtest rather than a targeted fix. Built a mixed R/C/I city with power, a pump, and services to audit the overlays, inspect panel, and leveling. Two honest takeaways: (1) no bug found — the game is in good shape and the utility feedback shipped this session (capacity meters, capacity-aware tips, ⚡/💧 problem icons) has closed the main gaps I kept hitting; (2) my setup kept fighting a lake-split site (a stub road bridged the lake, so lakeside pipes were correctly rejected for crossing water — the honest ghost handles this for a real player), so the leveling/overlay audit stayed shallow. A fuller healthy-city leveling+overlay audit on a clean shore site is the natural next tick.
