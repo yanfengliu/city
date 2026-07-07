@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: sandy shoreline detail
+
+Fresh playtest after the facade pass: buildings, roads, trees, lot groundwork, and utility badges now carry more painterly detail, but water still cut into the grass as flat hard-edged blue cells. Real RTS reference screenshots lean heavily on warm terrain transitions around water, farms, and paths, so this round stayed renderer-only and targeted lake/shore readability.
+
+Shipped: `buildTerrainMesh` now exposes named `terrain-land`, `terrain-water`, and `terrain-shore-details` meshes. The existing land mesh still owns vertex-colored grass and vertical shore skirts; the new detail mesh adds sandy, deterministic top-edge strips only on real land-water borders, below zone/road/ghost layers so gameplay overlays and placement remain unchanged. Sim terrain generation, water masks, pump validation, land value, roads, bridges, save/load, and protocol payloads are unchanged.
+
+TDD: RED `tests/rendering/terrain-mesh.test.ts` first failed because the named terrain meshes and shoreline-detail layer did not exist. A second check caught an implementation mistake where top shoreline strips were also being emitted at the map boundary because the skirt helper treats out-of-bounds as water; fixed by splitting real-water adjacency from boundary-skirt adjacency. GREEN now pins the detail mesh, vertex colors, real-water edge count, and y-layer below zones. Browser evidence: `.shots/aoe2-shoreline-baseline.jpg` captured the hard-edged pre-change water; `.shots/aoe2-shoreline-details.jpg` captured the same visual-host/player-harness scenario with 12 buildings, 27 road cells, 56 fps, and visible sandy lake edges under the road/zone/building layers. These screenshots are ignored local evidence, not committed artifacts.
+
+Review fixes: shore detail strips now crop around adjacent water-facing sides so corner coastlines do not self-overlap, the detail layer was raised and given polygon offset for far-zoom depth stability while staying below zones, the terrain renderer comment now lists all three meshes, and the tests now pin no-detail map boundaries plus the corner-cropping contract. Browser evidence refreshed at `.shots/aoe2-shoreline-details-reviewed.jpg`.
+
+Verification: `npm test` 137/137, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: rendering/perf reviewer found corner self-overlap and depth-stability risks; both fixed. Boundary/docs reviewer found a weak boundary test and stale terrain comment; both fixed.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: growable facade accents
 
 Fresh playtest after the road-surface pass: roads, forests, lot groundwork, services, and utility badges read much richer, but grown RCI buildings still had large blank wall faces at close strategic zoom. This round stayed renderer-only and targeted those wall faces with small deterministic facade panels/door-window blocks, using Age of Empires II only as broad material/readability reference and not as copied asset or silhouette work.

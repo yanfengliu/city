@@ -20,6 +20,10 @@ export const LAND_COLOR = 0x819b55;
 export const LAND_LIGHTNESS_JITTER = 0.075;
 export const WATER_COLOR = 0x2f7fb8;
 export const SHORE_COLOR = 0xb29a66;
+export const SHORE_DETAIL_COLOR = 0xd0bc7d;
+export const SHORE_DETAIL_LIGHTNESS_JITTER = 0.065;
+export const SHORE_DETAIL_INSET = 0.22;
+export const SHORE_DETAIL_Y = 0.011;
 
 // Roads.
 export const ROAD_COLOR = 0x766349;
