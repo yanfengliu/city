@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: night readability + painterly palette
+
+Task prompt: use the vision harness to playtest and iteratively improve the game until it feels polished, with Age of Empires II as a broad look-and-feel reference while preserving project rules and verification gates.
+
+Baseline: `npm test` passed 124/124 before edits. The browser playtest opened the Vite dev build and captured a real player screenshot: the app was playable from the DOM/HUD side, but the rendered map could become nearly black during night despite `game-design.md` saying night stayed readable. The browser connector could see the HUD/canvas but not the page's main-world globals (`render_game_to_text`, `advanceTime`, `__harness`) from its isolated evaluation world, so this round used real browser screenshots and visible HUD text as a fallback rather than a fully satisfied visual-host pass. Revisit only if it reproduces in normal Playwright/preview tooling.
+
+Shipped: a rendering-only readability/material pass, not a sim change. The night floor is now a clear blue dusk with shadows disabled only in the darkest part of the cycle; daylight backs the hemisphere fill down again so the sun/shadow shape cues remain. The palette shifted toward warm painterly RTS materials: olive grass with stronger cell variation, brighter water, sandy shores, dirt/cobble roads, darker trunks/canopies, warmer residential walls, and tile/wood roof tones. `docs/design/vision.md` now explicitly allows only broad AoE2 material-language reference and bans copied assets, silhouettes, UI, names, or source art.
+
+Browser evidence: `.shots/aoe2-day-palette.png` proves the daylight terrain stays bright with visible shape; `.shots/aoe2-zoned-palette.png` proves real player input can place roads/zones and grow buildings under the new palette; `.shots/aoe2-night-readable.png` proves the night state is readable rather than black. The screenshots are ignored local evidence, not committed artifacts.
+
+Verification after the final retune: `npm test` 124/124, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: sim-boundary reviewer found no sim/protocol/worker/persistence risk; rendering reviewer flagged daylight over-fill, fixed by making hemisphere fill night-heavy (`1.05 + 0.7 * (1 - daylight)`) and lowering noon sun intensity; docs reviewer flagged missing post-edit evidence, fixed in this entry. Remaining accepted minor: `DirectionalLight.castShadow` toggles at the dusk threshold, so a small shadow pop is possible, but it removes the night shadow blanket and does not affect sim correctness.
+
 ### 2026-07-07 — visual playtest adapter advertised-action follow-up
 
 Review fix: `src/harness/visual.ts` advertised `wheel` on the `Map/canvas` control even though `performAction()` fails `wheel` and `PlayerInput` has no wheel method. Plan: add a focused RED test proving the canvas control advertises only supported actions, remove the unsupported `wheel` capability/zoom wording, update harness docs/progress, rerun focused tests plus all four city gates, and commit without pushing.

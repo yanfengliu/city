@@ -9,7 +9,8 @@ A browser city-building game in the spirit of Cities: Skylines: the player draws
 1. **The city is alive.** Growth, traffic, and fields respond continuously to the player's decisions. Cause and effect are observable: zone next to industry and watch land value sink; add a road and watch traffic reroute.
 2. **Simulation you can trust.** The sim is deterministic, headless, and testable. Every mechanic has a contract test. What the renderer shows is a faithful projection of sim state.
 3. **Readable 3D.** Low-poly, clean-silhouette buildings with zone-coded accents, smooth vehicle motion, soft daylight. Clarity over realism — the reference is Cities: Skylines' readability, not its asset fidelity.
-4. **Desktop browser, instant play.** One canvas, no landing page, no install. 60 fps render on a mid-range laptop with a mid-size city.
+4. **Painterly strategy readability.** Visual polish may borrow broad lessons from Age of Empires II: Definitive Edition screenshots: isometric-friendly framing, warm earth and grass, red-tile roofs, timber/stone contrast, busy-but-legible terrain, and bright strategic-game readability. This is a material-language reference only: no copied assets, silhouettes, UI, names, or source art.
+5. **Desktop browser, instant play.** One canvas, no landing page, no install. 60 fps render on a mid-range laptop with a mid-size city.
 
 ## Player fantasy and loop
 

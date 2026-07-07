@@ -32,13 +32,13 @@ const SHADOW_HALF_EXTENT = 100;
 /** Day and night endpoints for every lit/atmospheric colour, lerped by daylight. */
 const PALETTE = {
   skyTopDay: new Color(0x3d78be),
-  skyTopNight: new Color(0x121d33),
+  skyTopNight: new Color(0x344f78),
   skyHorizonDay: new Color(0xb4d2ea),
-  skyHorizonNight: new Color(0x2a3a55),
+  skyHorizonNight: new Color(0x7c95af),
   hemiSkyDay: new Color(0xbcd8f2),
-  hemiSkyNight: new Color(0x25334d),
+  hemiSkyNight: new Color(0xc0cfdf),
   hemiGroundDay: new Color(0x6a6a45),
-  hemiGroundNight: new Color(0x323a2b),
+  hemiGroundNight: new Color(0x838d5e),
   sunDay: new Color(0xfff3da),
   sunLow: new Color(0xffb066), // warm, near the horizon (sunrise/sunset)
 };
@@ -354,16 +354,17 @@ export class CityScene {
       this.gridHeight / 2 + Math.sin(angle * 0.5) * 40,
     );
     const daylight = Math.max(0, height);
+    this.sun.castShadow = daylight > 0.15;
 
     // Sun: warm and dim near the horizon, bright and neutral when high.
     const warmth = 1 - Math.min(1, Math.max(0, height) / 0.4);
     this.sun.color.copy(PALETTE.sunDay).lerp(PALETTE.sunLow, warmth);
-    this.sun.intensity = 0.5 + 2.3 * daylight; // moonlight floor so night keeps some shape
+    this.sun.intensity = 1.35 + 1.35 * daylight; // moonlight floor so night keeps playable shape
 
     // Hemisphere fill — a high night floor keeps the ground clearly readable
     // (paired with the buildings' warm glow) so a night city stays playable:
     // night reads as a lit dusk, not a black-out.
-    this.hemi.intensity = 0.9 + 0.2 * daylight;
+    this.hemi.intensity = 1.05 + 0.7 * (1 - daylight);
     this.hemi.color.copy(PALETTE.hemiSkyNight).lerp(PALETTE.hemiSkyDay, daylight);
     this.hemi.groundColor.copy(PALETTE.hemiGroundNight).lerp(PALETTE.hemiGroundDay, daylight);
 

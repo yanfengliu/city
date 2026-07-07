@@ -15,16 +15,16 @@ export const GHOST_HEIGHT = 0.1;
 export type ZoneKind = 'R' | 'C' | 'I';
 
 // Terrain palette.
-export const LAND_COLOR = 0x6fa557;
-export const LAND_LIGHTNESS_JITTER = 0.05;
-export const WATER_COLOR = 0x2f6db3;
-export const SHORE_COLOR = 0x9a8a63;
+export const LAND_COLOR = 0x819b55;
+export const LAND_LIGHTNESS_JITTER = 0.075;
+export const WATER_COLOR = 0x2f7fb8;
+export const SHORE_COLOR = 0xb29a66;
 
 // Roads.
-export const ROAD_COLOR = 0x3a3d42;
+export const ROAD_COLOR = 0x766349;
 
 // Bridges (road cells over water): concrete causeway deck + railings + pylons.
-export const BRIDGE_COLOR = 0x8f959e;
+export const BRIDGE_COLOR = 0x9a9482;
 export const BRIDGE_RAIL_HEIGHT = 0.14;
 export const BRIDGE_RAIL_THICKNESS = 0.08;
 /** Pylon half-width (pylon box is centered in the cell). */
@@ -50,8 +50,8 @@ export const HIGHWAY_DASH_LENGTH = 0.55;
 export const HIGHWAY_DASH_GAP = 0.55;
 
 // Trees.
-export const TREE_TRUNK_COLOR = 0x6b4a2f;
-export const TREE_CANOPY_COLOR = 0x2e7d3c;
+export const TREE_TRUNK_COLOR = 0x5d3f2a;
+export const TREE_CANOPY_COLOR = 0x2f6f35;
 export const TREE_TRUNK_HEIGHT = 0.35;
 export const TREE_TRUNK_RADIUS = 0.06;
 export const TREE_CANOPY_HEIGHT = 0.85;
@@ -84,14 +84,14 @@ export const BUILDING_TINT_HUE_JITTER = 0.03;
 export const BUILDING_TINT_LIGHT_JITTER = 0.08;
 export const BUILDING_ROOF_HEIGHTS: Record<ZoneKind, number> = { R: 0.35, C: 0.1, I: 0.18 };
 export const BUILDING_WALL_COLORS: Record<ZoneKind, number> = {
-  R: 0xd9cbaa,
-  C: 0xa7bdd6,
-  I: 0xb5a48c,
+  R: 0xd7c59e,
+  C: 0xb9b5a4,
+  I: 0xa89170,
 };
 export const BUILDING_ROOF_COLORS: Record<ZoneKind, number> = {
-  R: 0xa8563e,
-  C: 0x3d6b9e,
-  I: 0xb87b33,
+  R: 0xb55238,
+  C: 0x526d8f,
+  I: 0x8a6238,
 };
 /** Per-level lightness boost so level differences read beyond height alone. */
 export const BUILDING_LEVEL_WALL_LIGHTEN = 0.03;
