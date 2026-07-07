@@ -8,6 +8,10 @@ import {
 } from 'three';
 import type { BufferGeometry, Material } from 'three';
 import {
+  STRUCTURE_DETAIL_COLORS,
+  STRUCTURE_DETAIL_HEIGHT,
+  STRUCTURE_DETAIL_LENGTH,
+  STRUCTURE_DETAIL_WIDTH,
   STRUCTURE_FOOTPRINT_MARGIN,
   STRUCTURE_ROOF_COLORS,
   STRUCTURE_ROOF_HEIGHT,
@@ -31,6 +35,7 @@ export interface StructureRenderView {
 interface Archetype {
   walls: InstancedMesh;
   roofs: InstancedMesh;
+  details: InstancedMesh;
   /** Structure id per instance slot (parallel to the instance buffers). */
   ids: number[];
   capacity: number;
@@ -40,8 +45,8 @@ const SERVICE_KINDS: readonly ServiceKind[] = ['fireStation', 'police', 'clinic'
 const MATRIX = new Matrix4();
 
 /**
- * Player-placed service buildings as instanced walls + roofs, one archetype
- * per service type (distinct wall/roof colors so they read against RCI
+ * Player-placed service buildings as instanced walls + roofs + roof details,
+ * one archetype per service type (distinct palettes so they read against RCI
  * buildings; taller than a level-1 growable). Same slot layout / swap-remove
  * bookkeeping as BuildingsView, minus per-instance colors — the type's
  * materials carry the palette.
@@ -51,11 +56,13 @@ export class StructuresView {
   private readonly archetypes: Record<ServiceKind, Archetype>;
   private readonly slots = new Map<number, { service: ServiceKind; slot: number }>();
   private readonly unitBox: BufferGeometry;
+  private readonly detailBox: BufferGeometry;
 
   constructor() {
     this.group.name = 'structures';
     // Base at y=0; per-instance matrices scale to footprint * margin and fixed heights.
     this.unitBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    this.detailBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     this.archetypes = Object.fromEntries(
       SERVICE_KINDS.map((kind) => [kind, this.makeArchetype(kind)]),
     ) as Record<ServiceKind, Archetype>;
@@ -80,6 +87,7 @@ export class StructuresView {
     this.slots.set(view.id, { service: view.service, slot });
     archetype.walls.count = archetype.ids.length;
     archetype.roofs.count = archetype.ids.length;
+    archetype.details.count = archetype.ids.length;
     this.writeInstance(archetype, slot, view);
   }
 
@@ -92,7 +100,7 @@ export class StructuresView {
     const last = archetype.ids.length - 1;
     if (entry.slot !== last) {
       const movedId = archetype.ids[last];
-      for (const mesh of [archetype.walls, archetype.roofs]) {
+      for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
         mesh.getMatrixAt(last, MATRIX);
         mesh.setMatrixAt(entry.slot, MATRIX);
         mesh.instanceMatrix.needsUpdate = true;
@@ -103,19 +111,39 @@ export class StructuresView {
     archetype.ids.pop();
     archetype.walls.count = archetype.ids.length;
     archetype.roofs.count = archetype.ids.length;
+    archetype.details.count = archetype.ids.length;
   }
 
   private makeArchetype(kind: ServiceKind): Archetype {
     return {
-      walls: this.makeMesh(new MeshLambertMaterial({ color: STRUCTURE_WALL_COLORS[kind] })),
-      roofs: this.makeMesh(new MeshLambertMaterial({ color: STRUCTURE_ROOF_COLORS[kind] })),
+      walls: this.makeMesh(
+        `${kind}-walls`,
+        this.unitBox,
+        new MeshLambertMaterial({ color: STRUCTURE_WALL_COLORS[kind] }),
+      ),
+      roofs: this.makeMesh(
+        `${kind}-roofs`,
+        this.unitBox,
+        new MeshLambertMaterial({ color: STRUCTURE_ROOF_COLORS[kind] }),
+      ),
+      details: this.makeMesh(
+        `${kind}-details`,
+        this.detailBox,
+        new MeshLambertMaterial({ color: STRUCTURE_DETAIL_COLORS[kind] }),
+      ),
       ids: [],
       capacity: STRUCTURE_START_CAPACITY,
     };
   }
 
-  private makeMesh(material: Material, capacity = STRUCTURE_START_CAPACITY): InstancedMesh {
-    const mesh = new InstancedMesh(this.unitBox, material, capacity);
+  private makeMesh(
+    name: string,
+    geometry: BufferGeometry,
+    material: Material,
+    capacity = STRUCTURE_START_CAPACITY,
+  ): InstancedMesh {
+    const mesh = new InstancedMesh(geometry, material, capacity);
+    mesh.name = name;
     mesh.count = 0;
     mesh.frustumCulled = false;
     mesh.castShadow = true;
@@ -129,10 +157,11 @@ export class StructuresView {
     archetype.capacity *= 2;
     archetype.walls = this.replaceMesh(archetype.walls, archetype.capacity);
     archetype.roofs = this.replaceMesh(archetype.roofs, archetype.capacity);
+    archetype.details = this.replaceMesh(archetype.details, archetype.capacity);
   }
 
   private replaceMesh(old: InstancedMesh, capacity: number): InstancedMesh {
-    const next = this.makeMesh(old.material as Material, capacity);
+    const next = this.makeMesh(old.name, old.geometry, old.material as Material, capacity);
     (next.instanceMatrix.array as Float32Array).set(old.instanceMatrix.array as Float32Array);
     next.count = old.count;
     next.instanceMatrix.needsUpdate = true;
@@ -150,7 +179,16 @@ export class StructuresView {
     archetype.walls.setMatrixAt(slot, MATRIX);
     MATRIX.makeScale(sx, STRUCTURE_ROOF_HEIGHT, sz).setPosition(cx, STRUCTURE_WALL_HEIGHT, cz);
     archetype.roofs.setMatrixAt(slot, MATRIX);
-    archetype.walls.instanceMatrix.needsUpdate = true;
-    archetype.roofs.instanceMatrix.needsUpdate = true;
+    const detailLength = Math.min(STRUCTURE_DETAIL_LENGTH, sx * 0.55);
+    const detailWidth = Math.min(STRUCTURE_DETAIL_WIDTH, sz * 0.35);
+    MATRIX.makeScale(detailLength, STRUCTURE_DETAIL_HEIGHT, detailWidth).setPosition(
+      cx,
+      STRUCTURE_WALL_HEIGHT + STRUCTURE_ROOF_HEIGHT,
+      cz,
+    );
+    archetype.details.setMatrixAt(slot, MATRIX);
+    for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
+      mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 }

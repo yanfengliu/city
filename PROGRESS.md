@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: civic service silhouettes
+
+Follow-up playtest after the forest pass: the world terrain, growables, and forests now read well, but player-placed civic services were still plain wall+roof blocks.
+
+Shipped: a rendering-only civic service silhouette pass. Service structures now render as synchronized wall, roof, and roof-detail instanced layers with named archetype meshes and service-specific accent colors. The detail layer stays in lockstep through upsert/remove/grow, matching the growable-building instancing pattern while keeping sim/protocol unchanged.
+
+TDD: RED `tests/rendering/structures-mesh.test.ts` first failed because `fireStation-walls`/`roofs`/`details` named meshes did not exist; GREEN passes after the renderer exposes and count-syncs all three layers. Browser evidence: `.shots/aoe2-service-structures-close.png` shows real road and service placement with roof accent blocks visible on the placed civic buildings. These screenshots are ignored local evidence, not committed artifacts.
+
+Verification before review: `npm test` 126/126, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: rendering/perf reviewer found no issues; boundary/docs reviewer found architecture wording that incorrectly grouped utilities under structure messages, an unused `Archetype.service` field, stale review wording, and missing grow-path test evidence. Fixed by splitting utilities back to `NetworksView` docs, removing the dead field, and extending the rendering test to cover service detail count sync after capacity growth.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: richer forest silhouettes
 
 Follow-up playtest after the roof-silhouette pass: the boot and mixed-district screenshots showed a readable map, but forests still dominated the view as identical single-cone placeholders.

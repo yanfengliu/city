@@ -169,6 +169,9 @@ export const STRUCTURE_START_CAPACITY = 64;
 export const STRUCTURE_FOOTPRINT_MARGIN = 0.9;
 export const STRUCTURE_WALL_HEIGHT = 1.2;
 export const STRUCTURE_ROOF_HEIGHT = 0.22;
+export const STRUCTURE_DETAIL_HEIGHT = 0.36;
+export const STRUCTURE_DETAIL_LENGTH = 0.86;
+export const STRUCTURE_DETAIL_WIDTH = 0.34;
 export const STRUCTURE_WALL_COLORS: Record<ServiceKind, number> = {
   fireStation: 0xc23b2e,
   police: 0x2c3e6b,
@@ -180,6 +183,12 @@ export const STRUCTURE_ROOF_COLORS: Record<ServiceKind, number> = {
   police: 0x9fb2cc,
   clinic: 0xc23b2e,
   school: 0x7a5230,
+};
+export const STRUCTURE_DETAIL_COLORS: Record<ServiceKind, number> = {
+  fireStation: 0x7a1d18,
+  police: 0xf0efe8,
+  clinic: 0x7a2c2c,
+  school: 0x5c3f28,
 };
 
 /** Deterministic integer hash of a cell index → [0, 1). Drives per-cell visual jitter. */
