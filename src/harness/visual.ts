@@ -157,9 +157,9 @@ function cityVisualControls(): VisualPlaytestControl[] {
     id: 'canvas',
     label: 'Map/canvas',
     target: 'canvas',
-    actionKinds: ['click', 'drag', 'wheel'],
+    actionKinds: ['click', 'drag'],
     bounds: canvasBounds(),
-    description: 'Map surface for cell clicks, drags, camera orbit/pan, and zoom.',
+    description: 'Map surface for supported visual-host cell clicks and drags.',
   });
   controls.set('keyboard', {
     id: 'keyboard',

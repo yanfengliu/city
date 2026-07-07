@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — visual playtest adapter advertised-action follow-up
+
+Review fix: `src/harness/visual.ts` advertised `wheel` on the `Map/canvas` control even though `performAction()` fails `wheel` and `PlayerInput` has no wheel method. Plan: add a focused RED test proving the canvas control advertises only supported actions, remove the unsupported `wheel` capability/zoom wording, update harness docs/progress, rerun focused tests plus all four city gates, and commit without pushing.
+
+Shipped: the canvas control now advertises only `click` and `drag`, and its description/docs no longer imply the generic visual host supports zoom/wheel. Unsupported generic actions, including `wheel`, remain fail-closed if supplied directly, but they are no longer offered to agents as available controls.
+
+TDD / verification: RED `tests/harness/visual-host.test.ts -t "advertises only supported"` failed on `['click','drag','wheel']`; GREEN focused visual-host file passed 4/4 after the change. Final gates: `npm test` 124/124, `npm run typecheck`, `npm run lint`, and `npm run build` all green. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Package/lock files were untouched, so no audit rerun was required.
+
 ### 2026-07-07 — civ-engine v1.3.0 visual playtest harness adapter
 
 Task prompt: implement the city side of adopting civ-engine v1.3.0 visual playtest harness contracts without degrading the existing dev-only browser harness; keep `__harness.player` screenshot/real input/HUD control, annotations, replay, selfCheck, and inspectAt intact; do not edit sibling repos; do not push.

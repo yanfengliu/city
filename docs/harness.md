@@ -71,9 +71,9 @@ The camera must **frame** a cell for `where`/`dragMap`/`tapMap` to reach it — 
 
 ### civ-engine visual playtest adapter
 
-`src/harness/visual.ts` is deliberately small glue between the existing city harness and civ-engine's generic visual loop. The observation includes the screenshot data URL, a visible-text summary derived from `state()`, DOM-discovered HUD buttons when running in a browser (with static fallbacks for tests), a `Map/canvas` control, a keyboard control, and state channels: `render_game_to_text` for the agent plus reviewer/trace-only channels for recorded findings and the latest replay diagnostics.
+`src/harness/visual.ts` is deliberately small glue between the existing city harness and civ-engine's generic visual loop. The observation includes the screenshot data URL, a visible-text summary derived from `state()`, DOM-discovered HUD buttons when running in a browser (with static fallbacks for tests), a `Map/canvas` control for supported click/drag actions, a keyboard control, and state channels: `render_game_to_text` for the agent plus reviewer/trace-only channels for recorded findings and the latest replay diagnostics.
 
-Action mapping preserves the "real player surface" rule: `click` with `target: "hud:<label>"` calls `player.hud(label)`, `click` with `point` calls `player.clickAt`, `drag` calls `player.dragAt`, `key` calls `player.key`, `wait` calls `advance(ms)`, and `stop` returns success. Unsupported generic actions fail closed so a loop cannot silently use a capability the city has not exposed. The adapter intentionally does not call `command(name,data)`.
+Action mapping preserves the "real player surface" rule: `click` with `target: "hud:<label>"` calls `player.hud(label)`, `click` with `point` calls `player.clickAt`, `drag` calls `player.dragAt`, `key` calls `player.key`, `wait` calls `advance(ms)`, and `stop` returns success. Unsupported generic actions (`hover`, `type`, `wheel`, `select`, `viewport`) are not advertised and still fail closed if supplied directly, so a loop cannot silently use a capability the city has not exposed. The adapter intentionally does not call `command(name,data)`.
 
 ## Finding format (`PlaytestFinding`)
 

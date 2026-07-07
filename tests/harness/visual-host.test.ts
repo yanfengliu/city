@@ -115,6 +115,15 @@ describe('city visual playtest host', () => {
     );
   });
 
+  it('advertises only supported canvas action kinds', () => {
+    const { api } = stubHarness();
+
+    const observation = cityVisualObservation(api);
+    const canvas = observation.controls?.find((control) => control.target === 'canvas');
+
+    expect(canvas?.actionKinds).toEqual(['click', 'drag']);
+  });
+
   it('normalizes DOM tool button labels before exposing hud targets', () => {
     const { api } = stubHarness();
     const originalDocument = globalThis.document;
