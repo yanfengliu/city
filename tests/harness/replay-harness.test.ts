@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MemorySink, SessionRecorder, type SessionBundle } from 'civ-engine';
+import {
+  MemorySink,
+  SessionRecorder,
+  visualPlaytestFindingsFromMarkers,
+  type SessionBundle,
+} from 'civ-engine';
 import { createCitySim, type CitySimConfig } from '../../src/sim/city';
 import { buildDistrict, findLandBlock } from '../sim/helpers';
 import { findingToMarker, findingsFromMarkers } from '../../src/harness/findings';
@@ -108,5 +113,69 @@ describe('playtest harness pipeline', () => {
     );
     expect(real.ok, JSON.stringify(real)).toBe(true);
     expect(real.checkedSegments).toBeGreaterThan(0);
+  });
+
+  it('stores visual playtest marker data while preserving legacy finding reads', () => {
+    const marker = findingToMarker(
+      {
+        category: 'ux',
+        severity: 'high',
+        area: 'onboarding',
+        observed: 'The founding tip is hidden behind the HUD',
+        suggestion: 'Move the tip below the top bar',
+      },
+      42,
+    );
+
+    expect(marker.tick).toBe(42);
+    expect(marker.data).toMatchObject({
+      visualPlaytest: {
+        schemaVersion: 1,
+        type: 'finding',
+        finding: {
+          category: 'usability',
+          severity: 'high',
+          area: 'onboarding',
+          observed: 'The founding tip is hidden behind the HUD',
+          evidence: { tick: 42 },
+        },
+      },
+      playtestFinding: {
+        category: 'ux',
+        severity: 'high',
+        area: 'onboarding',
+      },
+    });
+
+    const recorded = findingsFromMarkers([
+      {
+        id: 'm1',
+        tick: 42,
+        kind: 'annotation',
+        provenance: 'game',
+        data: marker.data,
+      },
+    ]);
+    expect(recorded).toEqual([
+      {
+        tick: 42,
+        category: 'ux',
+        severity: 'high',
+        area: 'onboarding',
+        observed: 'The founding tip is hidden behind the HUD',
+        suggestion: 'Move the tip below the top bar',
+      },
+    ]);
+    expect(
+      visualPlaytestFindingsFromMarkers([
+        {
+          id: 'm1',
+          tick: 42,
+          kind: 'annotation',
+          provenance: 'game',
+          data: marker.data,
+        },
+      ]),
+    ).toHaveLength(1);
   });
 });

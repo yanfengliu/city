@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — civ-engine v1.3.0 visual playtest harness adapter
+
+Task prompt: implement the city side of adopting civ-engine v1.3.0 visual playtest harness contracts without degrading the existing dev-only browser harness; keep `__harness.player` screenshot/real input/HUD control, annotations, replay, selfCheck, and inspectAt intact; do not edit sibling repos; do not push.
+
+Shipped: `src/harness/visual.ts` adapts the existing dev harness to civ-engine's `VisualPlaytestHost` contract. `observe()` captures `player.screenshot()`, visible text from `state()`, HUD/canvas/keyboard controls, and explicit state channels (`render_game_to_text` agent-visible; findings/replay diagnostics reviewer or trace-only). `performAction()` maps `hud:<label>` clicks to `player.hud`, point clicks to `player.clickAt`, drags to `player.dragAt`, keys to `player.key`, waits to `advance(ms)`, and stops to success; it never calls `command`. `createHarness()` now exposes `visualHost()` while preserving `player`, `state`, `annotate`, `findings`, `inspectAt`, `selfCheck`, and `getBundle`.
+
+Finding markers now use civ-engine's `visualPlaytestFindingToMarker` / `visualPlaytestFindingsFromMarkers` while preserving the legacy `PlaytestFinding` under `data.playtestFinding`, so old `findingsFromMarkers()` behavior still works and new visual tooling can read the marker payload. `package-lock.json` now records `../civ-engine` version 1.3.0.
+
+TDD / verification: RED marker test first failed because marker data lacked `visualPlaytest`; RED visual-host test first failed because `src/harness/visual.ts` did not exist; review-found RED test then failed on DOM tool labels surfacing as `hud:RoadQ`. Final gates: `npm test` 123/123, `npm run typecheck`, `npm run lint`, `npm run build` all green. `npm install` and both audits (`npm audit --audit-level=high --omit=dev`, `npm audit --audit-level=high`) reported 0 vulnerabilities. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully.
+
+Local no-upload adversarial review: checked marker compatibility, action routing, docs/architecture coverage, and lockfile scope. One real issue found and fixed before commit: DOM-discovered tool labels included shortcut badge text (`RoadQ`), which could confuse agent targets; controls now canonicalize to known HUD labels and the regression is pinned in `tests/harness/visual-host.test.ts`. Limitation by design: generic visual actions not backed by the current city player surface (`hover`, `type`, `wheel`, `select`, `viewport`) fail closed instead of silently pretending to work.
+
 ### 2026-07-05 — Play→improve loop (round 9): integration verification (no code change)
 
 An honest verification tick rather than a new feature. Built a fully-served city — R district + coal plant + power lines + pump + pipes on a shore site — and confirmed the eight improvements shipped this session work TOGETHER with no regressions: all 29 buildings powered AND watered, 0 problem icons (served → no ⚡/💧), meters green (⚡ 44/400, 💧 44/300), the building inspect panel reads "Power: connected / Water: connected", the overlay legend + spacebar-pause behave, and the healthy city renders correctly in the re-enabled day/night lighting (day hero shot in `.shots`). No genuine improvement surfaced worth shipping — the game is well-polished and the remaining candidates (demand-bar oversupply hint, overlay keyboard shortcuts, leveling/growth re-tuning) are either too marginal or determinism-gated design, so nothing was changed (forcing marginal edits would lower quality).

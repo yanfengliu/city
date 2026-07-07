@@ -2,9 +2,11 @@ import type { Game } from '../app/game';
 import type { CommandName } from '../protocol/messages';
 import type { CityCommands } from '../sim/types';
 import type { SimSummary } from '../sim/summary';
+import type { VisualPlaytestHost } from 'civ-engine';
 import type { PlaytestFinding, RecordedFinding } from './findings';
 import type { SelfCheckSummary } from './inspect';
 import type { PlayerInput } from './player';
+import { createCityVisualPlaytestHost } from './visual';
 
 /**
  * `window.__harness` — the LLM playtest surface (see docs/harness.md). Drive
@@ -35,13 +37,15 @@ export interface HarnessApi {
   selfCheck(): Promise<SelfCheckSummary | null>;
   /** Export the recorded, annotated session bundle. */
   getBundle(): Promise<{ bundle: unknown; findings: RecordedFinding[] }>;
+  /** Adapter for civ-engine's generic visual playtest loop. */
+  visualHost(): VisualPlaytestHost;
   readonly lastInspection: { tick: number; summary: SimSummary | null } | undefined;
   readonly lastSelfCheck: SelfCheckSummary | undefined;
   readonly lastBundle: { bundle: unknown; findings: RecordedFinding[] } | undefined;
 }
 
 export function createHarness(game: Game): HarnessApi {
-  return {
+  const harness: HarnessApi = {
     player: game.playerInput(),
     state: () => game.getTextState(),
     advance: (ms) => game.advanceTime(ms),
@@ -51,6 +55,7 @@ export function createHarness(game: Game): HarnessApi {
     inspectAt: (tick) => game.inspectAt(tick),
     selfCheck: () => game.requestSelfCheck(),
     getBundle: () => game.requestBundle(),
+    visualHost: () => createCityVisualPlaytestHost(harness),
     get lastInspection() {
       return game.lastInspection;
     },
@@ -61,4 +66,5 @@ export function createHarness(game: Game): HarnessApi {
       return game.lastBundle;
     },
   };
+  return harness;
 }

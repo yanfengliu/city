@@ -24,6 +24,7 @@ overlay plane ◀── FieldStore  ◀──┼─── field chunks (on each 
 - `src/rendering/` — Three.js only. Consumes protocol messages into a RenderStore (entity views keyed by id+generation), builds/updates GPU resources. Never imports `sim/`.
 - `src/ui/` — DOM HUD (vanilla TS, no framework; keep it lean). Reads UiStore, dispatches commands via a single `submitCommand` funnel.
 - `src/app/` — composition root: boot worker, wire stores, input → active tool → command, render loop.
+- `src/harness/` — dev-only playtest/replay adapters. It wraps the composition-root game surface, recorder messages, and real `PlayerInput` events. The civ-engine visual playtest host lives here and may read UI labels / screenshot / text state, but it must not bypass the real player surface for visual-loop actions.
 - `src/persistence/` — save/load: requests snapshot from worker, versions it, localStorage + file export/import; load path re-creates the worker world from snapshot.
 
 ## Worker protocol (v1)
@@ -69,6 +70,7 @@ Projected render views are minimal per archetype: buildings `{kind:'rci'|'servic
 - Pure-function unit tests for road-graph derivation, footprint search, L-path drag expansion, demand math.
 - Determinism gate: synthetic playtest + replay selfCheck (see above) in `npm test`.
 - Renderer/UI verified through the browser game-testing loop (`render_game_to_text()`, screenshots), not unit tests. `render_game_to_text()` reports: tick, population, treasury, demand, vehicle count, camera, active tool, and a coarse ASCII map — enough for an agent to close the loop without pixels.
+- Harness adapters have browser-free contract tests for marker conversion, replay inspection, and the civ-engine visual playtest host; they assert that the visual loop maps actions to `PlayerInput`/`advance` rather than `command`.
 
 ## Key decisions
 

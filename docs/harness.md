@@ -12,6 +12,7 @@ Both were studied before building this (`../civ-engine`, `../aoe2`).
 - `SessionReplayer.fromBundle(bundle, { worldFactory })` — `openAt(tick)` returns a paused, queryable `World` replayed to that tick; `selfCheck()` runs a 3-stream determinism check (serialized state vs events vs command executions) and pinpoints the first differing path.
 - `snapshotAtTick(bundle, tick)` — folds tick diffs from the nearest snapshot to return the `WorldSnapshot` at any tick **without constructing a World** (pure data).
 - The `Marker` primitive + a read-only **MCP corpus server** for offline bundle interrogation.
+- The v1.3.0 **visual playtest loop contracts** (`VisualPlaytestHost`, `VisualPlaytestObservation`, `VisualPlaytestAction`, `VisualPlaytestFinding`, `runVisualPlaytestLoop`) — zero-dependency interfaces for browser-game agents that need screenshot/text/control/state observations plus real player-surface actions.
 - Determinism contract (all input via `world.submit()`, all randomness via `world.random()`, no wall-clock in systems, sliced/queue state lives in components) — the city already honors it; `tests/sim/replay.test.ts` is the project's `selfCheck` gate.
 
 **aoe2** proves the end-to-end shape for an LLM and supplies the patterns we copy:
@@ -47,6 +48,7 @@ Installed **only in the dev build** (`import.meta.env.DEV`), matching the DEV-ga
 | `inspectAt(tick)` | Replay to `tick` and resolve the exact deterministic state there (`{ tick, summary }`); the tick is clamped to the recorded range, and `summary` is `null` (with `error`) if folding fails, so the call always settles. Also stashed on `lastInspection`. |
 | `selfCheck()` | Run civ-engine's 3-stream determinism check over the recorded session; returns `{ ok, checkedSegments, ... }` (or `null` + `error` on failure). Also stashed on `lastSelfCheck`. |
 | `getBundle()` | The full annotated `SessionBundle` (commands + snapshots + markers) for offline analysis / regression; also stashed on `lastBundle`. |
+| `visualHost()` | Returns a civ-engine `VisualPlaytestHost` adapter over this same harness. `observe()` captures `player.screenshot()`, visible text, HUD controls, and explicit state channels; `performAction()` maps only to player-surface actions (`player.hud`, `clickAt`, `dragAt`, `key`, `advance`) and never calls the `command` backdoor; `annotate()` converts `VisualPlaytestFinding` into the legacy city finding shape. |
 
 The async methods (`inspectAt` / `selfCheck` / `getBundle`) return a Promise **and** stash their result on `last*`, so an automation eval can trigger then read the stash a beat later (Promises don't survive a `preview_eval` boundary). Each reply is **id-correlated**, so overlapping calls resolve to their own request rather than mis-matching.
 
@@ -67,6 +69,12 @@ The async methods (`inspectAt` / `selfCheck` / `getBundle`) return a Promise **a
 
 The camera must **frame** a cell for `where`/`dragMap`/`tapMap` to reach it — you can't click what's off-screen, same as a human — so position the camera (and set an explicit viewport; a 0-size canvas makes projection NaN) before acting. Map gestures round-trip through the real `GroundPicker` (pixel → cell), so the screen↔world mapping is exact. Sim commands are async — read `state()` a beat after acting, not in the same tick.
 
+### civ-engine visual playtest adapter
+
+`src/harness/visual.ts` is deliberately small glue between the existing city harness and civ-engine's generic visual loop. The observation includes the screenshot data URL, a visible-text summary derived from `state()`, DOM-discovered HUD buttons when running in a browser (with static fallbacks for tests), a `Map/canvas` control, a keyboard control, and state channels: `render_game_to_text` for the agent plus reviewer/trace-only channels for recorded findings and the latest replay diagnostics.
+
+Action mapping preserves the "real player surface" rule: `click` with `target: "hud:<label>"` calls `player.hud(label)`, `click` with `point` calls `player.clickAt`, `drag` calls `player.dragAt`, `key` calls `player.key`, `wait` calls `advance(ms)`, and `stop` returns success. Unsupported generic actions fail closed so a loop cannot silently use a capability the city has not exposed. The adapter intentionally does not call `command(name,data)`.
+
 ## Finding format (`PlaytestFinding`)
 
 ```ts
@@ -79,7 +87,7 @@ interface PlaytestFinding {
 }
 ```
 
-Stored as a civ-engine `Marker`: `{ kind: 'annotation', tick, text: "[category] area: observed", data: finding }`.
+Stored as a civ-engine `Marker` using civ-engine's v1.3.0 visual marker schema, with the legacy city finding preserved under `data.playtestFinding`: `{ kind: 'annotation', tick, text, data: { visualPlaytest: { schemaVersion: 1, type: 'finding', finding: VisualPlaytestFinding }, playtestFinding } }`. `findingsFromMarkers()` still reads old bundles whose marker data was just the legacy finding object, and also falls back to `visualPlaytestFindingsFromMarkers()` for visual-only markers.
 
 ## Headless summary
 
@@ -95,6 +103,8 @@ Stored as a civ-engine `Marker`: `{ kind: 'annotation', tick, text: "[category] 
 ## Verified by
 
 `tests/harness/replay-harness.test.ts` records a scripted session, annotates a marker, replays via `SessionReplayer`, asserts `selfCheck().ok`, and checks `simSummary` at the marker tick — the whole pipeline, browser-free.
+
+`tests/harness/visual-host.test.ts` verifies the civ-engine visual host adapter browser-free: observations include screenshot/text/controls/state channels, and `runVisualPlaytestLoop()` drives HUD clicks, point clicks, drags, keys, waits, stops, and annotations through the existing `player`/`advance` surface without touching the `command` backdoor.
 
 ## Deferred (possible extensions)
 
