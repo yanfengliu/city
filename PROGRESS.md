@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: compact utility alert badges
+
+Follow-up playtest after the zone-groundwork pass: the settlement, forests, service silhouettes, and lot texture read better, but the utility warnings still appeared as large font-glyph badges that could dominate close rooftops and fall back to black square-looking symbols depending on the browser font stack. This round stayed renderer-only and targeted alert legibility.
+
+Shipped: `UtilityIconsFx` now renders cached vector canvas badges instead of raw emoji text. Missing power is an amber badge with a drawn bolt, missing water is a blue badge with a drawn drop, and the both-missing state combines the two compact badges. The badge scale and roof gap were tightened so alerts remain readable without carpeting the roofline. The sim/protocol contract remains unchanged: the renderer still derives alerts from each building's `powered`/`watered` flags through `utilityIconKey`.
+
+TDD: RED `tests/rendering/utility-icon-badge.test.ts` first failed because the badge helper module did not exist; GREEN passes after `utilityIconBadgeParts` maps the existing icon keys to vector badge parts. The post-review test seam now also pins badge canvas aspect, sprite width, and vector primitive drawing via a fake canvas context that does not expose text rendering. Browser evidence: `.shots/aoe2-utility-badges.png` was captured from a real-control Chrome playtest (road + R/C/I zoning + growth, no utilities) with 16 grown buildings and 16 live utility badges in `render_game_to_text`; the close screenshot shows the new vector badges reading as small rooftop alerts without the old black-square glyph fallback. The screenshot is ignored local evidence, not a committed artifact.
+
+Verification after review fix: `npm test` 130/130, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: rendering/perf reviewer found no issues; boundary/docs reviewer found one low test-strength gap, fixed by moving badge layout/drawing into a renderer-facing helper and extending the test to pin the texture/sprite contract.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: zone lot groundwork
 
 Follow-up playtest after the service-silhouette pass: buildings, services, forests, and palette are stronger, but empty zoned ground still read as flat color blocks rather than inhabited planned lots. AoE2-style settlement readability relies heavily on warm dirt/stone ground texture around buildings, so this round stayed renderer-only and targeted zone surfaces.

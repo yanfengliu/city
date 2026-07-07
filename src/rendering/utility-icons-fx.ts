@@ -7,6 +7,7 @@ import {
   UTILITY_ICON_Y_GAP,
   type ZoneKind,
 } from './constants';
+import { drawUtilityIconBadges, utilityIconBadgeLayout } from './utility-icon-badge';
 import { utilityIconKey, type UtilityIconView } from './utility-icon-key';
 
 /** What the fx needs from a building view to place its problem icon. */
@@ -29,20 +30,15 @@ interface IconEntry {
   phase: number;
 }
 
-/** '⚡💧' is two glyphs wide; single icons are square. */
-const isWide = (key: string): boolean => key === '⚡💧';
-
-/** Draws the icon glyph(s) onto a canvas texture (cached per key). */
+/** Draws compact vector badge(s) onto a canvas texture (cached per key). */
 function makeTexture(key: string): CanvasTexture {
+  const layout = utilityIconBadgeLayout(key);
   const canvas = document.createElement('canvas');
-  canvas.height = 128;
-  canvas.width = isWide(key) ? 256 : 128;
+  canvas.height = layout.canvasHeight;
+  canvas.width = layout.canvasWidth;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.font = '92px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(key, canvas.width / 2, canvas.height / 2 + 4);
+    drawUtilityIconBadges(ctx, key);
   }
   return new CanvasTexture(canvas);
 }
@@ -78,7 +74,7 @@ export class UtilityIconsFx {
   }
 
   private applyScale(sprite: Sprite, key: string): void {
-    sprite.scale.set(UTILITY_ICON_SCALE * (isWide(key) ? 2 : 1), UTILITY_ICON_SCALE, 1);
+    sprite.scale.set(UTILITY_ICON_SCALE * utilityIconBadgeLayout(key).spriteWidth, UTILITY_ICON_SCALE, 1);
   }
 
   /** Add/update/remove the icon for one building. */
