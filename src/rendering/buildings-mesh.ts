@@ -13,6 +13,9 @@ import type { BufferGeometry } from 'three';
 import {
   BUILDING_ABANDONED_ROOF_COLOR,
   BUILDING_ABANDONED_WALL_COLOR,
+  BUILDING_DETAIL_COLOR,
+  BUILDING_DETAIL_HEIGHT,
+  BUILDING_DETAIL_WIDTH,
   BUILDING_FOOTPRINT_JITTER,
   BUILDING_FOOTPRINT_MARGIN,
   BUILDING_HEIGHT_JITTER,
@@ -25,6 +28,7 @@ import {
   BUILDING_TINT_LIGHT_JITTER,
   BUILDING_ROOF_COLORS,
   BUILDING_ROOF_HEIGHTS,
+  BUILDING_ROOF_OVERHANG,
   BUILDING_START_CAPACITY,
   BUILDING_WALL_COLORS,
   cellHash01,
@@ -48,6 +52,7 @@ interface Archetype {
   zone: ZoneKind;
   walls: InstancedMesh;
   roofs: InstancedMesh;
+  details: InstancedMesh;
   /** Building id per instance slot (parallel to the instance buffers). */
   ids: number[];
   capacity: number;
@@ -57,9 +62,9 @@ const MATRIX = new Matrix4();
 const COLOR = new Color();
 
 /**
- * Grown RCI buildings as instanced walls + roofs, one archetype per zone
- * (walls and roofs are separate InstancedMeshes sharing a slot layout so the
- * roof keeps constant thickness and its own per-level color). Incremental
+ * Grown RCI buildings as instanced walls + roofs + roof details, one archetype
+ * per zone (separate InstancedMeshes sharing a slot layout so the roof/detail
+ * layers keep constant thickness and their own colors). Incremental
  * upserts/removals with an id -> slot map and swap-remove; capacity doubles
  * when full. Abandoned buildings grey out via instance color.
  */
@@ -69,6 +74,7 @@ export class BuildingsView {
   private readonly slots = new Map<number, { zone: ZoneKind; slot: number }>();
   private readonly unitBox: BufferGeometry;
   private readonly pyramidRoof: BufferGeometry;
+  private readonly detailBox: BufferGeometry;
   private readonly material = new MeshLambertMaterial({
     color: 0xffffff,
     emissive: BUILDING_NIGHT_GLOW_COLOR,
@@ -82,6 +88,7 @@ export class BuildingsView {
     this.unitBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     // 4-sided cone rotated 45° = square pyramid whose base matches the unit box.
     this.pyramidRoof = new ConeGeometry(Math.SQRT1_2, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0);
+    this.detailBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     this.archetypes = {
       R: this.makeArchetype('R'),
       C: this.makeArchetype('C'),
@@ -114,6 +121,7 @@ export class BuildingsView {
     this.slots.set(view.id, { zone: view.zone, slot });
     archetype.walls.count = archetype.ids.length;
     archetype.roofs.count = archetype.ids.length;
+    archetype.details.count = archetype.ids.length;
     this.writeInstance(archetype, slot, view);
   }
 
@@ -126,7 +134,7 @@ export class BuildingsView {
     const last = archetype.ids.length - 1;
     if (entry.slot !== last) {
       const movedId = archetype.ids[last];
-      for (const mesh of [archetype.walls, archetype.roofs]) {
+      for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
         mesh.getMatrixAt(last, MATRIX);
         mesh.setMatrixAt(entry.slot, MATRIX);
         mesh.getColorAt(last, COLOR);
@@ -140,6 +148,7 @@ export class BuildingsView {
     archetype.ids.pop();
     archetype.walls.count = archetype.ids.length;
     archetype.roofs.count = archetype.ids.length;
+    archetype.details.count = archetype.ids.length;
   }
 
   private makeArchetype(zone: ZoneKind): Archetype {
@@ -148,6 +157,7 @@ export class BuildingsView {
       zone,
       walls: this.makeMesh(this.unitBox, BUILDING_START_CAPACITY),
       roofs: this.makeMesh(roofGeometry, BUILDING_START_CAPACITY),
+      details: this.makeMesh(this.detailBox, BUILDING_START_CAPACITY),
       ids: [],
       capacity: BUILDING_START_CAPACITY,
     };
@@ -171,6 +181,7 @@ export class BuildingsView {
     archetype.capacity *= 2;
     archetype.walls = this.replaceMesh(archetype.walls, archetype.capacity);
     archetype.roofs = this.replaceMesh(archetype.roofs, archetype.capacity);
+    archetype.details = this.replaceMesh(archetype.details, archetype.capacity);
   }
 
   private replaceMesh(old: InstancedMesh, capacity: number): InstancedMesh {
@@ -199,8 +210,20 @@ export class BuildingsView {
 
     MATRIX.makeScale(sx, height, sz).setPosition(cx, 0, cz);
     archetype.walls.setMatrixAt(slot, MATRIX);
-    MATRIX.makeScale(sx, BUILDING_ROOF_HEIGHTS[view.zone], sz).setPosition(cx, height, cz);
+    const roofSx = Math.min(view.w * 0.98, sx + BUILDING_ROOF_OVERHANG);
+    const roofSz = Math.min(view.h * 0.98, sz + BUILDING_ROOF_OVERHANG);
+    const roofHeight = BUILDING_ROOF_HEIGHTS[view.zone];
+    MATRIX.makeScale(roofSx, roofHeight, roofSz).setPosition(cx, height, cz);
     archetype.roofs.setMatrixAt(slot, MATRIX);
+    const detailX = cx + (cellHash01(view.id + 0x6666) - 0.5) * sx * 0.35;
+    const detailZ = cz + (cellHash01(view.id + 0x7777) - 0.5) * sz * 0.35;
+    const detailWidth = Math.min(BUILDING_DETAIL_WIDTH, Math.min(sx, sz) * 0.35);
+    MATRIX.makeScale(detailWidth, BUILDING_DETAIL_HEIGHT, detailWidth).setPosition(
+      detailX,
+      height + roofHeight * 0.82,
+      detailZ,
+    );
+    archetype.details.setMatrixAt(slot, MATRIX);
 
     if (view.abandoned) {
       // Per-building shade jitter so a derelict block reads as varied, weathered
@@ -209,6 +232,7 @@ export class BuildingsView {
       const decayJit = (cellHash01(view.id + 0x5555) - 0.5) * BUILDING_TINT_LIGHT_JITTER * 1.5;
       archetype.walls.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_WALL_COLOR).offsetHSL(0, 0, decayJit));
       archetype.roofs.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
+      archetype.details.setColorAt(slot, COLOR.setHex(BUILDING_DETAIL_COLOR).offsetHSL(0, 0, decayJit * 0.5));
     } else {
       // Subtle per-building tint (walls and roof shift together) on top of the
       // per-level lightening, so a district varies without losing its zone hue.
@@ -220,8 +244,9 @@ export class BuildingsView {
       COLOR.setHex(BUILDING_ROOF_COLORS[view.zone]);
       COLOR.offsetHSL(hueJit, 0, BUILDING_LEVEL_ROOF_LIGHTEN * levelIndex + lightJit);
       archetype.roofs.setColorAt(slot, COLOR);
+      archetype.details.setColorAt(slot, COLOR.setHex(BUILDING_DETAIL_COLOR).offsetHSL(hueJit, 0, lightJit * 0.5));
     }
-    for (const mesh of [archetype.walls, archetype.roofs]) {
+    for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }

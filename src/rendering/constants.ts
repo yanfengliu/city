@@ -78,11 +78,17 @@ export const BUILDING_HEIGHT_JITTER = 0.16;
 /** Per-building footprint shrink (each axis independently) so silhouettes vary
  * — subtracted from the margin, keeping every building inside its cell. */
 export const BUILDING_FOOTPRINT_JITTER = 0.12;
+/** Roofs slightly overhang walls so districts read as tiled/wood rooflines
+ * instead of plain extruded blocks. Clamped per footprint in the renderer. */
+export const BUILDING_ROOF_OVERHANG = 0.18;
 /** Subtle per-building tint jitter (keeps the zone colour readable, breaks up
  * the row-of-clones look). */
 export const BUILDING_TINT_HUE_JITTER = 0.03;
 export const BUILDING_TINT_LIGHT_JITTER = 0.08;
-export const BUILDING_ROOF_HEIGHTS: Record<ZoneKind, number> = { R: 0.35, C: 0.1, I: 0.18 };
+export const BUILDING_ROOF_HEIGHTS: Record<ZoneKind, number> = { R: 0.5, C: 0.16, I: 0.24 };
+export const BUILDING_DETAIL_HEIGHT = 0.5;
+export const BUILDING_DETAIL_WIDTH = 0.28;
+export const BUILDING_DETAIL_COLOR = 0x3f3025;
 export const BUILDING_WALL_COLORS: Record<ZoneKind, number> = {
   R: 0xd7c59e,
   C: 0xb9b5a4,
@@ -196,11 +202,11 @@ export const WIRE_Y = 0.82;
 export const POLE_SPACING = 6;
 
 // Utility-problem icon (floating ⚡/💧 above a live building missing a utility).
-export const UTILITY_ICON_SCALE = 0.6;
+export const UTILITY_ICON_SCALE = 0.36;
 /** Vertical bob amplitude (units) so the icon reads as an alert, not decor. */
-export const UTILITY_ICON_BOUNCE = 0.12;
+export const UTILITY_ICON_BOUNCE = 0.08;
 /** Gap above the building's roof top where the icon floats. */
-export const UTILITY_ICON_Y_GAP = 0.5;
+export const UTILITY_ICON_Y_GAP = 0.42;
 
 // Level-up celebration (floating "▲ Level N" sprite above the building).
 export const LEVELUP_DURATION_MS = 1600;

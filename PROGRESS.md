@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: stronger roof silhouettes
+
+Follow-up playtest after the palette/night pass: boot and small-district screenshots showed the world is readable, but growable buildings still read as plain extruded blocks at play zoom.
+
+Shipped: a rendering-only RCI silhouette pass. Buildings now render as per-zone wall, roof, and roof-detail instanced stacks: roofs have a modest footprint overhang, taller residential roof peaks, and small deterministic chimney/detail blocks so districts read more like clustered strategy-game structures without copied assets or source silhouettes. Utility problem glyphs were scaled down and moved closer to the roofline so ⚡/💧 alerts still explain missing services without carpeting the rooftops.
+
+Browser evidence: `.shots/aoe2-roof-details-fresh.png` shows the fresh road/zoning/growth playtest from current code; `.shots/aoe2-roof-details-fresh-close.png` shows the close zoom with raised roof details and smaller utility alerts visible in real gameplay. These are ignored local evidence files, not committed artifacts.
+
+Verification after the final retune: `npm test` 124/124, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: sim-boundary/determinism reviewer found no issues; docs/UX reviewer found one stale class comment, fixed; rendering/perf reviewer found no blockers and noted abandoned roof details stay dark rather than grey, accepted because the close screenshot shows this preserves roofline legibility without hiding utility alerts.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: night readability + painterly palette
 
 Task prompt: use the vision harness to playtest and iteratively improve the game until it feels polished, with Age of Empires II as a broad look-and-feel reference while preserving project rules and verification gates.
