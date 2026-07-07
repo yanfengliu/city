@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — Cities: Skylines-style visual playtest loop: modern zoning and RCI palette
+
+Fresh playtest after the asphalt-road pass showed the top HUD and roads had shifted strongly toward a modern civic-planning read, but the growing district still carried two warm old-settlement signals: empty zone details looked like beige construction pads, and live RCI buildings used tan/red/brown material colors. This round stayed renderer-only and retargeted planning overlays plus growable building materials toward the Cities: Skylines direction.
+
+Shipped: undeveloped zoned cells now keep the existing zone tint but use smaller, lower-opacity, zone-hued inset planning parcels instead of broad earth/stone fills. Live RCI material constants now use cool concrete/green-gray residential walls, blue-glass commercial walls/facades, light steel industrial walls, darker cool roofs, and blue-gray rooftop details. Abandoned buildings still use the existing grey wall/roof treatment, while their small shared roof-detail accent follows the updated cool detail color. Sim growth, zoning rules, protocol payloads, building footprints, traffic, costs, save/load, and command behavior are unchanged.
+
+TDD: RED `tests/rendering/zones-mesh.test.ts` first failed because the parcel inset/opacity/color constants still described filled beige pads. GREEN now pins lighter zone-colored parcels and the material opacity contract. RED `tests/rendering/buildings-mesh.test.ts` then failed on the warm building palette. GREEN now pins cool live RCI constants and verifies real instance colors from `BuildingsView`. Browser evidence: `.shots/cities-modern-zones-buildings-full-page.png` was captured from a real Chrome/player-harness run using HUD buttons and map drags to build a gridded district, paint R/C/I zoning, and advance to 55 buildings, 114 population, 4 vehicles on screen, 103 road cells, 55 utility alert badges, and 60 fps. The screenshot shows cooler live buildings and planning parcels under the civic HUD. This screenshot is ignored local evidence, not a committed artifact.
+
+Review: boundary/tests/docs reviewer found one P3 wording issue where the progress note overclaimed abandoned detail colors were unchanged; fixed by documenting that grey walls/roofs stay the same while the small shared roof-detail accent follows the updated detail color. The rendering/perf reviewer did not return after repeated waits and was closed, so fallback local review checked the line-numbered renderer diff, material/depth paths, screenshot evidence, and full verification gates.
+
 ### 2026-07-07 — Cities: Skylines-style visual playtest loop: asphalt city roads
 
 Fresh playtest after the civic HUD pass showed the interface now reads much closer to a modern city-planning game, but the ordinary player-built roads were still the most visibly off-direction asset: warm brown dirt/cobble paths under a Cities: Skylines-style HUD. This round stayed renderer-only and retargeted land roads to modern asphalt.

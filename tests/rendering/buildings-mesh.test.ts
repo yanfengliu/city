@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { Color, InstancedMesh, Matrix4 } from 'three';
 import {
+  BUILDING_DETAIL_COLOR,
   BUILDING_FACADE_BASE_Y,
+  BUILDING_FACADE_COLORS,
   BUILDING_FACADE_DEPTH,
+  BUILDING_ROOF_COLORS,
   BUILDING_START_CAPACITY,
+  BUILDING_WALL_COLORS,
   type ZoneKind,
 } from '../../src/rendering/constants';
 import { BuildingsView } from '../../src/rendering/buildings-mesh';
@@ -102,5 +106,35 @@ describe('BuildingsView', () => {
     expect(facade.count).toBe(1);
     expectCloseArray(matrixAt(facade, 0), movedMatrix);
     expectCloseArray(colorAt(facade, 0), movedColor);
+  });
+
+  it('uses a cool modern RCI palette instead of warm settlement materials', () => {
+    const residentialWall = new Color(BUILDING_WALL_COLORS.R);
+    const commercialWall = new Color(BUILDING_WALL_COLORS.C);
+    const industrialWall = new Color(BUILDING_WALL_COLORS.I);
+    const residentialRoof = new Color(BUILDING_ROOF_COLORS.R);
+    const detailColor = new Color(BUILDING_DETAIL_COLOR);
+    const commercialFacade = new Color(BUILDING_FACADE_COLORS.C);
+
+    expect(residentialWall.b).toBeGreaterThan(0.5);
+    expect(residentialWall.r - residentialWall.b).toBeLessThan(0.12);
+    expect(commercialWall.b).toBeGreaterThan(commercialWall.r);
+    expect(industrialWall.b).toBeGreaterThanOrEqual(0.5);
+    expect(residentialRoof.b).toBeGreaterThan(residentialRoof.r);
+    expect(detailColor.b).toBeGreaterThan(detailColor.r);
+    expect(commercialFacade.b).toBeGreaterThan(commercialFacade.r);
+
+    const view = new BuildingsView();
+    view.upsert({ id: 11, zone: 'R', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+    view.upsert({ id: 12, zone: 'C', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+    view.upsert({ id: 13, zone: 'I', x: 5, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+
+    const liveResidential = colorAt(mesh(view, 'R-walls'), 0);
+    const liveCommercial = colorAt(mesh(view, 'C-walls'), 0);
+    const liveIndustrial = colorAt(mesh(view, 'I-walls'), 0);
+
+    expect(liveResidential[2]).toBeGreaterThan(0.46);
+    expect(liveCommercial[2]).toBeGreaterThan(liveCommercial[0]);
+    expect(liveIndustrial[2]).toBeGreaterThan(0.45);
   });
 });

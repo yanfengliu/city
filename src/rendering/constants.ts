@@ -82,17 +82,17 @@ export const TREE_SCALE_RANGE = 0.55;
 
 // Zone tint overlay (translucent quads over zoned-but-empty cells).
 export const ZONE_TINT_OPACITY = 0.45;
-export const ZONE_GROUND_DETAIL_OPACITY = 0.28;
-export const ZONE_GROUND_DETAIL_INSET = 0.18;
+export const ZONE_GROUND_DETAIL_OPACITY = 0.16;
+export const ZONE_GROUND_DETAIL_INSET = 0.28;
 export const ZONE_COLORS: Record<ZoneKind, number> = {
   R: 0x46a34a,
   C: 0x3f74c9,
   I: 0xcf8a2d,
 };
 export const ZONE_GROUND_DETAIL_COLORS: Record<ZoneKind, number> = {
-  R: 0xd0bd89,
-  C: 0xb8b09c,
-  I: 0x9c8564,
+  R: 0x6ed57a,
+  C: 0x5aa7df,
+  I: 0xe7ac55,
 };
 
 // Buildings (instanced box + roof per zone archetype).
@@ -116,7 +116,7 @@ export const BUILDING_TINT_LIGHT_JITTER = 0.08;
 export const BUILDING_ROOF_HEIGHTS: Record<ZoneKind, number> = { R: 0.5, C: 0.16, I: 0.24 };
 export const BUILDING_DETAIL_HEIGHT = 0.5;
 export const BUILDING_DETAIL_WIDTH = 0.28;
-export const BUILDING_DETAIL_COLOR = 0x3f3025;
+export const BUILDING_DETAIL_COLOR = 0x8fa2aa;
 export const BUILDING_FACADE_WIDTH = 0.28;
 export const BUILDING_FACADE_HEIGHT = 0.32;
 export const BUILDING_FACADE_DEPTH = 0.04;
@@ -124,19 +124,19 @@ export const BUILDING_FACADE_BASE_Y = 0.08;
 export const BUILDING_FACADE_FRONT_OFFSET = 0.024;
 export const BUILDING_FACADE_X_JITTER = 0.28;
 export const BUILDING_WALL_COLORS: Record<ZoneKind, number> = {
-  R: 0xd7c59e,
-  C: 0xb9b5a4,
-  I: 0xa89170,
+  R: 0xc8d1c3,
+  C: 0x6f9ec7,
+  I: 0xb4c1c7,
 };
 export const BUILDING_ROOF_COLORS: Record<ZoneKind, number> = {
-  R: 0xb55238,
-  C: 0x526d8f,
-  I: 0x8a6238,
+  R: 0x506d76,
+  C: 0x2e5268,
+  I: 0x4d565c,
 };
 export const BUILDING_FACADE_COLORS: Record<ZoneKind, number> = {
-  R: 0x4e3928,
-  C: 0x2f3f52,
-  I: 0x453827,
+  R: 0x4f7b82,
+  C: 0xb7dff4,
+  I: 0x5f6c70,
 };
 /** Per-level lightness boost so level differences read beyond height alone. */
 export const BUILDING_LEVEL_WALL_LIGHTEN = 0.03;
