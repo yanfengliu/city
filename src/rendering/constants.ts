@@ -23,6 +23,11 @@ export const SHORE_COLOR = 0xb29a66;
 
 // Roads.
 export const ROAD_COLOR = 0x766349;
+export const ROAD_DETAIL_COLOR = 0xa0835d;
+export const ROAD_DETAIL_LIGHTNESS_JITTER = 0.08;
+export const ROAD_DETAIL_Y = 0.021;
+export const ROAD_DETAIL_SIDE_INSET = 0.14;
+export const ROAD_DETAIL_END_INSET = 0.22;
 
 // Bridges (road cells over water): concrete causeway deck + railings + pylons.
 export const BRIDGE_COLOR = 0x9a9482;

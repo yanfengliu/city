@@ -1,11 +1,17 @@
-import { BufferAttribute, BufferGeometry, Group, Mesh, MeshLambertMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshLambertMaterial } from 'three';
 import {
   BRIDGE_COLOR,
   BRIDGE_PYLON_BOTTOM_Y,
   BRIDGE_PYLON_HALF_WIDTH,
   BRIDGE_RAIL_HEIGHT,
   BRIDGE_RAIL_THICKNESS,
+  cellHash01,
   ROAD_COLOR,
+  ROAD_DETAIL_COLOR,
+  ROAD_DETAIL_END_INSET,
+  ROAD_DETAIL_LIGHTNESS_JITTER,
+  ROAD_DETAIL_SIDE_INSET,
+  ROAD_DETAIL_Y,
   ROAD_SURFACE_Y,
 } from './constants';
 
@@ -13,6 +19,7 @@ import {
 class GeometryBuilder {
   private readonly positions: number[] = [];
   private readonly normals: number[] = [];
+  private readonly colors: number[] = [];
   private readonly indices: number[] = [];
 
   /** One rectangular face: origin o plus edge vectors u and v, flat normal n. */
@@ -38,6 +45,12 @@ class GeometryBuilder {
     this.face([x0, y, z0], [x1 - x0, 0, 0], [0, 0, z1 - z0], [0, 1, 0]);
   }
 
+  /** Upward-facing quad with a per-vertex color for one merged detail layer. */
+  coloredQuad(x0: number, z0: number, x1: number, z1: number, y: number, color: Color): void {
+    this.quad(x0, z0, x1, z1, y);
+    for (let i = 0; i < 4; i++) this.colors.push(color.r, color.g, color.b);
+  }
+
   /** Axis-aligned box between opposite corners (all six faces). */
   box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): void {
     const dx = x1 - x0;
@@ -55,21 +68,33 @@ class GeometryBuilder {
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(this.positions), 3));
     geometry.setAttribute('normal', new BufferAttribute(new Float32Array(this.normals), 3));
+    if (this.colors.length > 0) {
+      geometry.setAttribute('color', new BufferAttribute(new Float32Array(this.colors), 3));
+    }
     geometry.setIndex(new BufferAttribute(new Uint32Array(this.indices), 1));
     return geometry;
   }
 }
 
+function roadDetailColor(index: number): Color {
+  return new Color(ROAD_DETAIL_COLOR).offsetHSL(
+    0,
+    0,
+    (cellHash01(index) - 0.5) * ROAD_DETAIL_LIGHTNESS_JITTER,
+  );
+}
+
 /**
- * Road cells as one merged mesh of flat asphalt quads slightly above the
- * terrain, plus a concrete bridge mesh for road cells over water (causeway
- * deck at road height, railings on edges without a road neighbor, pylons
- * down into the water). Fully rebuilt from each `roads` message — cheap at
- * current scale (chunked rebuilds come later).
+ * Road cells as merged dirt-surface quads with a lighter worn detail strip,
+ * plus a concrete bridge mesh for road cells over water (causeway deck at road
+ * height, railings on edges without a road neighbor, pylons down into the
+ * water). Fully rebuilt from each `roads` message — cheap at current scale
+ * (chunked rebuilds come later).
  */
 export class RoadsView {
   readonly group: Group;
   private readonly roadMesh: Mesh;
+  private readonly roadDetailMesh: Mesh;
   private readonly bridgeMesh: Mesh;
   private readonly gridWidth: number;
   /** Highway cells rendered by HighwayView — skipped here to avoid double-draw. */
@@ -86,18 +111,27 @@ export class RoadsView {
     this.gridWidth = gridWidth;
     this.highwayCells = highwayCells;
     this.roadMesh = new Mesh(new BufferGeometry(), new MeshLambertMaterial({ color: ROAD_COLOR }));
+    this.roadMesh.name = 'road-surface';
+    this.roadDetailMesh = new Mesh(
+      new BufferGeometry(),
+      new MeshLambertMaterial({ color: 0xffffff, vertexColors: true }),
+    );
+    this.roadDetailMesh.name = 'road-surface-details';
     this.bridgeMesh = new Mesh(
       new BufferGeometry(),
       new MeshLambertMaterial({ color: BRIDGE_COLOR }),
     );
+    this.bridgeMesh.name = 'bridge-surface';
     this.roadMesh.visible = false;
+    this.roadDetailMesh.visible = false;
     this.bridgeMesh.visible = false;
     this.roadMesh.receiveShadow = true;
+    this.roadDetailMesh.receiveShadow = true;
     this.bridgeMesh.castShadow = true;
     this.bridgeMesh.receiveShadow = true;
     this.group = new Group();
     this.group.name = 'roads';
-    this.group.add(this.roadMesh, this.bridgeMesh);
+    this.group.add(this.roadMesh, this.roadDetailMesh, this.bridgeMesh);
   }
 
   /** Terrain water mask from boot; re-renders roads that arrived earlier. */
@@ -112,6 +146,8 @@ export class RoadsView {
     this.cellCount = cells.length;
     const bridges: number[] = [];
     const roads = new GeometryBuilder();
+    const roadDetails = new GeometryBuilder();
+    let landRoadCount = 0;
     for (const index of cells) {
       // Highway cells are drawn distinctly by HighwayView.
       if (this.highwayCells.has(index)) continue;
@@ -122,9 +158,19 @@ export class RoadsView {
       const x = index % this.gridWidth;
       const z = Math.floor(index / this.gridWidth);
       roads.quad(x, z, x + 1, z + 1, ROAD_SURFACE_Y);
+      roadDetails.coloredQuad(
+        x + ROAD_DETAIL_SIDE_INSET,
+        z + ROAD_DETAIL_END_INSET,
+        x + 1 - ROAD_DETAIL_SIDE_INSET,
+        z + 1 - ROAD_DETAIL_END_INSET,
+        ROAD_DETAIL_Y,
+        roadDetailColor(index),
+      );
+      landRoadCount++;
     }
     this.bridgeCellCount = bridges.length;
-    this.swapGeometry(this.roadMesh, roads.build(), cells.length - bridges.length > 0);
+    this.swapGeometry(this.roadMesh, roads.build(), landRoadCount > 0);
+    this.swapGeometry(this.roadDetailMesh, roadDetails.build(), landRoadCount > 0);
     this.swapGeometry(this.bridgeMesh, this.buildBridges(bridges, new Set(cells)), bridges.length > 0);
   }
 

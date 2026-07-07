@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: worn road surface detail
+
+Fresh playtest after the utility-badge pass: buildings, forests, lot groundwork, and badges now have more AoE2-inspired painterly texture, but ordinary roads still read as flat dark strips between otherwise richer assets. This round stayed renderer-only and targeted the road surface.
+
+Shipped: `RoadsView` now exposes named `road-surface`, `road-surface-details`, and `bridge-surface` meshes. Land roads keep their existing base dirt strip and add a narrow inset worn/cobbled surface detail layer just above it, with deterministic per-cell lightness variation from `cellHash01`. Highway cells still stay with `HighwayView`, water roads still become bridge geometry, and the detail mesh hides when an update contains only highway/bridge cells. Sim, protocol, traffic, road graph, save/load, and command behavior are unchanged.
+
+TDD: RED `tests/rendering/roads-mesh.test.ts` first failed because `road-surface-details` did not exist; a second RED assertion failed because the detail geometry had no vertex colors. GREEN passes after adding the detail layer, visibility synchronization, and deterministic detail tinting. Browser evidence: `.shots/aoe2-road-details.png` was captured from a real-control Chrome playtest (road + R/C/I zoning + growth) with 33 road cells, 16 buildings, and 56 fps in `render_game_to_text`; the screenshot shows the warmer worn road detail beside the new lot groundwork and rooftops. The screenshot is ignored local evidence, not a committed artifact.
+
+Review fix: rendering/perf review flagged that the new road detail layer initially sat only 0.001 world units below the traffic overlay, risking z shimmer. Fixed by lowering `ROAD_DETAIL_Y` to keep 0.004 overlay clearance, adding a test assertion for that spacing, and capturing `.shots/aoe2-road-details-traffic-overlay.png` with `activeOverlay: "traffic"` to verify the overlay renders cleanly over the new detail layer.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: compact utility alert badges
 
 Follow-up playtest after the zone-groundwork pass: the settlement, forests, service silhouettes, and lot texture read better, but the utility warnings still appeared as large font-glyph badges that could dominate close rooftops and fall back to black square-looking symbols depending on the browser font stack. This round stayed renderer-only and targeted alert legibility.
