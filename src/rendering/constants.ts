@@ -7,6 +7,7 @@
 // Vertical layering (world y). Terrain land sits at y=0.
 export const WATER_SURFACE_Y = -0.12;
 export const ZONE_SURFACE_Y = 0.015;
+export const ZONE_GROUND_DETAIL_Y = 0.017;
 export const ROAD_SURFACE_Y = 0.02;
 export const GHOST_SURFACE_Y = 0.03;
 export const GHOST_HEIGHT = 0.1;
@@ -68,10 +69,17 @@ export const TREE_SCALE_RANGE = 0.55;
 
 // Zone tint overlay (translucent quads over zoned-but-empty cells).
 export const ZONE_TINT_OPACITY = 0.45;
+export const ZONE_GROUND_DETAIL_OPACITY = 0.28;
+export const ZONE_GROUND_DETAIL_INSET = 0.18;
 export const ZONE_COLORS: Record<ZoneKind, number> = {
   R: 0x46a34a,
   C: 0x3f74c9,
   I: 0xcf8a2d,
+};
+export const ZONE_GROUND_DETAIL_COLORS: Record<ZoneKind, number> = {
+  R: 0xd0bd89,
+  C: 0xb8b09c,
+  I: 0x9c8564,
 };
 
 // Buildings (instanced box + roof per zone archetype).

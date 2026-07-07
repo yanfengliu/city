@@ -211,7 +211,7 @@ export class Game {
       this.ghost.mesh,
       new HighwayView({ column: HIGHWAY_COLUMN, length: HIGHWAY_LENGTH }).group,
       this.roadsView.group,
-      this.zonesView.mesh,
+      this.zonesView.group,
       this.buildingsView.group,
       this.vehiclesView.mesh,
       this.structuresView.group,

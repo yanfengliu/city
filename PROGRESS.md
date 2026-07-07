@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: zone lot groundwork
+
+Follow-up playtest after the service-silhouette pass: buildings, services, forests, and palette are stronger, but empty zoned ground still read as flat color blocks rather than inhabited planned lots. AoE2-style settlement readability relies heavily on warm dirt/stone ground texture around buildings, so this round stayed renderer-only and targeted zone surfaces.
+
+Shipped: `ZonesView` now renders a grouped tint + ground-detail layer. The existing translucent R/C/I tint remains, and a second named `zone-ground-details` mesh adds subtle inset earth/stone lot panels on visible undeveloped cells. Both meshes rebuild from the same `zones` message and share the existing building/service occlusion path, so grown structures keep their footprints clean and the sim/protocol remain unchanged.
+
+TDD: RED `tests/rendering/zones-mesh.test.ts` first failed because `zone-ground-details` was missing; GREEN passes after the detail mesh and group are wired. Browser evidence: `.shots/aoe2-zone-ground-details.png` was captured from a real-control playtest (road + R/C/I zoning + growth) and shows the new lot panels around the road and buildings. The screenshot is ignored local evidence, not a committed artifact.
+
+Verification after review fix: `npm test` 127/127, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: rendering/perf reviewer found no blockers; boundary/docs reviewer found one low test-strength gap. Fixed by extending the rendering test to pin the inset detail geometry and zone-specific detail colors.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: civic service silhouettes
 
 Follow-up playtest after the forest pass: the world terrain, growables, and forests now read well, but player-placed civic services were still plain wall+roof blocks.
