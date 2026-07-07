@@ -109,6 +109,12 @@ export const BUILDING_ROOF_HEIGHTS: Record<ZoneKind, number> = { R: 0.5, C: 0.16
 export const BUILDING_DETAIL_HEIGHT = 0.5;
 export const BUILDING_DETAIL_WIDTH = 0.28;
 export const BUILDING_DETAIL_COLOR = 0x3f3025;
+export const BUILDING_FACADE_WIDTH = 0.28;
+export const BUILDING_FACADE_HEIGHT = 0.32;
+export const BUILDING_FACADE_DEPTH = 0.04;
+export const BUILDING_FACADE_BASE_Y = 0.08;
+export const BUILDING_FACADE_FRONT_OFFSET = 0.024;
+export const BUILDING_FACADE_X_JITTER = 0.28;
 export const BUILDING_WALL_COLORS: Record<ZoneKind, number> = {
   R: 0xd7c59e,
   C: 0xb9b5a4,
@@ -119,6 +125,11 @@ export const BUILDING_ROOF_COLORS: Record<ZoneKind, number> = {
   C: 0x526d8f,
   I: 0x8a6238,
 };
+export const BUILDING_FACADE_COLORS: Record<ZoneKind, number> = {
+  R: 0x4e3928,
+  C: 0x2f3f52,
+  I: 0x453827,
+};
 /** Per-level lightness boost so level differences read beyond height alone. */
 export const BUILDING_LEVEL_WALL_LIGHTEN = 0.03;
 export const BUILDING_LEVEL_ROOF_LIGHTEN = 0.07;
@@ -128,6 +139,7 @@ export const BUILDING_ABANDONED_ROOF_COLOR = 0x585858;
  * vanishing into the dark (material-level; intensity = night × MAX). */
 export const BUILDING_NIGHT_GLOW_COLOR = 0xffca7a;
 export const BUILDING_NIGHT_GLOW_MAX = 0.55;
+export const BUILDING_FACADE_GLOW_MAX = 0.85;
 
 // Ghost drag preview. Capacity covers the longest L-path on a 128x128 grid (255
 // cells) and rect drags up to 1024 cells; larger rect previews clip (the command

@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: growable facade accents
+
+Fresh playtest after the road-surface pass: roads, forests, lot groundwork, services, and utility badges read much richer, but grown RCI buildings still had large blank wall faces at close strategic zoom. This round stayed renderer-only and targeted those wall faces with small deterministic facade panels/door-window blocks, using Age of Empires II only as broad material/readability reference and not as copied asset or silhouette work.
+
+Shipped: `BuildingsView` now exposes named wall, roof, roof-detail, and facade instanced layers per zone. Facade instances share the building slot lifecycle with the existing wall/roof/detail layers, survive capacity growth, swap-copy on removal, and use the existing deterministic tint path plus a stronger night glow material so daylight reads as doors/windows and dusk reads as warm lit settlement detail. The panels are a renderer-local front/south-side accent, not a new road-orientation protocol. Sim, protocol, growth, traffic, save/load, and command behavior are unchanged.
+
+TDD: RED `tests/rendering/buildings-mesh.test.ts` first failed because the named building meshes and facade layer did not exist. GREEN passes after adding the facade mesh, capacity growth synchronization, removal synchronization, and matrix-position assertions for the front/south panel placement. Post-review, the test also covers swap-remove preservation and pre-growth matrix/color preservation through capacity growth. Browser evidence: `.shots/aoe2-facade-details-day.jpg` was captured from the visual host/player harness after real HUD/map gestures placed roads and R/C/I zoning; `render_game_to_text` reported 12 buildings, 27 road cells, 56 fps, and 12 utility icons. `.shots/aoe2-facade-details-close.jpg` captures the same setup near dusk, showing the facade layer becoming warm lit details. These screenshots are ignored local evidence, not committed artifacts.
+
+Review fixes: wording now says the panels are front/south-side accents rather than road-oriented facades, `docs/architecture/architecture.md` lists the fourth building layer, and facade meshes opt out of cast/receive shadows to avoid thin detached shadow artifacts while walls/roofs/details still cast normally.
+
+Verification: `npm test` 134/134, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: boundary/docs reviewer found the road-facing wording overclaim, lifecycle test gaps, and stale architecture docs; all fixed. Rendering/perf reviewer found the facade shadow risk; fixed by shadow opt-out and a regression assertion.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: worn road surface detail
 
 Fresh playtest after the utility-badge pass: buildings, forests, lot groundwork, and badges now have more AoE2-inspired painterly texture, but ordinary roads still read as flat dark strips between otherwise richer assets. This round stayed renderer-only and targeted the road surface.

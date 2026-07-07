@@ -16,6 +16,14 @@ import {
   BUILDING_DETAIL_COLOR,
   BUILDING_DETAIL_HEIGHT,
   BUILDING_DETAIL_WIDTH,
+  BUILDING_FACADE_BASE_Y,
+  BUILDING_FACADE_COLORS,
+  BUILDING_FACADE_DEPTH,
+  BUILDING_FACADE_FRONT_OFFSET,
+  BUILDING_FACADE_GLOW_MAX,
+  BUILDING_FACADE_HEIGHT,
+  BUILDING_FACADE_WIDTH,
+  BUILDING_FACADE_X_JITTER,
   BUILDING_FOOTPRINT_JITTER,
   BUILDING_FOOTPRINT_MARGIN,
   BUILDING_HEIGHT_JITTER,
@@ -53,6 +61,7 @@ interface Archetype {
   walls: InstancedMesh;
   roofs: InstancedMesh;
   details: InstancedMesh;
+  facades: InstancedMesh;
   /** Building id per instance slot (parallel to the instance buffers). */
   ids: number[];
   capacity: number;
@@ -75,7 +84,13 @@ export class BuildingsView {
   private readonly unitBox: BufferGeometry;
   private readonly pyramidRoof: BufferGeometry;
   private readonly detailBox: BufferGeometry;
+  private readonly facadeBox: BufferGeometry;
   private readonly material = new MeshLambertMaterial({
+    color: 0xffffff,
+    emissive: BUILDING_NIGHT_GLOW_COLOR,
+    emissiveIntensity: 0,
+  });
+  private readonly facadeMaterial = new MeshLambertMaterial({
     color: 0xffffff,
     emissive: BUILDING_NIGHT_GLOW_COLOR,
     emissiveIntensity: 0,
@@ -89,6 +104,7 @@ export class BuildingsView {
     // 4-sided cone rotated 45° = square pyramid whose base matches the unit box.
     this.pyramidRoof = new ConeGeometry(Math.SQRT1_2, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0);
     this.detailBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    this.facadeBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     this.archetypes = {
       R: this.makeArchetype('R'),
       C: this.makeArchetype('C'),
@@ -103,7 +119,9 @@ export class BuildingsView {
   /** Ramps the shared warm emissive with darkness (night ∈ [0,1]) so the city
    * lights up at night instead of vanishing. Cheap — one material uniform. */
   setNightGlow(night: number): void {
-    this.material.emissiveIntensity = Math.max(0, Math.min(1, night)) * BUILDING_NIGHT_GLOW_MAX;
+    const clamped = Math.max(0, Math.min(1, night));
+    this.material.emissiveIntensity = clamped * BUILDING_NIGHT_GLOW_MAX;
+    this.facadeMaterial.emissiveIntensity = clamped * BUILDING_FACADE_GLOW_MAX;
   }
 
   upsert(view: BuildingRenderView): void {
@@ -122,6 +140,7 @@ export class BuildingsView {
     archetype.walls.count = archetype.ids.length;
     archetype.roofs.count = archetype.ids.length;
     archetype.details.count = archetype.ids.length;
+    archetype.facades.count = archetype.ids.length;
     this.writeInstance(archetype, slot, view);
   }
 
@@ -134,7 +153,7 @@ export class BuildingsView {
     const last = archetype.ids.length - 1;
     if (entry.slot !== last) {
       const movedId = archetype.ids[last];
-      for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
+      for (const mesh of [archetype.walls, archetype.roofs, archetype.details, archetype.facades]) {
         mesh.getMatrixAt(last, MATRIX);
         mesh.setMatrixAt(entry.slot, MATRIX);
         mesh.getColorAt(last, COLOR);
@@ -149,26 +168,39 @@ export class BuildingsView {
     archetype.walls.count = archetype.ids.length;
     archetype.roofs.count = archetype.ids.length;
     archetype.details.count = archetype.ids.length;
+    archetype.facades.count = archetype.ids.length;
   }
 
   private makeArchetype(zone: ZoneKind): Archetype {
     const roofGeometry = zone === 'R' ? this.pyramidRoof : this.unitBox;
     return {
       zone,
-      walls: this.makeMesh(this.unitBox, BUILDING_START_CAPACITY),
-      roofs: this.makeMesh(roofGeometry, BUILDING_START_CAPACITY),
-      details: this.makeMesh(this.detailBox, BUILDING_START_CAPACITY),
+      walls: this.makeMesh(this.unitBox, BUILDING_START_CAPACITY, `${zone}-walls`),
+      roofs: this.makeMesh(roofGeometry, BUILDING_START_CAPACITY, `${zone}-roofs`),
+      details: this.makeMesh(this.detailBox, BUILDING_START_CAPACITY, `${zone}-roof-details`),
+      facades: this.makeMesh(this.facadeBox, BUILDING_START_CAPACITY, `${zone}-facades`, {
+        material: this.facadeMaterial,
+        shadows: false,
+      }),
       ids: [],
       capacity: BUILDING_START_CAPACITY,
     };
   }
 
-  private makeMesh(geometry: BufferGeometry, capacity: number): InstancedMesh {
-    const mesh = new InstancedMesh(geometry, this.material, capacity);
+  private makeMesh(
+    geometry: BufferGeometry,
+    capacity: number,
+    name = '',
+    options: { material?: MeshLambertMaterial; shadows?: boolean } = {},
+  ): InstancedMesh {
+    const material = options.material ?? this.material;
+    const shadows = options.shadows ?? true;
+    const mesh = new InstancedMesh(geometry, material, capacity);
+    mesh.name = name;
     mesh.count = 0;
     mesh.frustumCulled = false;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = shadows;
+    mesh.receiveShadow = shadows;
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     // Pre-allocate instance colors so write/copy paths never hit a null buffer.
     mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
@@ -182,10 +214,18 @@ export class BuildingsView {
     archetype.walls = this.replaceMesh(archetype.walls, archetype.capacity);
     archetype.roofs = this.replaceMesh(archetype.roofs, archetype.capacity);
     archetype.details = this.replaceMesh(archetype.details, archetype.capacity);
+    archetype.facades = this.replaceMesh(archetype.facades, archetype.capacity, {
+      material: this.facadeMaterial,
+      shadows: false,
+    });
   }
 
-  private replaceMesh(old: InstancedMesh, capacity: number): InstancedMesh {
-    const next = this.makeMesh(old.geometry, capacity);
+  private replaceMesh(
+    old: InstancedMesh,
+    capacity: number,
+    options: { material?: MeshLambertMaterial; shadows?: boolean } = {},
+  ): InstancedMesh {
+    const next = this.makeMesh(old.geometry, capacity, old.name, options);
     (next.instanceMatrix.array as Float32Array).set(old.instanceMatrix.array as Float32Array);
     if (next.instanceColor && old.instanceColor) {
       (next.instanceColor.array as Float32Array).set(old.instanceColor.array as Float32Array);
@@ -224,6 +264,16 @@ export class BuildingsView {
       detailZ,
     );
     archetype.details.setMatrixAt(slot, MATRIX);
+    const facadeWidth = Math.min(BUILDING_FACADE_WIDTH, sx * 0.35);
+    const facadeHeight = Math.min(BUILDING_FACADE_HEIGHT, height * 0.45);
+    const facadeX = cx + (cellHash01(view.id + 0x8888) - 0.5) * sx * BUILDING_FACADE_X_JITTER;
+    const facadeZ = cz + sz / 2 + BUILDING_FACADE_DEPTH / 2 + BUILDING_FACADE_FRONT_OFFSET;
+    MATRIX.makeScale(facadeWidth, facadeHeight, BUILDING_FACADE_DEPTH).setPosition(
+      facadeX,
+      BUILDING_FACADE_BASE_Y,
+      facadeZ,
+    );
+    archetype.facades.setMatrixAt(slot, MATRIX);
 
     if (view.abandoned) {
       // Per-building shade jitter so a derelict block reads as varied, weathered
@@ -233,6 +283,7 @@ export class BuildingsView {
       archetype.walls.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_WALL_COLOR).offsetHSL(0, 0, decayJit));
       archetype.roofs.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
       archetype.details.setColorAt(slot, COLOR.setHex(BUILDING_DETAIL_COLOR).offsetHSL(0, 0, decayJit * 0.5));
+      archetype.facades.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
     } else {
       // Subtle per-building tint (walls and roof shift together) on top of the
       // per-level lightening, so a district varies without losing its zone hue.
@@ -245,8 +296,12 @@ export class BuildingsView {
       COLOR.offsetHSL(hueJit, 0, BUILDING_LEVEL_ROOF_LIGHTEN * levelIndex + lightJit);
       archetype.roofs.setColorAt(slot, COLOR);
       archetype.details.setColorAt(slot, COLOR.setHex(BUILDING_DETAIL_COLOR).offsetHSL(hueJit, 0, lightJit * 0.5));
+      archetype.facades.setColorAt(
+        slot,
+        COLOR.setHex(BUILDING_FACADE_COLORS[view.zone]).offsetHSL(hueJit, 0, lightJit),
+      );
     }
-    for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
+    for (const mesh of [archetype.walls, archetype.roofs, archetype.details, archetype.facades]) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
