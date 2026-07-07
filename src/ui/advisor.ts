@@ -1,3 +1,13 @@
+import {
+  HUD_HEADER_STRIP_CSS,
+  HUD_MUTED_TEXT,
+  HUD_PANEL_CHROME_CSS,
+  HUD_POSITIVE_TEXT,
+  HUD_ROW_BORDER,
+  HUD_TEXT,
+  hudIconButtonCss,
+} from './hud-style';
+
 /** One checklist requirement inside a tip, with its live completion state. */
 export interface TipStep {
   text: string;
@@ -48,21 +58,18 @@ export class AdvisorPanel {
   ) {
     this.root = document.createElement('div');
     this.root.style.cssText =
-      'position:absolute;bottom:14px;right:14px;width:360px;max-width:46vw;color:#fff;' +
-      'background:rgba(10,20,30,.82);border:1px solid rgba(143,224,255,.25);border-radius:8px;' +
-      'font-size:12.5px;z-index:10;user-select:none;display:none;overflow:hidden';
+      'position:absolute;bottom:14px;right:14px;width:360px;max-width:46vw;' +
+      `font-size:12.5px;z-index:10;user-select:none;display:none;overflow:hidden;${HUD_PANEL_CHROME_CSS}`;
 
     const header = document.createElement('div');
     header.style.cssText =
-      'display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(83,193,232,.12);' +
-      'font-weight:bold;cursor:pointer';
+      `display:flex;align-items:center;gap:8px;padding:6px 10px;font-weight:bold;cursor:pointer;${HUD_HEADER_STRIP_CSS}`;
     const title = document.createElement('span');
     title.textContent = '💡 Advisor';
     this.countEl = document.createElement('span');
-    this.countEl.style.cssText = 'color:#8fb3c9;font-weight:normal;font-size:11px;flex:1';
+    this.countEl.style.cssText = `color:${HUD_MUTED_TEXT};font-weight:normal;font-size:11px;flex:1`;
     this.collapseButton = document.createElement('button');
-    this.collapseButton.style.cssText =
-      'background:none;border:none;color:#8fe0ff;cursor:pointer;font-size:13px;padding:0 2px';
+    this.collapseButton.style.cssText = hudIconButtonCss();
     header.appendChild(title);
     header.appendChild(this.countEl);
     header.appendChild(this.collapseButton);
@@ -126,7 +133,7 @@ export class AdvisorPanel {
 
   private buildRow(advisory: Advisory): HTMLDivElement {
     const row = document.createElement('div');
-    row.style.cssText = 'padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.06)';
+    row.style.cssText = `padding:5px 10px;border-bottom:1px solid ${HUD_ROW_BORDER}`;
 
     const top = document.createElement('div');
     top.style.cssText = 'display:flex;align-items:flex-start;gap:6px;line-height:1.35';
@@ -153,8 +160,7 @@ export class AdvisorPanel {
     const dismiss = document.createElement('button');
     dismiss.textContent = '×';
     dismiss.title = 'Dismiss (returns if the situation persists)';
-    dismiss.style.cssText =
-      'background:none;border:none;color:#8fb3c9;cursor:pointer;font-size:14px;padding:0 2px;line-height:1';
+    dismiss.style.cssText = hudIconButtonCss();
     dismiss.addEventListener('click', (event) => {
       event.stopPropagation();
       this.dismissed.add(advisory.text);
@@ -172,10 +178,12 @@ export class AdvisorPanel {
       item.style.cssText = 'display:flex;align-items:flex-start;gap:6px;font-size:12px;line-height:1.4';
       const mark = document.createElement('span');
       mark.textContent = step.done ? '✓' : '○';
-      mark.style.cssText = `flex:none;font-weight:bold;color:${step.done ? '#5fe07a' : '#7f97a8'}`;
+      mark.style.cssText = `flex:none;font-weight:bold;color:${step.done ? HUD_POSITIVE_TEXT : HUD_MUTED_TEXT}`;
       const label = document.createElement('span');
       label.textContent = step.text;
-      label.style.cssText = `flex:1;color:${step.done ? '#8fb3c9' : '#cfe6f2'}${step.done ? ';text-decoration:line-through' : ''}`;
+      label.style.cssText = `flex:1;color:${step.done ? HUD_MUTED_TEXT : HUD_TEXT}${
+        step.done ? ';text-decoration:line-through' : ''
+      }`;
       item.appendChild(mark);
       item.appendChild(label);
       list.appendChild(item);

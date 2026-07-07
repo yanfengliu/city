@@ -1,6 +1,13 @@
 import { MAX_TAX_RATE, MIN_TAX_RATE } from '../sim/constants/economy';
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 import type { BudgetReport, TaxRates, ZoneType } from '../sim/types';
+import {
+  HUD_MUTED_TEXT,
+  HUD_NEGATIVE_TEXT,
+  HUD_PANEL_CHROME_CSS,
+  HUD_POSITIVE_TEXT,
+  hudIconButtonCss,
+} from './hud-style';
 
 const ZONE_ROWS: { zone: ZoneType; key: keyof TaxRates; label: string; color: string }[] = [
   { zone: 'R', key: 'r', label: 'Residential', color: '#58c15c' },
@@ -30,9 +37,8 @@ export class BudgetPanel {
   constructor(container: HTMLElement, onSetTaxRate: (zone: ZoneType, rate: number) => void) {
     this.root = document.createElement('div');
     this.root.style.cssText =
-      'position:absolute;top:56px;right:8px;width:230px;color:#fff;' +
-      'background:rgba(10,20,30,.85);padding:10px 12px;border-radius:8px;font-size:13px;' +
-      'display:none;user-select:none;z-index:10';
+      'position:absolute;top:56px;right:8px;width:230px;padding:10px 12px;font-size:13px;' +
+      `display:none;user-select:none;z-index:10;${HUD_PANEL_CHROME_CSS}`;
 
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
@@ -42,9 +48,7 @@ export class BudgetPanel {
     header.appendChild(title);
     const closeButton = document.createElement('button');
     closeButton.textContent = '×';
-    closeButton.style.cssText =
-      'background:none;border:none;color:#9db4c8;cursor:pointer;font-size:16px;' +
-      'line-height:1;padding:0 2px';
+    closeButton.style.cssText = hudIconButtonCss();
     closeButton.addEventListener('click', () => this.hide());
     header.appendChild(closeButton);
     this.root.appendChild(header);
@@ -56,7 +60,7 @@ export class BudgetPanel {
       row.style.cssText = 'display:flex;justify-content:space-between';
       const name = document.createElement('span');
       name.textContent = label;
-      name.style.color = '#c9d4dd';
+      name.style.color = HUD_MUTED_TEXT;
       const value = document.createElement('span');
       row.appendChild(name);
       row.appendChild(value);
@@ -123,12 +127,12 @@ export class BudgetPanel {
   update(taxRates: TaxRates, budget: BudgetReport): void {
     if (!this.visible) return;
     this.incomeEl.textContent = money(budget.income);
-    this.incomeEl.style.color = '#9fdf9f';
+    this.incomeEl.style.color = HUD_POSITIVE_TEXT;
     this.expensesEl.textContent = money(budget.expenses);
-    this.expensesEl.style.color = '#ff9d9d';
+    this.expensesEl.style.color = HUD_NEGATIVE_TEXT;
     const net = budget.income - budget.expenses;
     this.netEl.textContent = `${net < 0 ? '−' : '+'}${money(net)}`;
-    this.netEl.style.color = net < 0 ? '#ff9d9d' : '#9fdf9f';
+    this.netEl.style.color = net < 0 ? HUD_NEGATIVE_TEXT : HUD_POSITIVE_TEXT;
     for (const row of ZONE_ROWS) {
       const slider = this.sliders.get(row.key);
       const value = this.valueEls.get(row.key);

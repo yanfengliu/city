@@ -1,4 +1,16 @@
 import type { GameSpeed } from '../protocol/messages';
+import {
+  HUD_COMPACT_PANEL_CHROME_CSS,
+  HUD_DIVIDER_COLOR,
+  HUD_MUTED_TEXT,
+  HUD_NEGATIVE_TEXT,
+  HUD_PANEL_CHROME_CSS,
+  HUD_POSITIVE_TEXT,
+  hudButtonCss,
+  hudKeyBadgeCss,
+  hudToastCss,
+  hudWarningBadgeCss,
+} from './hud-style';
 
 /** Map overlay selection; field names mirror the protocol FieldName literals. */
 export type OverlayName =
@@ -127,12 +139,6 @@ const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
 const TOAST_DURATION_MS = 4000;
 const MAX_TOASTS = 4;
 
-const BUTTON_CSS =
-  'background:#2b3d4f;color:#fff;border:1px solid #4a6076;border-radius:4px;' +
-  'padding:2px 8px;cursor:pointer;font-size:13px';
-const ACTIVE_BG = '#4a7db5';
-const IDLE_BG = '#2b3d4f';
-
 const DEMAND_BAR_HEIGHT_PX = 20;
 const DEMAND_BARS: { key: 'r' | 'c' | 'i'; label: string; color: string }[] = [
   { key: 'r', label: 'R', color: '#58c15c' },
@@ -174,12 +180,12 @@ export class Hud<TTool extends string> {
   ) {
     this.root = document.createElement('div');
     this.root.style.cssText =
-      'position:absolute;top:8px;left:8px;color:#fff;background:rgba(10,20,30,.72);' +
-      'padding:8px 12px;border-radius:8px;font-size:13px;display:flex;gap:12px;align-items:center;' +
-      'flex-wrap:wrap;max-width:calc(100vw - 32px);user-select:none;z-index:10';
+      'position:absolute;top:8px;left:8px;padding:8px 12px;font-size:13px;display:flex;' +
+      'gap:12px;align-items:center;flex-wrap:wrap;max-width:calc(100vw - 32px);' +
+      `user-select:none;z-index:10;${HUD_PANEL_CHROME_CSS}`;
 
     this.treasuryEl = document.createElement('span');
-    this.treasuryEl.style.cssText = 'color:#9fdf9f;font-weight:bold';
+    this.treasuryEl.style.cssText = `color:${HUD_POSITIVE_TEXT};font-weight:bold`;
     this.root.appendChild(this.treasuryEl);
 
     this.populationEl = document.createElement('span');
@@ -196,9 +202,7 @@ export class Hud<TTool extends string> {
     this.root.appendChild(this.waterEl);
 
     this.warningEl = document.createElement('span');
-    this.warningEl.style.cssText =
-      'color:#1a1a1a;background:#ffb347;font-weight:bold;border-radius:4px;' +
-      'padding:1px 6px;display:none';
+    this.warningEl.style.cssText = hudWarningBadgeCss();
     this.root.appendChild(this.warningEl);
 
     this.root.appendChild(this.makeDemandBars());
@@ -232,7 +236,7 @@ export class Hud<TTool extends string> {
     this.root.appendChild(this.makeDivider());
     const overlaysLabel = document.createElement('span');
     overlaysLabel.textContent = 'Overlays:';
-    overlaysLabel.style.color = '#c9d4dd';
+    overlaysLabel.style.color = HUD_MUTED_TEXT;
     this.root.appendChild(overlaysLabel);
     for (const overlay of OVERLAYS) {
       const button = this.makeButton(overlay.label, () => callbacks.onSelectOverlay(overlay.id), overlay.title);
@@ -268,16 +272,14 @@ export class Hud<TTool extends string> {
     const controlsHint = document.createElement('div');
     controlsHint.textContent = 'Camera:  WASD move  ·  scroll zoom  ·  right-drag rotate  ·  Space pause';
     controlsHint.style.cssText =
-      'position:absolute;bottom:10px;left:12px;color:#cfe0ea;font-size:11px;' +
-      'background:rgba(10,20,30,.5);padding:3px 9px;border-radius:5px;' +
-      'user-select:none;pointer-events:none;z-index:9;opacity:.72';
+      'position:absolute;bottom:10px;left:12px;font-size:11px;padding:3px 9px;' +
+      `user-select:none;pointer-events:none;z-index:9;opacity:.78;${HUD_COMPACT_PANEL_CHROME_CSS}`;
     container.appendChild(controlsHint);
 
     this.legendEl = document.createElement('div');
     this.legendEl.style.cssText =
-      'position:absolute;bottom:36px;left:12px;min-width:104px;color:#eaf0f4;font-size:12px;' +
-      'background:rgba(10,20,30,.74);padding:7px 10px;border-radius:6px;' +
-      'user-select:none;pointer-events:none;z-index:9;display:none';
+      'position:absolute;bottom:36px;left:12px;min-width:104px;font-size:12px;padding:7px 10px;' +
+      `user-select:none;pointer-events:none;z-index:9;display:none;${HUD_COMPACT_PANEL_CHROME_CSS}`;
     container.appendChild(this.legendEl);
   }
 
@@ -337,7 +339,7 @@ export class Hud<TTool extends string> {
   private makeDivider(): HTMLSpanElement {
     const divider = document.createElement('span');
     divider.textContent = '|';
-    divider.style.color = '#4a6076';
+    divider.style.color = HUD_DIVIDER_COLOR;
     return divider;
   }
 
@@ -351,14 +353,14 @@ export class Hud<TTool extends string> {
       const box = document.createElement('div');
       box.style.cssText =
         `width:7px;height:${DEMAND_BAR_HEIGHT_PX}px;position:relative;overflow:hidden;` +
-        'background:rgba(255,255,255,.15);border-radius:2px';
+        'background:rgba(110,215,255,.14);border-radius:2px';
       const fill = document.createElement('div');
       fill.style.cssText =
         `position:absolute;bottom:0;left:0;width:100%;height:0;background:${bar.color}`;
       box.appendChild(fill);
       const label = document.createElement('div');
       label.textContent = bar.label;
-      label.style.cssText = 'font-size:9px;line-height:1;color:#c9d4dd';
+      label.style.cssText = `font-size:9px;line-height:1;color:${HUD_MUTED_TEXT}`;
       column.appendChild(box);
       column.appendChild(label);
       wrap.appendChild(column);
@@ -371,10 +373,7 @@ export class Hud<TTool extends string> {
   private keyBadge(key: string): HTMLSpanElement {
     const badge = document.createElement('span');
     badge.textContent = key.toUpperCase();
-    badge.style.cssText =
-      'margin-left:5px;padding:0 3px;font-size:9px;font-weight:bold;line-height:13px;' +
-      'display:inline-block;min-width:9px;text-align:center;color:#bfe6ff;' +
-      'background:rgba(0,0,0,.28);border:1px solid rgba(143,224,255,.4);border-radius:3px';
+    badge.style.cssText = hudKeyBadgeCss();
     return badge;
   }
 
@@ -418,7 +417,7 @@ export class Hud<TTool extends string> {
     const button = document.createElement('button');
     button.textContent = label;
     if (title) button.title = title;
-    button.style.cssText = BUTTON_CSS;
+    button.style.cssText = hudButtonCss(false);
     button.addEventListener('click', onClick);
     this.root.appendChild(button);
     return button;
@@ -455,13 +454,13 @@ export class Hud<TTool extends string> {
     this.currentSpeed = state.speed;
     if (state.speed !== 0) this.resumeSpeed = state.speed;
     for (const [speed, button] of this.speedButtons) {
-      button.style.background = speed === state.speed ? ACTIVE_BG : IDLE_BG;
+      button.style.cssText = hudButtonCss(speed === state.speed);
     }
     for (const [tool, button] of this.toolButtons) {
-      button.style.background = tool === state.activeTool ? ACTIVE_BG : IDLE_BG;
+      button.style.cssText = hudButtonCss(tool === state.activeTool);
     }
     for (const [overlay, button] of this.overlayButtons) {
-      button.style.background = overlay === state.activeOverlay ? ACTIVE_BG : IDLE_BG;
+      button.style.cssText = hudButtonCss(overlay === state.activeOverlay);
     }
     this.renderOverlayLegend(state.activeOverlay, state.inspectOpen);
   }
@@ -482,7 +481,7 @@ export class Hud<TTool extends string> {
     el.style.display = 'inline';
     el.textContent = `${icon} ${t.demand.toLocaleString('en-US')}/${t.supply.toLocaleString('en-US')}`;
     const covered = t.supply >= t.demand;
-    el.style.color = covered ? '#9fdf9f' : '#ff8a6a';
+    el.style.color = covered ? HUD_POSITIVE_TEXT : HUD_NEGATIVE_TEXT;
     el.title = covered
       ? `${noun}: ${t.demand} used of ${t.supply} capacity`
       : `${noun} over capacity (${t.demand} needed / ${t.supply}) — build another ${noun === 'Power' ? 'plant' : 'pump'}`;
@@ -495,9 +494,7 @@ export class Hud<TTool extends string> {
     }
     const toast = document.createElement('div');
     toast.textContent = message;
-    toast.style.cssText =
-      'color:#fff;background:rgba(150,40,40,.9);padding:6px 14px;border-radius:6px;' +
-      'font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,.4)';
+    toast.style.cssText = hudToastCss();
     this.toastArea.appendChild(toast);
     setTimeout(() => toast.remove(), TOAST_DURATION_MS);
   }

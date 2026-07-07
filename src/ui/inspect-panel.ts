@@ -1,3 +1,5 @@
+import { HUD_NEGATIVE_TEXT, HUD_PANEL_CHROME_CSS, hudIconButtonCss } from './hud-style';
+
 /** Pre-formatted building details (the app layer owns all sim math and wording). */
 export interface InspectData {
   /** e.g. "Residential — Level 2". */
@@ -21,9 +23,8 @@ export class InspectPanel {
   constructor(container: HTMLElement, onClose: () => void) {
     this.root = document.createElement('div');
     this.root.style.cssText =
-      'position:absolute;bottom:8px;left:8px;min-width:190px;color:#fff;' +
-      'background:rgba(10,20,30,.85);padding:10px 12px;border-radius:8px;font-size:13px;' +
-      'display:none;user-select:none;z-index:10';
+      'position:absolute;bottom:8px;left:8px;min-width:190px;padding:10px 12px;font-size:13px;' +
+      `display:none;user-select:none;z-index:10;${HUD_PANEL_CHROME_CSS}`;
 
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px';
@@ -33,16 +34,14 @@ export class InspectPanel {
 
     const closeButton = document.createElement('button');
     closeButton.textContent = '×';
-    closeButton.style.cssText =
-      'background:none;border:none;color:#9db4c8;cursor:pointer;font-size:16px;' +
-      'line-height:1;padding:0 2px';
+    closeButton.style.cssText = hudIconButtonCss();
     closeButton.addEventListener('click', onClose);
     header.appendChild(closeButton);
     this.root.appendChild(header);
 
     this.badgeEl = document.createElement('div');
     this.badgeEl.textContent = 'Abandoned';
-    this.badgeEl.style.cssText = 'color:#ff9d9d;font-weight:bold;margin-top:4px;display:none';
+    this.badgeEl.style.cssText = `color:${HUD_NEGATIVE_TEXT};font-weight:bold;margin-top:4px;display:none`;
     this.root.appendChild(this.badgeEl);
 
     this.bodyEl = document.createElement('div');

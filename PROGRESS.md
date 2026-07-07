@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — Cities: Skylines-style visual playtest loop: civic HUD skin
+
+Fresh full-page playtest after the shoreline pass showed the 3D scene had become the stronger half while the DOM HUD still read as generic dark-blue web controls over the city-planning view. The active goal was then corrected from an AoE2-style target to a Cities: Skylines-style target, so the pass was pivoted before commit. This round stayed UI-only and targeted the chrome: top HUD, advisor, budget, inspect, overlay legend, shortcut badges, warning badge, and toasts now share a compact dark civic-planning skin with translucent panels, cool cyan active tool states, pale metric text, and green/orange city-status accents. Sim, protocol, command handling, rendering meshes, save/load, and worker behavior are unchanged.
+
+TDD: RED `tests/ui/hud-style.test.ts` first failed because `src/ui/hud-style.ts` did not exist. GREEN now pins the shared panel chrome, active/inactive city-planner button treatment, shortcut-badge readability, warning-badge contrast, and avoidance of the old blue button colors. Focused verification so far: `npx.cmd vitest run tests/ui/hud-style.test.ts` passed after the Cities: Skylines-style palette pivot.
+
+Browser evidence: `.shots/cities-hud-skin-zoned-full-page.png` was captured from a real Chrome/player-harness run using HUD buttons and map drags to lay a highway-linked road spine, repaint R/C/I zones after the road settled, and advance the sim to 27 buildings, 45 population, 37 road cells, 27 utility alert badges, and 40 fps. The computed top HUD/background/button styles are the new dark civic gradients with cyan active states, and the screenshot verifies top HUD plus advisor readability. `.shots/cities-hud-skin-budget-full-page.png` opens the budget panel in the same run to verify its text fit and matching skin. These screenshots are ignored local evidence, not committed artifacts.
+
+Review note: two independent reviewer agents were dispatched (UI/layout and boundary/tests/docs lenses), but both failed immediately on the Codex usage limit before returning findings. Fallback local adversarial review checked the same lenses against the line-numbered diff and found no code defects; the only process catch was that the new helper/test files are untracked until staging, so staging must include them explicitly.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: sandy shoreline detail
 
 Fresh playtest after the facade pass: buildings, roads, trees, lot groundwork, and utility badges now carry more painterly detail, but water still cut into the grass as flat hard-edged blue cells. Real RTS reference screenshots lean heavily on warm terrain transitions around water, farms, and paths, so this round stayed renderer-only and targeted lake/shore readability.
