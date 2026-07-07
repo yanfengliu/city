@@ -26,12 +26,16 @@ export const SHORE_DETAIL_INSET = 0.22;
 export const SHORE_DETAIL_Y = 0.011;
 
 // Roads.
-export const ROAD_COLOR = 0x766349;
-export const ROAD_DETAIL_COLOR = 0xa0835d;
-export const ROAD_DETAIL_LIGHTNESS_JITTER = 0.08;
+export const ROAD_COLOR = 0x333a40;
+export const ROAD_DETAIL_COLOR = 0x464f55;
+export const ROAD_DETAIL_LIGHTNESS_JITTER = 0.055;
 export const ROAD_DETAIL_Y = 0.021;
 export const ROAD_DETAIL_SIDE_INSET = 0.14;
 export const ROAD_DETAIL_END_INSET = 0.22;
+export const ROAD_LANE_MARKING_COLOR = 0xd8e4e8;
+export const ROAD_LANE_MARKING_Y = 0.0235;
+export const ROAD_LANE_MARKING_WIDTH = 0.055;
+export const ROAD_LANE_MARKING_LENGTH = 0.42;
 
 // Bridges (road cells over water): concrete causeway deck + railings + pylons.
 export const BRIDGE_COLOR = 0x9a9482;
@@ -172,7 +176,7 @@ export const VEHICLE_LERP_MIN_MS = 15;
 export const VEHICLE_LERP_MAX_MS = 250;
 
 // Traffic overlay (road cells tinted by their edge's congestion bucket).
-export const TRAFFIC_OVERLAY_Y = 0.025;
+export const TRAFFIC_OVERLAY_Y = 0.028;
 export const TRAFFIC_BUCKET_COLORS: readonly [number, number, number, number] = [
   0x69a869, 0xe3cf4a, 0xf2953b, 0xe0453a,
 ];

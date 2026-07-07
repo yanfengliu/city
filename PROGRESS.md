@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — Cities: Skylines-style visual playtest loop: asphalt city roads
+
+Fresh playtest after the civic HUD pass showed the interface now reads much closer to a modern city-planning game, but the ordinary player-built roads were still the most visibly off-direction asset: warm brown dirt/cobble paths under a Cities: Skylines-style HUD. This round stayed renderer-only and retargeted land roads to modern asphalt.
+
+Shipped: `RoadsView` now exposes a synchronized named `road-lane-markings` mesh in addition to `road-surface`, `road-surface-details`, and `bridge-surface`. Land roads use a dark asphalt base, subtle cool-gray per-cell surface variation, and pale lane dashes oriented by neighboring road cells. Highway cells still stay in `HighwayView`, water road cells still become bridge geometry, and the new lane layer hides when an update has no ordinary land roads. Sim, protocol, road graph, traffic, costs, save/load, and command behavior are unchanged.
+
+TDD: RED `tests/rendering/roads-mesh.test.ts` first failed because the lane-marking constants/layer did not exist. GREEN now pins the lane layer name, y-order below traffic overlays, asphalt material color, vertical dash geometry, row-edge no-wrap behavior, and visibility synchronization. Browser evidence: `.shots/cities-asphalt-roads-full-page.png` was captured from a real Chrome/player-harness run using HUD buttons and map drags to place a highway-linked road spine, repaint R/C/I zones, and advance the sim to 27 buildings, 45 population, 37 road cells, 27 utility alert badges, and 39 fps. After review, `.shots/cities-asphalt-roads-traffic-overlay-full-page.png` refreshed the run with the Traffic overlay active to verify the lane/overlay y-order in the risky combined view. The screenshots show the new asphalt road treatment alongside the civic HUD. These screenshots are ignored local evidence, not committed artifacts.
+
+Review fixes: two independent reviewer agents both found an east-edge row-wrap bug in lane-neighbor detection, fixed with explicit row/column guards and pinned by a regression test. The rendering reviewer also called out the lane/traffic overlay y-gap as fragile, so the lane layer now sits at least 0.004 below the traffic overlay and the invariant is tested. The architecture doc was corrected to say road geometry currently full-rebuilds from each roads message; chunked road rebuilds remain a future performance path.
+
 ### 2026-07-07 — Cities: Skylines-style visual playtest loop: civic HUD skin
 
 Fresh full-page playtest after the shoreline pass showed the 3D scene had become the stronger half while the DOM HUD still read as generic dark-blue web controls over the city-planning view. The active goal was then corrected from an AoE2-style target to a Cities: Skylines-style target, so the pass was pivoted before commit. This round stayed UI-only and targeted the chrome: top HUD, advisor, budget, inspect, overlay legend, shortcut badges, warning badge, and toasts now share a compact dark civic-planning skin with translucent panels, cool cyan active tool states, pale metric text, and green/orange city-status accents. Sim, protocol, command handling, rendering meshes, save/load, and worker behavior are unchanged.

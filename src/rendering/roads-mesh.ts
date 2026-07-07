@@ -12,6 +12,10 @@ import {
   ROAD_DETAIL_LIGHTNESS_JITTER,
   ROAD_DETAIL_SIDE_INSET,
   ROAD_DETAIL_Y,
+  ROAD_LANE_MARKING_COLOR,
+  ROAD_LANE_MARKING_LENGTH,
+  ROAD_LANE_MARKING_WIDTH,
+  ROAD_LANE_MARKING_Y,
   ROAD_SURFACE_Y,
 } from './constants';
 
@@ -85,7 +89,8 @@ function roadDetailColor(index: number): Color {
 }
 
 /**
- * Road cells as merged dirt-surface quads with a lighter worn detail strip,
+ * Road cells as merged asphalt-surface quads with a subtle worn detail strip
+ * plus crisp lane markings for strategy-zoom road readability,
  * plus a concrete bridge mesh for road cells over water (causeway deck at road
  * height, railings on edges without a road neighbor, pylons down into the
  * water). Fully rebuilt from each `roads` message — cheap at current scale
@@ -95,6 +100,7 @@ export class RoadsView {
   readonly group: Group;
   private readonly roadMesh: Mesh;
   private readonly roadDetailMesh: Mesh;
+  private readonly roadLaneMesh: Mesh;
   private readonly bridgeMesh: Mesh;
   private readonly gridWidth: number;
   /** Highway cells rendered by HighwayView — skipped here to avoid double-draw. */
@@ -117,6 +123,11 @@ export class RoadsView {
       new MeshLambertMaterial({ color: 0xffffff, vertexColors: true }),
     );
     this.roadDetailMesh.name = 'road-surface-details';
+    this.roadLaneMesh = new Mesh(
+      new BufferGeometry(),
+      new MeshLambertMaterial({ color: ROAD_LANE_MARKING_COLOR }),
+    );
+    this.roadLaneMesh.name = 'road-lane-markings';
     this.bridgeMesh = new Mesh(
       new BufferGeometry(),
       new MeshLambertMaterial({ color: BRIDGE_COLOR }),
@@ -124,14 +135,16 @@ export class RoadsView {
     this.bridgeMesh.name = 'bridge-surface';
     this.roadMesh.visible = false;
     this.roadDetailMesh.visible = false;
+    this.roadLaneMesh.visible = false;
     this.bridgeMesh.visible = false;
     this.roadMesh.receiveShadow = true;
     this.roadDetailMesh.receiveShadow = true;
+    this.roadLaneMesh.receiveShadow = true;
     this.bridgeMesh.castShadow = true;
     this.bridgeMesh.receiveShadow = true;
     this.group = new Group();
     this.group.name = 'roads';
-    this.group.add(this.roadMesh, this.roadDetailMesh, this.bridgeMesh);
+    this.group.add(this.roadMesh, this.roadDetailMesh, this.roadLaneMesh, this.bridgeMesh);
   }
 
   /** Terrain water mask from boot; re-renders roads that arrived earlier. */
@@ -145,8 +158,10 @@ export class RoadsView {
     this.lastCells = cells;
     this.cellCount = cells.length;
     const bridges: number[] = [];
+    const roadCellSet = new Set(cells);
     const roads = new GeometryBuilder();
     const roadDetails = new GeometryBuilder();
+    const roadLanes = new GeometryBuilder();
     let landRoadCount = 0;
     for (const index of cells) {
       // Highway cells are drawn distinctly by HighwayView.
@@ -166,12 +181,40 @@ export class RoadsView {
         ROAD_DETAIL_Y,
         roadDetailColor(index),
       );
+      this.addLaneMarking(roadLanes, roadCellSet, index, x, z);
       landRoadCount++;
     }
     this.bridgeCellCount = bridges.length;
     this.swapGeometry(this.roadMesh, roads.build(), landRoadCount > 0);
     this.swapGeometry(this.roadDetailMesh, roadDetails.build(), landRoadCount > 0);
-    this.swapGeometry(this.bridgeMesh, this.buildBridges(bridges, new Set(cells)), bridges.length > 0);
+    this.swapGeometry(this.roadLaneMesh, roadLanes.build(), landRoadCount > 0);
+    this.swapGeometry(this.bridgeMesh, this.buildBridges(bridges, roadCellSet), bridges.length > 0);
+  }
+
+  private addLaneMarking(
+    b: GeometryBuilder,
+    roadCells: ReadonlySet<number>,
+    index: number,
+    x: number,
+    z: number,
+  ): void {
+    const w = this.gridWidth;
+    const hasW = x > 0 && roadCells.has(index - 1);
+    const hasE = x < w - 1 && roadCells.has(index + 1);
+    const hasN = z > 0 && roadCells.has(index - w);
+    const hasS = z < w - 1 && roadCells.has(index + w);
+    const horizontal = hasW || hasE;
+    const vertical = hasN || hasS || !horizontal;
+    const halfWidth = ROAD_LANE_MARKING_WIDTH / 2;
+    const halfLength = ROAD_LANE_MARKING_LENGTH / 2;
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    if (vertical) {
+      b.quad(cx - halfWidth, cz - halfLength, cx + halfWidth, cz + halfLength, ROAD_LANE_MARKING_Y);
+    }
+    if (horizontal) {
+      b.quad(cx - halfLength, cz - halfWidth, cx + halfLength, cz + halfWidth, ROAD_LANE_MARKING_Y);
+    }
   }
 
   private buildBridges(bridges: readonly number[], roadCells: ReadonlySet<number>): BufferGeometry {
