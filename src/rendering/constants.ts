@@ -51,13 +51,20 @@ export const HIGHWAY_DASH_GAP = 0.55;
 
 // Trees.
 export const TREE_TRUNK_COLOR = 0x5d3f2a;
-export const TREE_CANOPY_COLOR = 0x2f6f35;
+export const TREE_CANOPY_COLOR = 0x3f7438;
+export const TREE_CANOPY_HIGHLIGHT_COLOR = 0x5b9149;
+export const TREE_CANOPY_EMISSIVE_INTENSITY = 0.1;
 export const TREE_TRUNK_HEIGHT = 0.35;
 export const TREE_TRUNK_RADIUS = 0.06;
-export const TREE_CANOPY_HEIGHT = 0.85;
-export const TREE_CANOPY_RADIUS = 0.32;
-export const TREE_SCALE_MIN = 0.8;
-export const TREE_SCALE_RANGE = 0.5;
+export const TREE_CANOPY_HEIGHT = 0.72;
+export const TREE_CANOPY_RADIUS = 0.38;
+export const TREE_UPPER_CANOPY_HEIGHT = 0.62;
+export const TREE_UPPER_CANOPY_RADIUS = 0.27;
+export const TREE_UPPER_CANOPY_LIFT = 0.48;
+export const TREE_CANOPY_HUE_JITTER = 0.018;
+export const TREE_CANOPY_LIGHT_JITTER = 0.055;
+export const TREE_SCALE_MIN = 0.75;
+export const TREE_SCALE_RANGE = 0.55;
 
 // Zone tint overlay (translucent quads over zoned-but-empty cells).
 export const ZONE_TINT_OPACITY = 0.45;

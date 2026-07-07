@@ -1,8 +1,10 @@
 import {
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DynamicDrawUsage,
   Group,
+  InstancedBufferAttribute,
   InstancedMesh,
   Matrix4,
   MeshLambertMaterial,
@@ -12,13 +14,20 @@ import {
 import {
   cellHash01,
   TREE_CANOPY_COLOR,
+  TREE_CANOPY_EMISSIVE_INTENSITY,
+  TREE_CANOPY_HIGHLIGHT_COLOR,
   TREE_CANOPY_HEIGHT,
+  TREE_CANOPY_HUE_JITTER,
+  TREE_CANOPY_LIGHT_JITTER,
   TREE_CANOPY_RADIUS,
   TREE_SCALE_MIN,
   TREE_SCALE_RANGE,
   TREE_TRUNK_COLOR,
   TREE_TRUNK_HEIGHT,
   TREE_TRUNK_RADIUS,
+  TREE_UPPER_CANOPY_HEIGHT,
+  TREE_UPPER_CANOPY_LIFT,
+  TREE_UPPER_CANOPY_RADIUS,
 } from './constants';
 
 /** Plain-data view of the tree mask (mirrors protocol TerrainPayload). */
@@ -29,18 +38,22 @@ export interface TreesData {
 }
 
 const ROTATION_HASH_OFFSET = 0x9e3779b9;
+const CANOPY_HUE_HASH_OFFSET = 0x85ebca6b;
+const CANOPY_LIGHT_HASH_OFFSET = 0xc2b2ae35;
 const UP = new Vector3(0, 1, 0);
+const COLOR = new Color();
 
 /**
- * Decorative trees as two InstancedMeshes (trunks + canopies) sharing one
- * instance layout. Trees on occupied cells (roads and building footprints)
- * are hidden by rebuilding the instance buffer whenever the occupied set
- * changes (infrequent and cheap, so a full rebuild is fine).
+ * Decorative trees as synchronized instanced trunks + two-tier canopies.
+ * Trees on occupied cells (roads and building footprints) are hidden by
+ * rebuilding the instance buffer whenever the occupied set changes
+ * (infrequent and cheap, so a full rebuild is fine).
  */
 export class TreesView {
   readonly group = new Group();
   private readonly trunks: InstancedMesh;
-  private readonly canopies: InstancedMesh;
+  private readonly lowerCanopies: InstancedMesh;
+  private readonly upperCanopies: InstancedMesh;
   private readonly treeCells: number[] = [];
   private readonly width: number;
 
@@ -58,24 +71,47 @@ export class TreesView {
       5,
     );
     trunkGeometry.translate(0, TREE_TRUNK_HEIGHT / 2, 0);
-    const canopyGeometry = new ConeGeometry(TREE_CANOPY_RADIUS, TREE_CANOPY_HEIGHT, 6);
-    canopyGeometry.translate(0, TREE_TRUNK_HEIGHT + TREE_CANOPY_HEIGHT / 2, 0);
+    const lowerCanopyGeometry = new ConeGeometry(TREE_CANOPY_RADIUS, TREE_CANOPY_HEIGHT, 6);
+    lowerCanopyGeometry.translate(0, TREE_TRUNK_HEIGHT + TREE_CANOPY_HEIGHT / 2, 0);
+    const upperCanopyGeometry = new ConeGeometry(TREE_UPPER_CANOPY_RADIUS, TREE_UPPER_CANOPY_HEIGHT, 6);
+    upperCanopyGeometry.translate(
+      0,
+      TREE_TRUNK_HEIGHT + TREE_UPPER_CANOPY_LIFT + TREE_UPPER_CANOPY_HEIGHT / 2,
+      0,
+    );
 
     this.trunks = new InstancedMesh(
       trunkGeometry,
       new MeshLambertMaterial({ color: TREE_TRUNK_COLOR }),
       capacity,
     );
-    this.canopies = new InstancedMesh(
-      canopyGeometry,
-      new MeshLambertMaterial({ color: TREE_CANOPY_COLOR }),
+    this.lowerCanopies = new InstancedMesh(
+      lowerCanopyGeometry,
+      new MeshLambertMaterial({
+        color: 0xffffff,
+        emissive: TREE_CANOPY_COLOR,
+        emissiveIntensity: TREE_CANOPY_EMISSIVE_INTENSITY,
+      }),
       capacity,
     );
-    for (const mesh of [this.trunks, this.canopies]) {
+    this.upperCanopies = new InstancedMesh(
+      upperCanopyGeometry,
+      new MeshLambertMaterial({
+        color: 0xffffff,
+        emissive: TREE_CANOPY_HIGHLIGHT_COLOR,
+        emissiveIntensity: TREE_CANOPY_EMISSIVE_INTENSITY,
+      }),
+      capacity,
+    );
+    for (const mesh of [this.trunks, this.lowerCanopies, this.upperCanopies]) {
       mesh.instanceMatrix.setUsage(DynamicDrawUsage);
       mesh.frustumCulled = false;
       mesh.castShadow = true;
       this.group.add(mesh);
+    }
+    for (const mesh of [this.lowerCanopies, this.upperCanopies]) {
+      mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+      mesh.instanceColor.setUsage(DynamicDrawUsage);
     }
     this.group.name = 'trees';
     this.updateOccupied(new Set());
@@ -98,12 +134,23 @@ export class TreesView {
       scale.set(s, s, s);
       matrix.compose(position, rotation, scale);
       this.trunks.setMatrixAt(used, matrix);
-      this.canopies.setMatrixAt(used, matrix);
+      this.lowerCanopies.setMatrixAt(used, matrix);
+      this.upperCanopies.setMatrixAt(used, matrix);
+      const hueJit = (cellHash01(index + CANOPY_HUE_HASH_OFFSET) - 0.5) * TREE_CANOPY_HUE_JITTER;
+      const lightJit = (cellHash01(index + CANOPY_LIGHT_HASH_OFFSET) - 0.5) * TREE_CANOPY_LIGHT_JITTER;
+      this.lowerCanopies.setColorAt(used, COLOR.setHex(TREE_CANOPY_COLOR).offsetHSL(hueJit, 0, lightJit));
+      this.upperCanopies.setColorAt(
+        used,
+        COLOR.setHex(TREE_CANOPY_HIGHLIGHT_COLOR).offsetHSL(hueJit, 0, lightJit * 0.8),
+      );
       used++;
     }
     this.trunks.count = used;
-    this.canopies.count = used;
-    this.trunks.instanceMatrix.needsUpdate = true;
-    this.canopies.instanceMatrix.needsUpdate = true;
+    this.lowerCanopies.count = used;
+    this.upperCanopies.count = used;
+    for (const mesh of [this.trunks, this.lowerCanopies, this.upperCanopies]) {
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
   }
 }

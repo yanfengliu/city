@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — AoE2-style visual playtest loop: richer forest silhouettes
+
+Follow-up playtest after the roof-silhouette pass: the boot and mixed-district screenshots showed a readable map, but forests still dominated the view as identical single-cone placeholders.
+
+Shipped: a rendering-only forest silhouette pass. The existing tree view now keeps the same occupancy-driven rebuild contract, but renders synchronized trunks plus lower and upper canopy instances. Canopies use deterministic scale, rotation, hue, and lightness variation, with a small green emissive floor so forest clusters stay readable instead of collapsing into black shadow at strategy zoom.
+
+Browser evidence: `.shots/aoe2-forest-boot.png` shows the retuned forest masses across the opening map; `.shots/aoe2-forest-clearing-close.png` shows real road/zoning/growth input clearing trees around a small district while the surrounding woods keep the richer two-tier silhouette. These are ignored local evidence files, not committed artifacts.
+
+Verification after reviewer fixes: `npm test` 124/124, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Adversarial review: sim-boundary/determinism/docs reviewer found stale verification wording, fixed in this entry; rendering/perf reviewer found no blockers and flagged two polish details, both fixed by making canopy instance colors absolute over white materials and trimming max tree scale so large canopies stay inside cleared-cell boundaries.
+
 ### 2026-07-07 — AoE2-style visual playtest loop: stronger roof silhouettes
 
 Follow-up playtest after the palette/night pass: boot and small-district screenshots showed the world is readable, but growable buildings still read as plain extruded blocks at play zoom.
