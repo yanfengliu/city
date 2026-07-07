@@ -5,7 +5,11 @@ import {
   createCityVisualPlaytestHost,
 } from '../../src/harness/visual';
 import type { HarnessApi } from '../../src/harness/api';
-import type { PlaytestFinding, RecordedFinding } from '../../src/harness/findings';
+import {
+  recordedFindingFromPlaytestFinding,
+  type PlaytestFinding,
+  type RecordedFinding,
+} from '../../src/harness/findings';
 import type { SelfCheckSummary } from '../../src/harness/inspect';
 import type { PlayerInput } from '../../src/harness/player';
 import type { CommandName } from '../../src/protocol/messages';
@@ -36,13 +40,15 @@ function stubHarness() {
     },
   };
   const findings: RecordedFinding[] = [
-    {
-      tick: 3,
-      category: 'visual',
-      severity: 'low',
-      area: 'roads',
-      observed: 'Road preview is faint',
-    },
+    recordedFindingFromPlaytestFinding(
+      {
+        category: 'visual',
+        severity: 'low',
+        area: 'roads',
+        observed: 'Road preview is faint',
+      },
+      3,
+    ),
   ];
   const api: HarnessApi = {
     player,

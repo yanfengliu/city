@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-07 — Recursive self-improvement loop alignment
+
+City's harness has been aligned with civ-engine's v1.4.0 recursive improvement finding contract. Playtest annotations still accept the compact city `PlaytestFinding` shape, but marker writing now promotes every finding into a shared `ImprovementFinding` with tick evidence, lifecycle defaults (`unverified`, `proposalOnly`, `candidate`), visual marker compatibility, and the legacy `data.playtestFinding` payload for old bundles. Live `__harness.findings()` now exposes the canonical `improvement` object immediately, and bundle reads synthesize the loop payload for legacy city or visual-only markers.
+
+TDD: RED `tests/harness/replay-harness.test.ts` first failed because city markers lacked `data.improvementLoop`, legacy marker reads did not synthesize loop payloads, and `playtestFindingToImprovementFinding` did not exist. GREEN focused harness verification now covers the shared improvement envelope, visual compatibility, legacy marker migration, live visual-host recorded-findings state, and lifecycle classification fields. `npm install` re-resolved the local `file:../civ-engine` package metadata and reported 0 vulnerabilities.
+
+Verification: `npm test` 145/145, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. Build still emits Vite's pre-existing >500 kB chunk warning but exits successfully. Local adversarial review found and fixed one consistency issue: live `__harness.findings()` initially exposed loop defaults only inside `improvement`, while bundle reads surfaced them at top level too; `recordedFindingFromPlaytestFinding` now returns the same lifecycle/evidence shape for both paths. Review also tightened the exported visual conversion helper so visual evidence receives tick/screenshot-compatible loop evidence instead of only the tick.
+
 ### 2026-07-07 — Cities: Skylines-style visual playtest loop: modern zoning and RCI palette
 
 Fresh playtest after the asphalt-road pass showed the top HUD and roads had shifted strongly toward a modern civic-planning read, but the growing district still carried two warm old-settlement signals: empty zone details looked like beige construction pads, and live RCI buildings used tan/red/brown material colors. This round stayed renderer-only and retargeted planning overlays plus growable building materials toward the Cities: Skylines direction.

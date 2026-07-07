@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  IMPROVEMENT_FINDING_SCHEMA_VERSION,
   MemorySink,
   SessionRecorder,
+  improvementFindingsFromMarkers,
   visualPlaytestFindingsFromMarkers,
   type SessionBundle,
 } from 'civ-engine';
 import { createCitySim, type CitySimConfig } from '../../src/sim/city';
 import { buildDistrict, findLandBlock } from '../sim/helpers';
-import { findingToMarker, findingsFromMarkers } from '../../src/harness/findings';
+import {
+  findingToMarker,
+  findingsFromMarkers,
+  playtestFindingToImprovementFinding,
+  playtestFindingToVisualFinding,
+} from '../../src/harness/findings';
 import { inspectBundle, selfCheckBundle } from '../../src/harness/inspect';
 import type { CityCommands, CityEvents } from '../../src/sim/types';
 
@@ -115,13 +122,14 @@ describe('playtest harness pipeline', () => {
     expect(real.checkedSegments).toBeGreaterThan(0);
   });
 
-  it('stores visual playtest marker data while preserving legacy finding reads', () => {
+  it('stores recursive improvement loop marker data while preserving visual and legacy finding reads', () => {
     const marker = findingToMarker(
       {
         category: 'ux',
         severity: 'high',
         area: 'onboarding',
         observed: 'The founding tip is hidden behind the HUD',
+        expected: 'The first build tip stays visible while the HUD is open',
         suggestion: 'Move the tip below the top bar',
       },
       42,
@@ -137,13 +145,35 @@ describe('playtest harness pipeline', () => {
           severity: 'high',
           area: 'onboarding',
           observed: 'The founding tip is hidden behind the HUD',
+          expected: 'The first build tip stays visible while the HUD is open',
           evidence: { tick: 42 },
+        },
+      },
+      improvementLoop: {
+        schemaVersion: IMPROVEMENT_FINDING_SCHEMA_VERSION,
+        type: 'finding',
+        finding: {
+          schemaVersion: IMPROVEMENT_FINDING_SCHEMA_VERSION,
+          id: expect.stringMatching(/^city-42-onboarding-ux-/),
+          title: 'onboarding: The founding tip is hidden behind the HUD',
+          category: 'usability',
+          severity: 'high',
+          area: 'onboarding',
+          observed: 'The founding tip is hidden behind the HUD',
+          expected: 'The first build tip stays visible while the HUD is open',
+          suggestion: 'Move the tip below the top bar',
+          evidence: [{ kind: 'tick', tick: 42 }],
+          verificationStatus: 'unverified',
+          nextAction: 'proposalOnly',
+          disposition: 'candidate',
+          data: { cityFindingCategory: 'ux' },
         },
       },
       playtestFinding: {
         category: 'ux',
         severity: 'high',
         area: 'onboarding',
+        expected: 'The first build tip stays visible while the HUD is open',
       },
     });
 
@@ -163,8 +193,37 @@ describe('playtest harness pipeline', () => {
         severity: 'high',
         area: 'onboarding',
         observed: 'The founding tip is hidden behind the HUD',
+        expected: 'The first build tip stays visible while the HUD is open',
         suggestion: 'Move the tip below the top bar',
+        verificationStatus: 'unverified',
+        nextAction: 'proposalOnly',
+        disposition: 'candidate',
+        evidence: [{ kind: 'tick', tick: 42 }],
+        improvement: expect.objectContaining({
+          verificationStatus: 'unverified',
+          nextAction: 'proposalOnly',
+          disposition: 'candidate',
+          data: { cityFindingCategory: 'ux' },
+        }),
       },
+    ]);
+    expect(
+      improvementFindingsFromMarkers([
+        {
+          id: 'm1',
+          tick: 42,
+          kind: 'annotation',
+          provenance: 'game',
+          data: marker.data,
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        schemaVersion: IMPROVEMENT_FINDING_SCHEMA_VERSION,
+        id: expect.stringMatching(/^city-42-onboarding-ux-/),
+        verificationStatus: 'unverified',
+        nextAction: 'proposalOnly',
+      }),
     ]);
     expect(
       visualPlaytestFindingsFromMarkers([
@@ -177,5 +236,104 @@ describe('playtest harness pipeline', () => {
         },
       ]),
     ).toHaveLength(1);
+  });
+
+  it('synthesizes a full loop finding for legacy marker bundles', () => {
+    const recorded = findingsFromMarkers([
+      {
+        id: 'legacy',
+        tick: 11,
+        kind: 'annotation',
+        provenance: 'game',
+        data: {
+          playtestFinding: {
+            category: 'bug',
+            severity: 'medium',
+            area: 'traffic',
+            observed: 'Vehicles stop forever at the first junction',
+          },
+        },
+      },
+    ]);
+
+    expect(recorded).toEqual([
+      {
+        tick: 11,
+        category: 'bug',
+        severity: 'medium',
+        area: 'traffic',
+        observed: 'Vehicles stop forever at the first junction',
+        verificationStatus: 'unverified',
+        nextAction: 'proposalOnly',
+        disposition: 'candidate',
+        evidence: [{ kind: 'tick', tick: 11 }],
+        improvement: expect.objectContaining({
+          schemaVersion: IMPROVEMENT_FINDING_SCHEMA_VERSION,
+          id: expect.stringMatching(/^city-11-traffic-bug-/),
+          category: 'bug',
+          verificationStatus: 'unverified',
+          nextAction: 'proposalOnly',
+          disposition: 'candidate',
+          evidence: [{ kind: 'tick', tick: 11 }],
+          data: { cityFindingCategory: 'bug' },
+        }),
+      },
+    ]);
+  });
+
+  it('lets city callers classify findings into the shared recursive-loop lifecycle', () => {
+    const finding = playtestFindingToImprovementFinding(
+      {
+        category: 'perf',
+        severity: 'medium',
+        area: 'large-city-render',
+        observed: 'Frame time spikes when 500 buildings level up together',
+        expected: 'The renderer keeps level-up effects bounded under mass growth',
+        suggestion: 'Pool and cap simultaneous level-up labels',
+        verificationStatus: 'verified',
+        nextAction: 'manualFix',
+        disposition: 'accepted',
+        evidence: [{ kind: 'metric', label: 'fps', value: '18' }],
+      },
+      128,
+    );
+
+    expect(finding).toMatchObject({
+      schemaVersion: IMPROVEMENT_FINDING_SCHEMA_VERSION,
+      id: expect.stringMatching(/^city-128-large-city-render-perf-/),
+      title: 'large-city-render: Frame time spikes when 500 buildings level up together',
+      category: 'performance',
+      severity: 'medium',
+      area: 'large-city-render',
+      observed: 'Frame time spikes when 500 buildings level up together',
+      expected: 'The renderer keeps level-up effects bounded under mass growth',
+      suggestion: 'Pool and cap simultaneous level-up labels',
+      verificationStatus: 'verified',
+      nextAction: 'manualFix',
+      disposition: 'accepted',
+      evidence: [
+        { kind: 'tick', tick: 128 },
+        { kind: 'metric', label: 'fps', value: '18' },
+      ],
+      data: { cityFindingCategory: 'perf' },
+    });
+    expect(
+      playtestFindingToVisualFinding(
+        {
+          category: 'perf',
+          severity: 'medium',
+          area: 'large-city-render',
+          observed: 'Frame time spikes when 500 buildings level up together',
+          evidence: [
+            { kind: 'metric', label: 'fps', value: '18' },
+            { kind: 'screenshot', screenshotPath: 'artifacts/large-city.png' },
+          ],
+        },
+        128,
+      ).evidence,
+    ).toMatchObject({
+      tick: 128,
+      screenshotPath: 'artifacts/large-city.png',
+    });
   });
 });

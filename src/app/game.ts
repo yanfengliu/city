@@ -46,7 +46,12 @@ import type {
   TerrainPayload,
   WorkerToClient,
 } from '../protocol/messages';
-import { normalizeFinding, type PlaytestFinding, type RecordedFinding } from '../harness/findings';
+import {
+  normalizeFinding,
+  recordedFindingFromPlaytestFinding,
+  type PlaytestFinding,
+  type RecordedFinding,
+} from '../harness/findings';
 import type { SelfCheckSummary } from '../harness/inspect';
 import { createPlayerInput, type PlayerInput } from '../harness/player';
 import type { SimSummary } from '../sim/summary';
@@ -400,7 +405,7 @@ export class Game {
         this.hud.showToast(`Command rejected: ${message.message}`);
         break;
       case 'annotated':
-        this.harnessFindings.push({ tick: message.tick, ...message.finding });
+        this.harnessFindings.push(recordedFindingFromPlaytestFinding(message.finding, message.tick));
         break;
       case 'bundle':
         this.harnessFindings = message.findings.slice();
