@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 
 # LLM playtest harness screenshot sink (dev-only, see vite.config.ts shotSink)
 .shots/
+
+# Playtest artifacts (append-only local history; never committed)
+output/

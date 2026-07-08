@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout city
+        uses: actions/checkout@v4
+        with:
+          path: city
+
+      # civ-engine is a file:../civ-engine dependency — check the sibling out
+      # and build its dist so city's install resolves exactly like local dev.
+      # Tracks the engine's main deliberately — local dev consumes the live
+      # sibling via file:../civ-engine, and the repos co-evolve in lockstep.
+      - name: Checkout civ-engine (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: yanfengliu/civ-engine
+          ref: main
+          path: civ-engine
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build civ-engine dist
+        working-directory: civ-engine
+        run: |
+          npm install
+          npm run build
+
+      - name: Install city
+        working-directory: city
+        run: npm install
+
+      - name: Test (includes the SessionReplayer.selfCheck determinism gate)
+        working-directory: city
+        run: npm test
+
+      - name: Typecheck
+        working-directory: city
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: city
+        run: npm run lint
+
+      - name: Build
+        working-directory: city
+        run: npm run build

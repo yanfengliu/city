@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "playtest:llm": "node scripts/llm-visual-loop.mjs"
   },
   "dependencies": {
     "civ-engine": "file:../civ-engine",
@@ -23,6 +24,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
     "vite": "^8.1.2",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "@playwright/test": "^1.57.0"
   }
 }

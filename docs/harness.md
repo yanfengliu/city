@@ -128,8 +128,14 @@ run -> record -> find -> verify -> classify -> promote/propose -> review -> reru
 
 `tests/harness/visual-host.test.ts` verifies the civ-engine visual host adapter browser-free: observations include screenshot/text/controls/state channels, and `runVisualPlaytestLoop()` drives HUD clicks, point clicks, drags, keys, waits, stops, and annotations through the existing `player`/`advance` surface without touching the `command` backdoor.
 
-## Deferred (possible extensions)
+## Autonomous loop (`npm run playtest:llm`)
 
-- An autonomous runner (Playwright + an LLM-agent decision loop + cost budget) like aoe2's `playtest-llm.mjs`, for unattended campaigns. The player-surface observation, shared findings, replay verification, and bundle evidence core here is exactly what that runner would sit on.
+`scripts/llm-visual-loop.mjs` is the unattended runner: it boots the vite dev server plus headless Chromium, proxies civ-engine's `runVisualPlaytestLoop` through the in-page `window.__harness.visualHost()` (real pointer/keyboard events; the `command()` backdoor is never touched — pinned by `tests/harness/llm-loop-script.test.ts`), and runs with the engine's hardened options: `promptMode: 'oracleAssisted'`, `agentObservation: 'redacted'` (the engine enforces the hidden-state wall at the agent boundary), `onActionFailure: 'continue'`, and wall-clock/action budgets.
+
+The default agent is a deterministic scripted bootstrapper (road, R/C zones, coal plant + line, then watch) so the command runs without API keys. Set `CITY_LLM_VISUAL_LOOP_COMMAND` to plug in an LLM: the command receives `{step, promptParts, controls}` on stdin — `promptParts` come from civ-engine's `buildVisualPlaytestPromptParts`, so the screenshot arrives as a typed image part — and prints a decision JSON on stdout. Tune with `CITY_VISUAL_LOOP_STEPS` and `CITY_VISUAL_LOOP_WALL_CLOCK_MS`; `CITY_PLAYTEST_URL` reuses a running server.
+
+Each run persists append-only evidence under `output/playtests-llm/<stamp>/`: the exported session `bundle.json`, `findings.json`, `result.json` (loop outcome + replay self-check verification with skipped segments normalized to a count), and a validated engine `createImprovementRunManifest` `manifest.json`; every manifest is also appended to `output/playtests-llm/ledger.jsonl` so cross-run tooling can join ledger rows to their bundles via `sessionId`/`bundleId`.
+
+## Deferred (possible extensions)
 - Rendering markers on a scrubbable in-app replay timeline (aoe2 gets this for free from its replay UI; the city has no replay UI yet — `replayTo` covers the interactive need).
 - Wiring civ-engine's MCP corpus server over a directory of exported bundles for cross-run trend analysis.
