@@ -9,7 +9,7 @@ import type {
 } from 'civ-engine';
 import { TOOL_GROUPS } from '../app/tools';
 import type { HarnessApi } from './api';
-import { visualFindingToPlaytestFinding } from './findings';
+import { visualFindingToCityFinding } from './findings';
 
 export interface CityVisualObservationOptions {
   screenshotQuality?: number;
@@ -95,7 +95,7 @@ export function createCityVisualPlaytestHost(
     observe: () => cityVisualObservation(api, options),
     performAction: (action) => performCityVisualAction(api, action, options),
     annotate: (finding: VisualPlaytestFinding) => {
-      api.annotate(visualFindingToPlaytestFinding(finding));
+      api.annotate(visualFindingToCityFinding(finding));
     },
   };
 }

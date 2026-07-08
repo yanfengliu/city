@@ -7,7 +7,7 @@ import type {
   TaxRates,
   ZoneType,
 } from '../sim/types';
-import type { PlaytestFinding, RecordedFinding } from '../harness/findings';
+import type { CityImprovementFindingInput, RecordedFinding } from '../harness/findings';
 import type { SelfCheckSummary } from '../harness/inspect';
 import type { SimSummary } from '../sim/summary';
 
@@ -38,7 +38,7 @@ export type ClientToWorker =
   | { type: 'setFieldSubscriptions'; fields: FieldName[] }
   /** Playtest harness (see docs/harness.md): record a finding as a marker at
    * the current tick. */
-  | { type: 'annotate'; finding: PlaytestFinding }
+  | { type: 'annotate'; finding: CityImprovementFindingInput }
   /** Export the recorded session bundle (with findings). `id` correlates the reply. */
   | { type: 'requestBundle'; id: number }
   /** Replay the recorded session to `tick` and return the exact state there. */
@@ -168,7 +168,7 @@ export type WorkerToClient =
   /** Save response: the serialized world + metadata for persistence. */
   | { type: 'snapshot'; snapshot: unknown; meta: SaveMeta }
   /** Harness: a finding was recorded, anchored to `tick`. */
-  | { type: 'annotated'; tick: number; finding: PlaytestFinding }
+  | { type: 'annotated'; tick: number; finding: CityImprovementFindingInput }
   /** Harness: the exported session bundle + its findings (`id` correlates the request). */
   | { type: 'bundle'; id: number; bundle: unknown; findings: RecordedFinding[] }
   /** Harness: 3-stream determinism self-check result (null + error on failure). */

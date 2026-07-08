@@ -10,10 +10,10 @@ import {
 import { createCitySim, type CitySimConfig } from '../../src/sim/city';
 import { buildDistrict, findLandBlock } from '../sim/helpers';
 import {
-  findingToMarker,
+  cityFindingToImprovementFinding,
+  cityFindingToMarker,
+  cityFindingToVisualFinding,
   findingsFromMarkers,
-  playtestFindingToImprovementFinding,
-  playtestFindingToVisualFinding,
 } from '../../src/harness/findings';
 import { inspectBundle, selfCheckBundle } from '../../src/harness/inspect';
 import type { CityCommands, CityEvents } from '../../src/sim/types';
@@ -43,7 +43,7 @@ describe('playtest harness pipeline', () => {
     // What the browser __harness.annotate does: a finding marker at the tick.
     const findingTick = sim.world.tick;
     recorder.addMarker(
-      findingToMarker(
+      cityFindingToMarker(
         {
           category: 'balance',
           severity: 'medium',
@@ -122,8 +122,8 @@ describe('playtest harness pipeline', () => {
     expect(real.checkedSegments).toBeGreaterThan(0);
   });
 
-  it('stores recursive improvement loop marker data while preserving visual and legacy finding reads', () => {
-    const marker = findingToMarker(
+  it('stores standardized improvement loop marker data without emitting legacy finding payloads', () => {
+    const marker = cityFindingToMarker(
       {
         category: 'ux',
         severity: 'high',
@@ -169,13 +169,8 @@ describe('playtest harness pipeline', () => {
           data: { cityFindingCategory: 'ux' },
         },
       },
-      playtestFinding: {
-        category: 'ux',
-        severity: 'high',
-        area: 'onboarding',
-        expected: 'The first build tip stays visible while the HUD is open',
-      },
     });
+    expect(marker.data).not.toHaveProperty('playtestFinding');
 
     const recorded = findingsFromMarkers([
       {
@@ -282,7 +277,7 @@ describe('playtest harness pipeline', () => {
   });
 
   it('lets city callers classify findings into the shared recursive-loop lifecycle', () => {
-    const finding = playtestFindingToImprovementFinding(
+    const finding = cityFindingToImprovementFinding(
       {
         category: 'perf',
         severity: 'medium',
@@ -318,7 +313,7 @@ describe('playtest harness pipeline', () => {
       data: { cityFindingCategory: 'perf' },
     });
     expect(
-      playtestFindingToVisualFinding(
+      cityFindingToVisualFinding(
         {
           category: 'perf',
           severity: 'medium',

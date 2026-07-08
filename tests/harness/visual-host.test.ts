@@ -6,8 +6,8 @@ import {
 } from '../../src/harness/visual';
 import type { HarnessApi } from '../../src/harness/api';
 import {
-  recordedFindingFromPlaytestFinding,
-  type PlaytestFinding,
+  recordedFindingFromCityFinding,
+  type CityImprovementFindingInput,
   type RecordedFinding,
 } from '../../src/harness/findings';
 import type { SelfCheckSummary } from '../../src/harness/inspect';
@@ -23,7 +23,7 @@ function stubHarness() {
     key: [] as string[],
     advance: [] as number[],
     command: [] as string[],
-    annotate: [] as Partial<PlaytestFinding>[],
+    annotate: [] as Partial<CityImprovementFindingInput>[],
   };
   const player: PlayerInput = {
     screenshot: () => 'data:image/jpeg;base64,abc123',
@@ -40,7 +40,7 @@ function stubHarness() {
     },
   };
   const findings: RecordedFinding[] = [
-    recordedFindingFromPlaytestFinding(
+    recordedFindingFromCityFinding(
       {
         category: 'visual',
         severity: 'low',

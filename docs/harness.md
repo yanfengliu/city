@@ -19,7 +19,7 @@ Both were studied before building this (`../civ-engine`, `../aoe2`).
 **aoe2** proves the end-to-end shape for an LLM and supplies the patterns we copy:
 
 - In-browser agent API (`window.__AOE2_TEST__`): a **bounded** text snapshot, `advanceTicks(n)` with the sim **paused between calls**, `dispatchAgentCommand` with **rejection feedback fed back** to the next decision, and `getRecorderBundle()` to export the session.
-- Findings are structured (`category / area / observed / expected / severity / suggestion`) and are **injected into the bundle as engine `Marker`s**, so the replay timeline renders them for free — no bespoke annotation store. City now writes the shared `ImprovementFinding` envelope beside its legacy finding payload, so loop-aware tooling and older visual reports can read the same marker.
+- Findings are structured (`category / area / observed / expected / severity / suggestion`) and are **injected into the bundle as engine `Marker`s**, so the replay timeline renders them for free — no bespoke annotation store. City now writes the shared `ImprovementFinding` envelope for new runs and only reads legacy city payloads when migrating old bundles.
 - A headless `replay-inspect` script opens the bundle at sampled ticks and prints ground-truth state; findings are grounded in deterministic metrics computed from the trace before any LLM judgement.
 
 ## How it maps onto the city
@@ -27,7 +27,7 @@ Both were studied before building this (`../civ-engine`, `../aoe2`).
 The city runs the sim in a Web Worker; the main thread drives it with `{type:'command'}` / `advance` messages and observes via `render_game_to_text()` + frame diffs. So:
 
 - **Record** lives in the worker: a `SessionRecorder` connected to `world` from boot, torn down and restarted on New/Load (each city is one session, seeded by `currentSeed`).
-- **Annotate** is a main-thread -> worker message that normalizes a `PlaytestFinding`, maps it into civ-engine's shared `ImprovementFinding`, and calls `recorder.addMarker(improvementFindingToMarker(...))` with the worker's current tick. The marker also preserves the legacy city finding under `data.playtestFinding`.
+- **Annotate** is a main-thread -> worker message that normalizes a `CityImprovementFindingInput`, maps it into civ-engine's shared `ImprovementFinding`, and calls `recorder.addMarker(improvementFindingToMarker(...))` with the worker's current tick. New markers do not emit `data.playtestFinding`; that shape is read only for old bundles.
 - **Replay-debug** is `inspectAt(tick)`: the worker folds `snapshotAtTick(recorder.toBundle(), tick)` into a throwaway probe sim (the live world is untouched) and returns the exact deterministic `simSummary` there — so you can jump to any finding's tick and read ground-truth state without a world swap.
 - **Verify** with `SessionReplayer.selfCheck()` — the same check the project already gates on.
 
@@ -44,8 +44,8 @@ Installed **only in the dev build** (`import.meta.env.DEV`), matching the DEV-ga
 | `state()` | Bounded JSON game state (alias of `render_game_to_text()`). |
 | `advance(ms)` | Step the sim forward (alias of `advanceTime`); the sim otherwise runs at the HUD speed. |
 | `command(name, data)` | Submit a sim command by name (the same path the tools use). |
-| `annotate(finding)` | Record a `PlaytestFinding` as a shared recursive-loop marker at the current worker tick. Defaults are conservative: `verificationStatus: "unverified"`, `nextAction: "proposalOnly"`, `disposition: "candidate"`. |
-| `findings()` | The findings recorded this session (authoritative worker ticks), each with the legacy city fields plus a canonical `improvement: ImprovementFinding` payload. |
+| `annotate(finding)` | Record a `CityImprovementFindingInput` as a shared recursive-loop marker at the current worker tick. Defaults are conservative: `verificationStatus: "unverified"`, `nextAction: "proposalOnly"`, `disposition: "candidate"`. |
+| `findings()` | The findings recorded this session (authoritative worker ticks), each with city-local input fields plus a canonical `improvement: ImprovementFinding` payload. |
 | `inspectAt(tick)` | Replay to `tick` and resolve the exact deterministic state there (`{ tick, summary }`); the tick is clamped to the recorded range, and `summary` is `null` (with `error`) if folding fails, so the call always settles. Also stashed on `lastInspection`. |
 | `selfCheck()` | Run civ-engine's 3-stream determinism check over the recorded session; returns `{ ok, checkedSegments, ... }` (or `null` + `error` on failure). Also stashed on `lastSelfCheck`. |
 | `getBundle()` | The full annotated `SessionBundle` (commands + snapshots + markers) for offline analysis / regression; also stashed on `lastBundle`. |
@@ -76,10 +76,10 @@ The camera must **frame** a cell for `where`/`dragMap`/`tapMap` to reach it — 
 
 Action mapping preserves the "real player surface" rule: `click` with `target: "hud:<label>"` calls `player.hud(label)`, `click` with `point` calls `player.clickAt`, `drag` calls `player.dragAt`, `key` calls `player.key`, `wait` calls `advance(ms)`, and `stop` returns success. Unsupported generic actions (`hover`, `type`, `wheel`, `select`, `viewport`) are not advertised and still fail closed if supplied directly, so a loop cannot silently use a capability the city has not exposed. The adapter intentionally does not call `command(name,data)`.
 
-## Finding format (`PlaytestFinding`)
+## Finding format (`CityImprovementFindingInput`)
 
 ```ts
-interface PlaytestFinding {
+interface CityImprovementFindingInput {
   category: 'bug' | 'balance' | 'ux' | 'missing-feature' | 'visual' | 'perf';
   severity: 'low' | 'medium' | 'high';
   area: string;                  // free-form subsystem, e.g. 'onboarding', 'traffic', 'economy'
@@ -95,9 +95,9 @@ interface PlaytestFinding {
 }
 ```
 
-The city-facing type stays compact so visual agents can annotate quickly, but the marker writer promotes it into civ-engine's v1.4.0 `ImprovementFinding` contract. Defaults are deliberately cautious: new observations start as `unverified`, `proposalOnly`, and `candidate` until replay/state/screenshot evidence confirms them.
+The city-facing type stays compact so visual agents can annotate quickly, but the marker writer promotes it into civ-engine's v1.4.0 `ImprovementFinding` contract. Defaults are deliberately cautious: new observations start as `unverified`, `proposalOnly`, and `candidate` until replay/state/screenshot evidence confirms them. The older `PlaytestFinding` type and legacy helper names remain as deprecated aliases only; do not use them for new loop code.
 
-Stored as a civ-engine `Marker` with three compatible payloads: `data.improvementLoop` for the recursive loop, `data.visualPlaytest` for existing visual reports, and `data.playtestFinding` for legacy city readers. `findingsFromMarkers()` reads the improvement payload first, synthesizes one for old `playtestFinding` markers, and still falls back to `visualPlaytestFindingsFromMarkers()` for visual-only markers.
+Stored as a civ-engine `Marker` with standardized payloads: `data.improvementLoop` for the recursive loop and `data.visualPlaytest` for visual reports. New markers intentionally do not write `data.playtestFinding`; `findingsFromMarkers()` only reads that old payload when migrating legacy bundles, synthesizes a current `ImprovementFinding`, and still falls back to `visualPlaytestFindingsFromMarkers()` for visual-only markers.
 
 ## Headless summary
 
@@ -122,7 +122,7 @@ run -> record -> find -> verify -> classify -> promote/propose -> review -> reru
 
 ## Verified by
 
-`tests/harness/replay-harness.test.ts` records a scripted session, annotates a marker, replays via `SessionReplayer`, asserts `selfCheck().ok`, and checks `simSummary` at the marker tick — the whole pipeline, browser-free. It also pins the v1.4.0 `ImprovementFinding` payload, visual marker compatibility, and synthetic improvement payloads for legacy city markers.
+`tests/harness/replay-harness.test.ts` records a scripted session, annotates a marker, replays via `SessionReplayer`, asserts `selfCheck().ok`, and checks `simSummary` at the marker tick — the whole pipeline, browser-free. It also pins the v1.4.0 `ImprovementFinding` payload, visual marker compatibility, the absence of new `data.playtestFinding` payloads, and synthetic improvement payloads for legacy city markers.
 
 `tests/harness/visual-host.test.ts` verifies the civ-engine visual host adapter browser-free: observations include screenshot/text/controls/state channels, and `runVisualPlaytestLoop()` drives HUD clicks, point clicks, drags, keys, waits, stops, and annotations through the existing `player`/`advance` surface without touching the `command` backdoor.
 

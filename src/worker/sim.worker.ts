@@ -1,7 +1,7 @@
 import { MemorySink, SessionRecorder, snapshotAtTick, type SessionBundle } from 'civ-engine';
 import { footprintCells } from '../sim/buildings';
 import { createCitySim, getTreasury, rebuildDerived, type CitySimConfig } from '../sim/city';
-import { findingToMarker, findingsFromMarkers } from '../harness/findings';
+import { cityFindingToMarker, findingsFromMarkers } from '../harness/findings';
 import { selfCheckBundle } from '../harness/inspect';
 import { simSummary } from '../sim/summary';
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
@@ -424,7 +424,7 @@ addEventListener('message', (event) => {
     case 'annotate': {
       if (!recorder) break;
       const tick = world.tick;
-      recorder.addMarker(findingToMarker(message.finding, tick));
+      recorder.addMarker(cityFindingToMarker(message.finding, tick));
       post({ type: 'annotated', tick, finding: message.finding });
       break;
     }

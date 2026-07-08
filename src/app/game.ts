@@ -47,9 +47,9 @@ import type {
   WorkerToClient,
 } from '../protocol/messages';
 import {
-  normalizeFinding,
-  recordedFindingFromPlaytestFinding,
-  type PlaytestFinding,
+  normalizeImprovementFindingInput,
+  recordedFindingFromCityFinding,
+  type CityImprovementFindingInput,
   type RecordedFinding,
 } from '../harness/findings';
 import type { SelfCheckSummary } from '../harness/inspect';
@@ -405,7 +405,7 @@ export class Game {
         this.hud.showToast(`Command rejected: ${message.message}`);
         break;
       case 'annotated':
-        this.harnessFindings.push(recordedFindingFromPlaytestFinding(message.finding, message.tick));
+        this.harnessFindings.push(recordedFindingFromCityFinding(message.finding, message.tick));
         break;
       case 'bundle':
         this.harnessFindings = message.findings.slice();
@@ -811,8 +811,8 @@ export class Game {
   }
 
   /** Record a finding as a marker at the current tick. */
-  annotate(finding: Partial<PlaytestFinding>): void {
-    this.send({ type: 'annotate', finding: normalizeFinding(finding) });
+  annotate(finding: Partial<CityImprovementFindingInput>): void {
+    this.send({ type: 'annotate', finding: normalizeImprovementFindingInput(finding) });
   }
 
   /** Findings recorded this session (populated as annotations round-trip). */

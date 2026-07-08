@@ -18,12 +18,6 @@ import {
   type VisualPlaytestFindingSeverity,
 } from 'civ-engine';
 
-/**
- * Structured playtest findings, adapted from aoe2's `ConformanceFinding`. A
- * finding is recorded as a civ-engine `annotation` marker anchored to the tick
- * it was observed at, so it round-trips through the replay bundle and can be
- * jumped to for debugging (see docs/harness.md).
- */
 export type FindingCategory =
   | 'bug'
   | 'balance'
@@ -34,7 +28,11 @@ export type FindingCategory =
 
 export type FindingSeverity = 'low' | 'medium' | 'high';
 
-export interface PlaytestFinding {
+/**
+ * City-local input for the standardized recursive improvement loop. Marker
+ * output is always promoted to civ-engine's `ImprovementFinding` contract.
+ */
+export interface CityImprovementFindingInput {
   category: FindingCategory;
   severity: FindingSeverity;
   /** Free-form subsystem, e.g. 'onboarding', 'traffic', 'economy'. */
@@ -59,8 +57,11 @@ export interface PlaytestFinding {
   refs?: MarkerRefs;
 }
 
+/** @deprecated Use `CityImprovementFindingInput`; new markers should standardize on `ImprovementFinding`. */
+export type PlaytestFinding = CityImprovementFindingInput;
+
 /** A finding as read back from the bundle, with the tick it was anchored to. */
-export interface RecordedFinding extends PlaytestFinding {
+export interface RecordedFinding extends CityImprovementFindingInput {
   tick: number;
   /** Canonical shared loop payload consumed by cross-game improvement tooling. */
   improvement: ImprovementFinding;
@@ -132,9 +133,11 @@ const EVIDENCE_KINDS: ReadonlySet<string> = new Set<ImprovementEvidenceRef['kind
   'text',
 ]);
 
-/** Clamps loosely-typed input (harness API surface) into a valid finding. */
-export function normalizeFinding(input: Partial<PlaytestFinding>): PlaytestFinding {
-  const out: PlaytestFinding = {
+/** Clamps loosely-typed input (harness API surface) into a standardized city loop input. */
+export function normalizeImprovementFindingInput(
+  input: Partial<CityImprovementFindingInput>,
+): CityImprovementFindingInput {
+  const out: CityImprovementFindingInput = {
     category: CATEGORIES.has(input.category as string) ? (input.category as FindingCategory) : 'bug',
     severity: SEVERITIES.has(input.severity as string)
       ? (input.severity as FindingSeverity)
@@ -161,11 +164,16 @@ export function normalizeFinding(input: Partial<PlaytestFinding>): PlaytestFindi
   return out;
 }
 
-export function playtestFindingToVisualFinding(
-  input: PlaytestFinding,
+/** @deprecated Use `normalizeImprovementFindingInput`. */
+export function normalizeFinding(input: Partial<CityImprovementFindingInput>): CityImprovementFindingInput {
+  return normalizeImprovementFindingInput(input);
+}
+
+export function cityFindingToVisualFinding(
+  input: CityImprovementFindingInput,
   tick?: number,
 ): VisualPlaytestFinding {
-  const finding = normalizeFinding(input);
+  const finding = normalizeImprovementFindingInput(input);
   const evidence = visualEvidenceFromImprovementEvidence(evidenceWithTick(finding.evidence, tick));
   return {
     title: `${finding.area}: ${finding.observed || finding.category}`,
@@ -180,8 +188,16 @@ export function playtestFindingToVisualFinding(
   };
 }
 
-export function visualFindingToPlaytestFinding(input: VisualPlaytestFinding): PlaytestFinding {
-  return normalizeFinding({
+/** @deprecated Use `cityFindingToVisualFinding`. */
+export function playtestFindingToVisualFinding(
+  input: CityImprovementFindingInput,
+  tick?: number,
+): VisualPlaytestFinding {
+  return cityFindingToVisualFinding(input, tick);
+}
+
+export function visualFindingToCityFinding(input: VisualPlaytestFinding): CityImprovementFindingInput {
+  return normalizeImprovementFindingInput({
     category: VISUAL_TO_LEGACY_CATEGORY[input.category],
     severity: VISUAL_TO_LEGACY_SEVERITY[input.severity],
     area: input.area ?? 'general',
@@ -193,11 +209,16 @@ export function visualFindingToPlaytestFinding(input: VisualPlaytestFinding): Pl
   });
 }
 
-export function playtestFindingToImprovementFinding(
-  input: PlaytestFinding,
+/** @deprecated Use `visualFindingToCityFinding`. */
+export function visualFindingToPlaytestFinding(input: VisualPlaytestFinding): CityImprovementFindingInput {
+  return visualFindingToCityFinding(input);
+}
+
+export function cityFindingToImprovementFinding(
+  input: CityImprovementFindingInput,
   tick?: number,
 ): ImprovementFinding {
-  const finding = normalizeFinding(input);
+  const finding = normalizeImprovementFindingInput(input);
   const observed = finding.observed || `${finding.category} finding`;
   const evidence = evidenceWithTick(finding.evidence, tick);
   return {
@@ -222,8 +243,16 @@ export function playtestFindingToImprovementFinding(
   };
 }
 
-export function improvementFindingToPlaytestFinding(input: ImprovementFinding): PlaytestFinding {
-  return normalizeFinding({
+/** @deprecated Use `cityFindingToImprovementFinding`. */
+export function playtestFindingToImprovementFinding(
+  input: CityImprovementFindingInput,
+  tick?: number,
+): ImprovementFinding {
+  return cityFindingToImprovementFinding(input, tick);
+}
+
+export function improvementFindingToCityFinding(input: ImprovementFinding): CityImprovementFindingInput {
+  return normalizeImprovementFindingInput({
     category: VISUAL_TO_LEGACY_CATEGORY[input.category],
     severity: VISUAL_TO_LEGACY_SEVERITY[input.severity],
     area: input.area ?? 'general',
@@ -239,12 +268,17 @@ export function improvementFindingToPlaytestFinding(input: ImprovementFinding): 
   });
 }
 
-export function recordedFindingFromPlaytestFinding(
-  input: Partial<PlaytestFinding>,
+/** @deprecated Use `improvementFindingToCityFinding`. */
+export function improvementFindingToPlaytestFinding(input: ImprovementFinding): CityImprovementFindingInput {
+  return improvementFindingToCityFinding(input);
+}
+
+export function recordedFindingFromCityFinding(
+  input: Partial<CityImprovementFindingInput>,
   tick: number,
 ): RecordedFinding {
-  const finding = normalizeFinding(input);
-  const improvement = playtestFindingToImprovementFinding(finding, tick);
+  const finding = normalizeImprovementFindingInput(input);
+  const improvement = cityFindingToImprovementFinding(finding, tick);
   return {
     tick,
     ...finding,
@@ -256,23 +290,23 @@ export function recordedFindingFromPlaytestFinding(
   };
 }
 
-/** A finding -> a civ-engine annotation marker for the recorder. */
-export function findingToMarker(finding: PlaytestFinding, tick?: number): NewMarker {
-  const normalized = normalizeFinding(finding);
-  const loopFinding = playtestFindingToImprovementFinding(normalized, tick);
-  const marker = improvementFindingToMarker(loopFinding);
-  const markerData = isRecord(marker.data) ? marker.data : {};
-  const out: NewMarker = {
-    kind: 'annotation',
-    text: `[${normalized.category}/${normalized.severity}] ${normalized.area}: ${normalized.observed}`,
-    ...(marker.refs ? { refs: marker.refs } : {}),
-    data: {
-      ...markerData,
-      playtestFinding: normalized,
-    } as unknown as NewMarker['data'],
-  };
-  if (tick !== undefined) out.tick = tick;
-  return out;
+/** @deprecated Use `recordedFindingFromCityFinding`. */
+export function recordedFindingFromPlaytestFinding(
+  input: Partial<CityImprovementFindingInput>,
+  tick: number,
+): RecordedFinding {
+  return recordedFindingFromCityFinding(input, tick);
+}
+
+/** Standard city input -> a civ-engine recursive-loop annotation marker. */
+export function cityFindingToMarker(finding: CityImprovementFindingInput, tick?: number): NewMarker {
+  const normalized = normalizeImprovementFindingInput(finding);
+  return improvementFindingToMarker(cityFindingToImprovementFinding(normalized, tick));
+}
+
+/** @deprecated Use `cityFindingToMarker`; new markers no longer emit `data.playtestFinding`. */
+export function findingToMarker(finding: CityImprovementFindingInput, tick?: number): NewMarker {
+  return cityFindingToMarker(finding, tick);
 }
 
 /** Reads playtest findings back out of a bundle's markers, sorted by tick. */
@@ -284,31 +318,31 @@ export function findingsFromMarkers(markers: readonly Marker[]): RecordedFinding
     if (improvementFinding) {
       out.push({
         tick: m.tick,
-        ...improvementFindingToPlaytestFinding(improvementFinding),
+        ...improvementFindingToCityFinding(improvementFinding),
         improvement: improvementFinding,
       });
       continue;
     }
     const dataFinding = legacyFindingData(m.data);
     if (dataFinding) {
-      out.push(recordedFindingFromPlaytestFinding(dataFinding, m.tick));
+      out.push(recordedFindingFromCityFinding(dataFinding, m.tick));
       continue;
     }
     const [visualFinding] = visualPlaytestFindingsFromMarkers([m]);
     if (visualFinding) {
-      out.push(recordedFindingFromPlaytestFinding(visualFindingToPlaytestFinding(visualFinding), m.tick));
+      out.push(recordedFindingFromCityFinding(visualFindingToCityFinding(visualFinding), m.tick));
     }
   }
   return out.sort((a, b) => a.tick - b.tick);
 }
 
-function legacyFindingData(data: Marker['data']): Partial<PlaytestFinding> | null {
+function legacyFindingData(data: Marker['data']): Partial<CityImprovementFindingInput> | null {
   if (!isRecord(data)) return null;
   const nested = data.playtestFinding;
   if (isRecord(nested) && typeof nested.observed === 'string') {
-    return nested as Partial<PlaytestFinding>;
+    return nested as Partial<CityImprovementFindingInput>;
   }
-  if (typeof data.observed === 'string') return data as Partial<PlaytestFinding>;
+  if (typeof data.observed === 'string') return data as Partial<CityImprovementFindingInput>;
   return null;
 }
 
@@ -402,7 +436,7 @@ function normalizeSourceRun(sourceRun: ImprovementRunManifest | undefined): Impr
   return out;
 }
 
-function improvementFindingId(finding: PlaytestFinding, tick: number | undefined): string {
+function improvementFindingId(finding: CityImprovementFindingInput, tick: number | undefined): string {
   return [
     'city',
     tick === undefined ? 'unticked' : String(tick),

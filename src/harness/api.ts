@@ -3,7 +3,7 @@ import type { CommandName } from '../protocol/messages';
 import type { CityCommands } from '../sim/types';
 import type { SimSummary } from '../sim/summary';
 import type { VisualPlaytestHost } from 'civ-engine';
-import type { PlaytestFinding, RecordedFinding } from './findings';
+import type { CityImprovementFindingInput, RecordedFinding } from './findings';
 import type { SelfCheckSummary } from './inspect';
 import type { PlayerInput } from './player';
 import { createCityVisualPlaytestHost } from './visual';
@@ -27,8 +27,8 @@ export interface HarnessApi {
   advance(ms: number): void;
   /** Submit any sim command by name. */
   command<K extends CommandName>(name: K, data: CityCommands[K]): void;
-  /** Record a finding as a marker at the current tick. */
-  annotate(finding: Partial<PlaytestFinding>): void;
+  /** Record a standardized recursive-loop finding as a marker at the current tick. */
+  annotate(finding: Partial<CityImprovementFindingInput>): void;
   /** Findings recorded this session. */
   findings(): readonly RecordedFinding[];
   /** Replay to `tick` and resolve the exact deterministic state there (null summary on failure). */
