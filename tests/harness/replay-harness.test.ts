@@ -15,6 +15,7 @@ import {
   cityFindingToVisualFinding,
   findingsFromMarkers,
 } from '../../src/harness/findings';
+import { dogfoodRecursiveImprovementLoop } from '../../src/harness/dogfood';
 import { inspectBundle, selfCheckBundle } from '../../src/harness/inspect';
 import type { CityCommands, CityEvents } from '../../src/sim/types';
 
@@ -330,5 +331,30 @@ describe('playtest harness pipeline', () => {
       tick: 128,
       screenshotPath: 'artifacts/large-city.png',
     });
+  });
+
+  it('dogfoods the recursive loop with verified findings and before/after comparison', async () => {
+    const report = await dogfoodRecursiveImprovementLoop();
+
+    expect(report.loop.ok).toBe(true);
+    expect(report.loop.stopReason).toBe('agentStop');
+    expect(report.finding.verificationStatus).toBe('verified');
+    expect(report.finding.nextAction).toBe('none');
+    expect(report.finding.disposition).toBe('accepted');
+    expect(report.finding.improvement.verificationStatus).toBe('verified');
+    expect(report.finding.improvement.nextAction).toBe('none');
+    expect(report.finding.improvement.disposition).toBe('accepted');
+    expect(report.finding.improvement.evidence?.map((e) => e.kind)).toEqual(
+      expect.arrayContaining(['tick', 'step', 'metric', 'text']),
+    );
+    expect(report.selfCheck.ok).toBe(true);
+    expect(report.selfCheck.checkedSegments).toBeGreaterThan(0);
+    expect(report.inspection.hasSummary).toBe(true);
+    expect(report.bundle.findings).toBe(1);
+    expect(report.bundle.hasImprovementLoop).toBe(true);
+    expect(report.bundle.hasLegacyPlaytestFinding).toBe(false);
+    expect(report.before.tick).toBeLessThan(report.after.tick);
+    expect(report.comparison.populationDidNotRegress).toBe(true);
+    expect(report.comparison.roadCountStable).toBe(true);
   });
 });

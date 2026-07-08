@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-08 - Recursive loop dogfood runner
+
+Shipped a durable headless dogfood path for the recursive self-improvement loop: `dogfoodRecursiveImprovementLoop()` builds a deterministic city session, records it with `SessionRecorder`, runs civ-engine's `runVisualPlaytestLoop()`, stores a verified/accepted `ImprovementFinding`, takes a terminal snapshot before replay verification, inspects the finding tick, and returns a before/after comparison. This is now the executable repo evidence that the loop can run through standardized findings, classification, replay/self-check, rerun, and comparison without relying on a one-off browser automation transcript.
+
+TDD: RED `npx.cmd vitest run tests/harness/replay-harness.test.ts` failed on the missing `src/harness/dogfood.ts` module. GREEN focused harness verification passed after adding the helper: 6/6 tests in `tests/harness/replay-harness.test.ts`, including the dogfood contract that checks verified/none/accepted classification, improvement-loop marker payloads, no legacy `data.playtestFinding`, non-vacuous self-check segments, finding-tick inspection, and before/after non-regression.
+
+Live-browser note: the local Vite dev server was started on `127.0.0.1:5179` and the game rendered in the in-app browser with only the pre-existing Three.js shadow-map warning. The in-app browser evaluation surface is isolated/read-only for page globals, and the standalone Playwright CLI path was not reliable in this environment, so the committed dogfood runner is the durable verification path for this loop round.
+
 ### 2026-07-08 — Deprecate legacy finding payloads for standardized loops
 
 Follow-up to the recursive loop alignment: future harness markers now standardize on civ-engine's `ImprovementFinding` envelope and no longer emit the old `data.playtestFinding` payload. The old `PlaytestFinding` type and helper names remain as deprecated source aliases for callers that have not migrated yet, and `findingsFromMarkers()` still reads old bundle markers and synthesizes current loop payloads from them. City internals now use `CityImprovementFindingInput`, `cityFindingToMarker`, `cityFindingToImprovementFinding`, `cityFindingToVisualFinding`, `visualFindingToCityFinding`, and `recordedFindingFromCityFinding`.

@@ -124,6 +124,8 @@ run -> record -> find -> verify -> classify -> promote/propose -> review -> reru
 
 `tests/harness/replay-harness.test.ts` records a scripted session, annotates a marker, replays via `SessionReplayer`, asserts `selfCheck().ok`, and checks `simSummary` at the marker tick — the whole pipeline, browser-free. It also pins the v1.4.0 `ImprovementFinding` payload, visual marker compatibility, the absence of new `data.playtestFinding` payloads, and synthetic improvement payloads for legacy city markers.
 
+`src/harness/dogfood.ts` exposes `dogfoodRecursiveImprovementLoop()`, a headless dogfood runner for the full recursive loop. It builds a deterministic city session, records it with `SessionRecorder`, runs `runVisualPlaytestLoop()`, stores a verified/accepted `ImprovementFinding`, takes a terminal snapshot, checks replay determinism, inspects the finding tick, and returns a before/after comparison so reruns can prove behavior did not regress. The replay-harness test calls this helper directly; it is the executable evidence path for `run -> record -> find -> verify -> classify -> rerun -> compare` without needing a live browser.
+
 `tests/harness/visual-host.test.ts` verifies the civ-engine visual host adapter browser-free: observations include screenshot/text/controls/state channels, and `runVisualPlaytestLoop()` drives HUD clicks, point clicks, drags, keys, waits, stops, and annotations through the existing `player`/`advance` surface without touching the `command` backdoor.
 
 ## Deferred (possible extensions)
