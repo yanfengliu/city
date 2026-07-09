@@ -95,9 +95,14 @@ export async function dogfoodRecursiveImprovementLoop(): Promise<DogfoodImprovem
           {
             ...cityFinding,
             verificationStatus: 'verified',
+            // Engine 2.0.0: a verified finding must carry HOW it was
+            // confirmed plus an addressed replayable ref - the dogfood
+            // session is replay-verified below, and the tick anchors it.
+            verificationMethod: 'replay',
             nextAction: 'none',
             disposition: 'accepted',
             evidence: [
+              { kind: 'tick', tick: sim.world.tick },
               { kind: 'step', step: ctx.step },
               { kind: 'metric', label: 'controls', value: String(ctx.observation.controls?.length ?? 0) },
               { kind: 'text', label: 'summary', value: summaryLine(simSummary(sim.world)) },

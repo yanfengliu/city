@@ -8,6 +8,7 @@ import {
   type ImprovementFinding,
   type ImprovementNextAction,
   type ImprovementRunManifest,
+  type ImprovementVerificationMethod,
   type ImprovementVerificationStatus,
   type Marker,
   type MarkerRefs,
@@ -45,6 +46,8 @@ export interface CityImprovementFindingInput {
   suggestion?: string;
   /** Loop lifecycle status; defaults to `unverified` when omitted. */
   verificationStatus?: ImprovementVerificationStatus;
+  /** HOW a verified finding was confirmed; required by the engine (2.0.0) whenever verificationStatus is 'verified'. */
+  verificationMethod?: ImprovementVerificationMethod;
   /** Loop next action; defaults to `proposalOnly` when omitted. */
   nextAction?: ImprovementNextAction;
   /** Candidate disposition in the local improvement ledger. */
@@ -108,6 +111,14 @@ const VERIFICATION_STATUSES: ReadonlySet<string> = new Set<ImprovementVerificati
   'fixed',
   'regressed',
 ]);
+const VERIFICATION_METHODS: ReadonlySet<string> = new Set<ImprovementVerificationMethod>([
+  'replay',
+  'state',
+  'spec',
+  'metric',
+  'screenshot',
+  'human',
+]);
 const NEXT_ACTIONS: ReadonlySet<string> = new Set<ImprovementNextAction>([
   'proposalOnly',
   'autoFix',
@@ -149,6 +160,9 @@ export function normalizeImprovementFindingInput(
   };
   if (VERIFICATION_STATUSES.has(input.verificationStatus as string)) {
     out.verificationStatus = input.verificationStatus as ImprovementVerificationStatus;
+  }
+  if (VERIFICATION_METHODS.has(input.verificationMethod as string)) {
+    out.verificationMethod = input.verificationMethod as ImprovementVerificationMethod;
   }
   if (NEXT_ACTIONS.has(input.nextAction as string)) {
     out.nextAction = input.nextAction as ImprovementNextAction;
@@ -234,6 +248,7 @@ export function cityFindingToImprovementFinding(
     ...(evidence.length > 0 ? { evidence } : {}),
     ...(finding.refs ? { refs: finding.refs } : {}),
     verificationStatus: finding.verificationStatus ?? 'unverified',
+    ...(finding.verificationMethod ? { verificationMethod: finding.verificationMethod } : {}),
     nextAction: finding.nextAction ?? 'proposalOnly',
     disposition: finding.disposition ?? 'candidate',
     ...(finding.sourceRun ? { sourceRun: finding.sourceRun } : {}),
@@ -261,6 +276,7 @@ export function improvementFindingToCityFinding(input: ImprovementFinding): City
     ...(typeof input.suggestion === 'string' ? { suggestion: input.suggestion } : {}),
     evidence: input.evidence,
     verificationStatus: input.verificationStatus,
+    ...(input.verificationMethod ? { verificationMethod: input.verificationMethod } : {}),
     nextAction: input.nextAction,
     ...(input.disposition ? { disposition: input.disposition } : {}),
     ...(input.sourceRun ? { sourceRun: input.sourceRun } : {}),
