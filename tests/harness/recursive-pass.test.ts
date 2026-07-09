@@ -30,7 +30,7 @@ describe('selectFixCandidate', () => {
       { tick: 7, improvement: engineFinding('high-fix', 'high', 'manualFix') },
     ];
     expect(selectFixCandidate(rows)?.id).toBe('high-fix');
-    expect(engineFindingOf(rows[0]).id).toBe('low-fix');
+    expect(engineFindingOf(rows[0])?.id).toBe('low-fix');
   });
 
   it('returns null when nothing fixable is open', () => {
@@ -43,6 +43,17 @@ describe('selectFixCandidate', () => {
 });
 
 describe('buildPassManifest', () => {
+  it('threads the candidate class into manifest data for fleet aggregation', () => {
+    const manifest = buildPassManifest({
+      id: 'city-recursive-x',
+      startedAt: '2026-07-09T02:00:00.000Z',
+      completedAt: '2026-07-09T02:05:00.000Z',
+      candidate: { ...engineFinding('gap', 'low', 'improveHarness'), data: { class: 'coverage-gap:#zoning' } } as never,
+      artifacts: [],
+    });
+    expect((manifest.data as Record<string, unknown>).candidateClass).toBe('coverage-gap:#zoning');
+  });
+
   it('builds a validated engine manifest with the outcome vocabulary', () => {
     const manifest = buildPassManifest({
       id: 'city-recursive-x',
