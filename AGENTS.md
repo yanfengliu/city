@@ -9,8 +9,13 @@ Scale the approach to the task: trivial fixes → just do them; substantial work
 ## Continuing through plans
 
 - No stopping points within a multi-task plan. Work through all N tasks continuously; do not ask whether to keep going. Harness reminders are administrative noise, not stop signals.
+- Never manage context yourself — auto-compaction handles it. Do not stop, checkpoint, or ask "should I keep going" because the conversation is long. When one increment ships (gates green + commit + push + docs), start the next in the same turn. Stop only for a genuine blocker, a real user decision, or an explicit stop. (Fleet rule reinforced 2026-07-05.)
 - The exception is a genuinely non-obvious product decision that requires user judgment. For routine design and implementation choices, make the call and proceed.
 - Keep `PROGRESS.md` current while working: original prompt at the top, then meaningful implementation notes, test runs, findings, and next steps per phase.
+
+## Recursive loop (fleet)
+
+Before running or driving a `playtest:recursive` pass, read `../loop-ops/docs/skills/recursive-playtest.md`; before building loop machinery, read `../loop-ops/docs/skills/building-recursive-loop.md`. Those files are the fleet-wide source of truth for the loop contract (pass outcomes, honesty invariants, and the definition of a complete pass — a pass is not done at `proposal-only`).
 
 ## Project intent
 
@@ -64,7 +69,7 @@ Run the smallest relevant check while iterating. All four gates (`test`, `typech
 - Files under 500 LOC — extract helpers or split. 2-space indentation. `import type` for type-only imports. Remove dead code and duplicated logic.
 - Do not ship a visual feature without verifying it in a browser screenshot.
 - Expose `window.render_game_to_text()` and `window.advanceTime(ms)` for automated playtesting; init Three.js with `preserveDrawingBuffer: true` so screenshots capture WebGL.
-- Adversarially review non-trivial changes before declaring them done: fan out independent reviewer agents over the diff (correctness, sim-determinism, engine-contract, rendering/perf lenses), verify each claim against the live code, fix real findings, re-review until reviewers only nitpick.
+- Adversarially review non-trivial changes before declaring them done: fan out independent reviewer agents over the diff (correctness, sim-determinism, engine-contract, rendering/perf lenses), verify each claim against the live code, fix real findings, re-review until reviewers only nitpick. For high-risk changes (persistence/save-format, agent-loop or concurrency, anything with data-loss blast radius) also run the multi-CLI review (Codex + Claude) — a different model catches blind spots same-model subagents share.
 - Record non-obvious failure modes in `docs/learning/lessons.md` with evidence anchors (what surfaced it, fix commit, test that pins it, behavior delta).
 
 ## civ-engine usage rules (hard-won; violating these causes silent breakage)
