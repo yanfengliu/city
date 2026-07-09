@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "playtest:llm": "node scripts/llm-visual-loop.mjs"
+    "playtest:llm": "node scripts/llm-visual-loop.mjs",
+    "playtest:recursive": "node scripts/playtest-recursive.mjs"
   },
   "dependencies": {
     "civ-engine": "file:../civ-engine",

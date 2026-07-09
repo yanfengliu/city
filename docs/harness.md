@@ -136,6 +136,8 @@ The default agent is a deterministic scripted bootstrapper (road, R/C zones, coa
 
 Each run persists append-only evidence under `output/playtests-llm/<stamp>/`: the exported session `bundle.json`, `findings.json`, `result.json` (loop outcome + replay self-check verification with skipped segments normalized to a count), and a validated engine `createImprovementRunManifest` `manifest.json`; every manifest is also appended to `output/playtests-llm/ledger.jsonl` so cross-run tooling can join ledger rows to their bundles via `sessionId`/`bundleId`.
 
+`npm run playtest:recursive` is the one-command proposal-only pass: it runs the loop, selects the highest-severity open fix-classified finding from the new run's `findings.json` (each row's canonical payload is `.improvement`), and writes `pass-manifest.json` beside the run plus a row in `output/playtests-llm/passes.jsonl` with the fleet-wide outcome vocabulary (`no-fix-candidate | proposal-only | run-failed`). City has no auto-apply arm — the driving agent is the fix arm: fix the candidate, rerun the pass, and compare runs before claiming anything fixed.
+
 ## Deferred (possible extensions)
 - Rendering markers on a scrubbable in-app replay timeline (aoe2 gets this for free from its replay UI; the city has no replay UI yet — `replayTo` covers the interactive need).
 - Wiring civ-engine's MCP corpus server over a directory of exported bundles for cross-run trend analysis.
