@@ -1,4 +1,5 @@
 import type { GameSpeed } from '../protocol/messages';
+import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
 import {
   HUD_COMPACT_PANEL_CHROME_CSS,
   HUD_DIVIDER_COLOR,
@@ -22,10 +23,7 @@ export type OverlayName =
   | 'power'
   | 'water';
 
-interface OverlayLegendItem {
-  color: string;
-  label: string;
-}
+type OverlayLegendItem = { color: string; label: string };
 interface OverlayLegend {
   title: string;
   /** Gradient overlays (fields): a low→high colour bar with end labels. */
@@ -128,12 +126,12 @@ const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   {
     id: 'power',
     label: 'Power ⚡',
-    title: 'Yellow: plants & lines · green: powered buildings · faint halo: connection reach (2 cells) · red: no power',
+    title: `Yellow: plants & lines · green: powered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · red: no power`,
   },
   {
     id: 'water',
     label: 'Water 💧',
-    title: 'Blue: pumps & pipes · teal: watered buildings · faint halo: connection reach (2 cells) · red: no water',
+    title: `Blue: pumps & pipes · teal: watered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · red: no water`,
   },
 ];
 const TOAST_DURATION_MS = 4000;

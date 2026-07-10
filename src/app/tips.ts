@@ -1,5 +1,6 @@
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import { HIGHWAY_CELLS, HIGHWAY_CELL_SET, HIGHWAY_COLUMN } from '../sim/constants/highway';
+import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
 import type { Advisory } from '../ui/advisor';
 
 /** Live client-mirror facts the tip checklists read. */
@@ -136,7 +137,7 @@ export function activeTips(ctx: TipContext): Advisory[] {
       text: '⚡ Power your city — buildings go dark without it.',
       target: ctx.firstUnpowered,
       steps: [
-        { text: 'Place a Coal or Wind plant — it powers buildings within 2 cells of it.', done: ctx.hasPlant },
+        { text: `Place a Coal or Wind plant — it powers buildings within ${UTILITY_BRIDGE_RADIUS} cells of it.`, done: ctx.hasPlant },
         {
           // Once a plant exists but buildings stay dark, name the real fix: if
           // the network is over capacity, more lines won't help — add a plant.
@@ -155,7 +156,7 @@ export function activeTips(ctx: TipContext): Advisory[] {
       text: '💧 Supply water — dry buildings are abandoned.',
       target: ctx.firstUnwatered,
       steps: [
-        { text: 'Place a Pump beside water — it supplies buildings within 2 cells of it.', done: ctx.hasPump },
+        { text: `Place a Pump beside water — it supplies buildings within ${UTILITY_BRIDGE_RADIUS} cells of it.`, done: ctx.hasPump },
         {
           text:
             ctx.hasPump && ctx.waterOverCapacity

@@ -24,6 +24,20 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-10 — Special stamps replace growables; utility corridors reach farther
+
+User requests: placing service buildings or power plants should automatically bulldoze generic residential/commercial/industrial buildings and take their place; water pipes and power lines should not consume building space and should cover a larger area than their immediate vicinity.
+
+Shipped an execution-time placement plan shared by validation and handling for services, coal/wind plants, and pumps. A valid special stamp may intersect any number of growable R/C/I buildings; it removes every intersecting growable's complete footprint in deterministic order, evicts residents, unassigns workers, applies the normal rubble cooldown, preserves the underlying zone, and then claims the special footprint. Roads, water, and other special structures remain atomic blockers. The replacement entity allocates before demolition, and the worker now projects component-specific removals so civ-engine's immediate entity-id recycling cannot erase the new view. The client separately reconciles a recycled id's old footprint before claiming its new one.
+
+Power lines and underground pipes remain independent conductor maps that never write `occupiedCells`, never dezone, and may cross roads/buildings or survive underneath a replacement. Their shared Chebyshev connection radius increased from 3 to 5 (an 11-cell-wide corridor around each network cell), with tooltips, advisor copy, overlay legends, effect-area ghosts, design docs, and architecture docs using the same constant. Placement ghosts now allow special stamps over growables but continue to reject roads and other services/plants/pumps. Plant/pump footprints occlude preserved zoning; lines/pipes do not. Review also found that the utility halo had been expanding only from supplied growables, so the client now mirrors the sim's monotone conduction closure through attached live growables and services—including brownouts—and refreshes after building, structure, or network messages.
+
+TDD began with seven focused RED contracts covering full partial-footprint demolition, resident/job cleanup, multiple growables, mixed-special atomic rejection, same-tick competing stamps, conductor survival plus save/load rebuild, radius-5/radius-6 boundaries, and honest client ghosts. Reviewer-driven regressions then pinned upsert-only recycled ids at both worker projection and client occupancy, service-driven overlay refresh, exact reach closure, source-less conductor planning reach, utility-specific coloring, and plant/pump zone occlusion.
+
+Browser verification used the real HUD tools on a highway-linked district: a live residential growable with 3 population accepted the Wind ghost and was replaced on click, population dropped to 0, and power capacity rose from 0 to 40. A power line and pipe were drawn through the replacement site without a placement conflict; the pipe was absent in normal view and appeared only in Water overlay, while Power/Water overlays showed the wider reach halo. Saved ignored evidence: `output/playwright/special-replacement-before.png`, `special-replacement-after.png`, `utility-radius-five-overlay.png`, `pipe-hidden-normal.png`, and `pipe-water-overlay.png`. Browser console errors: 0.
+
+Closeout verification: `npm test` passed 173/173 across 40 files, `npm run typecheck`, `npm run lint`, and `npm run build` all passed; the build retains the pre-existing >500 kB chunk warning. Three independent adversarial lenses converged with no substantive findings after fixes (simulation/determinism/engine contracts, gameplay/UI/overlay parity, and tests/worker/save-load/docs).
+
 ### 2026-07-10 — Underground pipes visible only in the Water overlay
 
 User request: water pipelines should not be visible above ground during normal play and should appear only in the Water overlay.

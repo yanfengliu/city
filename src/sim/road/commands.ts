@@ -5,10 +5,8 @@ import {
   ROAD_BULLDOZE_REFUND,
   ROAD_COST_PER_CELL,
 } from '../constants/economy';
-import { evictCitizens, footprintCells } from '../buildings';
-import { REGROWTH_COOLDOWN_TICKS } from '../constants/zoning';
+import { bulldozeGrowableBuildings } from '../demolition';
 import { purchaseAllowed } from '../economy';
-import { unassignWorkers } from '../employment';
 import { cellIndex, inBounds, lPathCells } from '../grid';
 import { bulldozeStructures } from '../services';
 import { writeCongestionMirror } from '../traffic/congestion';
@@ -221,7 +219,8 @@ export function registerBulldozeRect(sim: CitySim): void {
     // Service structures first — frees their occupiedCells entries so the
     // building pass below only sees actual buildings.
     bulldozeStructures(sim, w, cells);
-    // Utilities next, for the same reason (plants/pumps/lines also occupy).
+    // Utilities next, for the same reason for plant/pump footprints; the same
+    // pass also removes any non-occupying lines and pipes inside the rectangle.
     bulldozeUtilities(sim, w, cells);
 
     // Buildings whose footprint intersects the rect.
@@ -230,27 +229,7 @@ export function registerBulldozeRect(sim: CitySim): void {
       const id = sim.occupiedCells.get(i);
       if (id !== undefined) buildings.add(id);
     }
-    const rubble = { ...((w.getState('regrowthBlock') as Record<string, number> | undefined) ?? {}) };
-    let rubbleChanged = false;
-    for (const id of [...buildings].sort((p, q) => p - q)) {
-      const building = w.getComponent(id, 'building');
-      const position = w.getComponent(id, 'position');
-      evictCitizens(w, id);
-      unassignWorkers(w, id);
-      if (building && position) {
-        for (const cell of footprintCells(position.x, position.y, building.w, building.h)) {
-          sim.occupiedCells.delete(cell);
-          // A power line running over this building is an overlay — it never
-          // owned the cell, so the freed cell simply stays free.
-          // Rubble: block regrowth briefly so the player can build on the
-          // cleared cells without racing the growth system.
-          rubble[String(cell)] = w.tick + REGROWTH_COOLDOWN_TICKS;
-          rubbleChanged = true;
-        }
-      }
-      w.destroyEntity(id);
-    }
-    if (rubbleChanged) w.setState('regrowthBlock', rubble);
+    bulldozeGrowableBuildings(sim, w, buildings);
 
     const roadRemoved = removeRoadCells(sim, w, cells);
     if (roadRemoved > 0) {

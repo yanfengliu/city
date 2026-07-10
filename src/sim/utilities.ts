@@ -12,8 +12,10 @@ import {
   WATER_PUMP_COST,
 } from './constants/utilities';
 import { footprintCells } from './buildings';
+import { bulldozeGrowableBuildings } from './demolition';
 import { purchaseAllowed } from './economy';
 import { cellFromIndex, cellIndex, inBounds, lPathCells } from './grid';
+import { powerPlantPlacementPlan, waterPumpPlacementPlan } from './utility-placement';
 import type { CitySim } from './city';
 import type { CityWorld, RoadEndpoints } from './types';
 
@@ -71,71 +73,38 @@ export function refreshUtilities(sim: CitySim): void {
   sim.pipeCells = pipes;
 }
 
-/** Footprint cells must be land, road-free, and unoccupied. */
-function footprintPlaceable(sim: CitySim, cells: number[]): boolean {
-  for (const i of cells) {
-    if (sim.terrain.water[i] === 1 || sim.roadCells.has(i) || sim.occupiedCells.has(i)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function orthAdjacentToWater(sim: CitySim, x: number, y: number): boolean {
-  for (const [nx, ny] of [
-    [x + 1, y],
-    [x - 1, y],
-    [x, y + 1],
-    [x, y - 1],
-  ]) {
-    if (inBounds(nx, ny, GRID_WIDTH, GRID_HEIGHT) && sim.terrain.water[cellIndex(nx, ny)] === 1) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function registerUtilityCommands(sim: CitySim): void {
   const { world } = sim;
 
-  world.registerValidator('placePowerPlant', (data) => {
-    if (data.kind !== 'coal' && data.kind !== 'wind') return false;
-    const side = POWER_PLANT_FOOTPRINT[data.kind];
-    if (
-      !inBounds(data.x, data.y, GRID_WIDTH, GRID_HEIGHT) ||
-      !inBounds(data.x + side - 1, data.y + side - 1, GRID_WIDTH, GRID_HEIGHT)
-    ) {
-      return false;
-    }
-    if (!footprintPlaceable(sim, footprintCells(data.x, data.y, side, side))) return false;
-    return purchaseAllowed(world, POWER_PLANT_COST[data.kind], true);
-  });
+  world.registerValidator('placePowerPlant', (data) =>
+    powerPlantPlacementPlan(sim, world, data) !== null,
+  );
 
   world.registerHandler('placePowerPlant', (data, w) => {
+    const plan = powerPlantPlacementPlan(sim, w, data);
+    if (!plan) return;
     const entity = w.createEntity();
     w.setPosition(entity, { x: data.x, y: data.y });
     w.addComponent(entity, 'powerPlant', { kind: data.kind });
+    bulldozeGrowableBuildings(sim, w, plan.buildingIds);
     w.setState('treasury', treasury(w) - POWER_PLANT_COST[data.kind]);
-    const side = POWER_PLANT_FOOTPRINT[data.kind];
-    for (const cell of footprintCells(data.x, data.y, side, side)) {
-      sim.occupiedCells.set(cell, entity);
-    }
+    for (const cell of plan.cells) sim.occupiedCells.set(cell, entity);
     w.emit('utilitiesChanged', {});
   });
 
-  world.registerValidator('placeWaterPump', (data) => {
-    if (!inBounds(data.x, data.y, GRID_WIDTH, GRID_HEIGHT)) return false;
-    if (!footprintPlaceable(sim, [cellIndex(data.x, data.y)])) return false;
-    if (!orthAdjacentToWater(sim, data.x, data.y)) return false;
-    return purchaseAllowed(world, WATER_PUMP_COST, true);
-  });
+  world.registerValidator('placeWaterPump', (data) =>
+    waterPumpPlacementPlan(sim, world, data) !== null,
+  );
 
   world.registerHandler('placeWaterPump', (data, w) => {
+    const plan = waterPumpPlacementPlan(sim, w, data);
+    if (!plan) return;
     const entity = w.createEntity();
     w.setPosition(entity, { x: data.x, y: data.y });
     w.addComponent(entity, 'waterPump', {});
+    bulldozeGrowableBuildings(sim, w, plan.buildingIds);
     w.setState('treasury', treasury(w) - WATER_PUMP_COST);
-    sim.occupiedCells.set(cellIndex(data.x, data.y), entity);
+    sim.occupiedCells.set(plan.cells[0], entity);
     w.emit('utilitiesChanged', {});
   });
 

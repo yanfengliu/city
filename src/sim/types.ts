@@ -160,7 +160,7 @@ export type CityComponents = {
   coverageMirror: Record<ServiceType, LayerState<number>>;
   /** Coal plant (3x3) or wind turbine (1x1), anchored top-left at the position component. */
   powerPlant: { kind: PowerPlantKind };
-  /** Power line cell marker — occupies its cell (blocks buildings and roads). */
+  /** Power line cell marker — overhead overlay that never occupies. */
   powerLine: Record<string, never>;
   /** Pipe cell marker — underground, does NOT occupy (may sit under anything on land). */
   pipe: Record<string, never>;

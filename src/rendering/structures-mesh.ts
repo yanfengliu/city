@@ -91,7 +91,7 @@ export class StructuresView {
     this.writeInstance(archetype, slot, view);
   }
 
-  /** Tolerates unknown ids — callers may pass the sim's full removal stream. */
+  /** Tolerates unknown ids during defensive rebuild or full-sync reconciliation. */
   remove(id: number): void {
     const entry = this.slots.get(id);
     if (!entry) return;

@@ -10,6 +10,7 @@ import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
 import { utilityTotals } from '../sim/utilities';
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 import { cellIndex } from '../sim/grid';
+import { projectRenderComponentRemovals } from './diff-projection';
 import type {
   BuildingView,
   ClientToWorker,
@@ -270,6 +271,7 @@ function postBootSync(): void {
 
 // Fires once per executed tick (the engine's GameLoop drives stepping).
 const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
+  const componentRemovals = projectRenderComponentRemovals(diff);
   const buildingDiff = diff.components['building'];
   const upserts: BuildingView[] = [];
   if (buildingDiff) {
@@ -278,7 +280,7 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
       if (view) upserts.push(view);
     }
   }
-  const removed = diff.entities.destroyed;
+  const removed = componentRemovals.buildings;
   if (upserts.length > 0 || removed.length > 0) {
     post({ type: 'buildings', upserts, removed: [...removed] });
   }
@@ -301,7 +303,9 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
       });
     }
   }
-  const structuresRemoved = [...removed].filter((id) => knownStructures.delete(id));
+  const structuresRemoved = componentRemovals.structures.filter((id) =>
+    knownStructures.delete(id),
+  );
   if (structureUpserts.length > 0 || structuresRemoved.length > 0) {
     post({ type: 'structures', upserts: structureUpserts, removed: structuresRemoved });
   }

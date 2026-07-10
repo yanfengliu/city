@@ -7,12 +7,13 @@ import {
   SERVICE_TYPES,
 } from './constants/services';
 import { footprintCells } from './buildings';
+import { bulldozeGrowableBuildings, replacementBuildingIds } from './demolition';
 import { purchaseAllowed } from './economy';
 import { coverageMirrorState } from './fields';
 import { cellIndex, inBounds } from './grid';
 import type { Layer } from 'civ-engine';
 import type { CitySim } from './city';
-import type { CityWorld, ServiceType } from './types';
+import type { CityWorld, PlaceServiceCommand, ServiceType } from './types';
 
 /** Local copy of city.ts getTreasury — avoids a runtime import cycle city ⇄ services. */
 function treasury(w: CityWorld): number {
@@ -85,36 +86,49 @@ function touchesRoad(sim: CitySim, cells: number[]): boolean {
   return false;
 }
 
+interface ServicePlacementPlan {
+  cells: number[];
+  buildingIds: number[];
+}
+
+function servicePlacementPlan(
+  sim: CitySim,
+  w: CityWorld,
+  data: PlaceServiceCommand,
+): ServicePlacementPlan | null {
+  if (!SERVICE_TYPES.includes(data.service)) return null;
+  const max = SERVICE_FOOTPRINT - 1;
+  if (
+    !inBounds(data.x, data.y, GRID_WIDTH, GRID_HEIGHT) ||
+    !inBounds(data.x + max, data.y + max, GRID_WIDTH, GRID_HEIGHT)
+  ) {
+    return null;
+  }
+  const cells = footprintCells(data.x, data.y, SERVICE_FOOTPRINT, SERVICE_FOOTPRINT);
+  const buildingIds = replacementBuildingIds(sim, w, cells);
+  if (buildingIds === null || !touchesRoad(sim, cells)) return null;
+  if (!purchaseAllowed(w, SERVICE_COST[data.service], false)) return null;
+  return { cells, buildingIds };
+}
+
 export function registerServiceCommands(sim: CitySim): void {
   const { world } = sim;
 
-  world.registerValidator('placeService', (data) => {
-    if (!SERVICE_TYPES.includes(data.service)) return false;
-    const max = SERVICE_FOOTPRINT - 1;
-    if (
-      !inBounds(data.x, data.y, GRID_WIDTH, GRID_HEIGHT) ||
-      !inBounds(data.x + max, data.y + max, GRID_WIDTH, GRID_HEIGHT)
-    ) {
-      return false;
-    }
-    const cells = footprintCells(data.x, data.y, SERVICE_FOOTPRINT, SERVICE_FOOTPRINT);
-    for (const i of cells) {
-      if (sim.terrain.water[i] === 1 || sim.roadCells.has(i) || sim.occupiedCells.has(i)) {
-        return false;
-      }
-    }
-    if (!touchesRoad(sim, cells)) return false;
-    return purchaseAllowed(world, SERVICE_COST[data.service], false);
-  });
+  world.registerValidator('placeService', (data) => servicePlacementPlan(sim, world, data) !== null);
 
   world.registerHandler('placeService', (data, w) => {
+    // Commands validate when queued; re-plan against execution-time occupancy
+    // and funds so competing same-tick stamps cannot overlap or double-charge.
+    const plan = servicePlacementPlan(sim, w, data);
+    if (!plan) return;
+    // Allocate before demolition because civ-engine can immediately recycle a
+    // destroyed id, while the worker projects removals by component identity.
     const entity = w.createEntity();
     w.setPosition(entity, { x: data.x, y: data.y });
     w.addComponent(entity, 'structure', { type: data.service });
+    bulldozeGrowableBuildings(sim, w, plan.buildingIds);
     w.setState('treasury', treasury(w) - SERVICE_COST[data.service]);
-    for (const cell of footprintCells(data.x, data.y, SERVICE_FOOTPRINT, SERVICE_FOOTPRINT)) {
-      sim.occupiedCells.set(cell, entity);
-    }
+    for (const cell of plan.cells) sim.occupiedCells.set(cell, entity);
     rebuildCoverage(sim, data.service);
     writeCoverageMirror(sim, w);
     w.emit('structuresChanged', {});

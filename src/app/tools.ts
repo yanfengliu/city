@@ -48,11 +48,11 @@ export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: str
     { id: 'school', label: 'School', key: 'e', title: 'School ($500): raises land value within 32 cells and lets buildings reach level 3' },
   ],
   [
-    { id: 'coal', label: 'Coal ⚡', key: 'g', title: 'Coal plant ($800, 3x3): powers 400 units but pollutes. Buildings within 2 cells of the plant, a Line, or another powered building get power' },
-    { id: 'wind', label: 'Wind ⚡', key: 'k', title: 'Wind turbine ($300, 1x1): clean but small (40 units). Same 2-cell connection rule' },
-    { id: 'powerLine', label: 'Line', key: 'l', title: 'Power line ($4/cell): drag from a plant toward your districts; may cross roads. Anything within 2 cells connects' },
+    { id: 'coal', label: 'Coal ⚡', key: 'g', title: `Coal plant ($800, 3x3): powers 400 units but pollutes. Buildings within ${UTILITY_BRIDGE_RADIUS} cells of the plant, a Line, or another powered building get power` },
+    { id: 'wind', label: 'Wind ⚡', key: 'k', title: `Wind turbine ($300, 1x1): clean but small (40 units). Same ${UTILITY_BRIDGE_RADIUS}-cell connection rule` },
+    { id: 'powerLine', label: 'Line', key: 'l', title: `Power line ($4/cell): takes no space and may cross roads/buildings. Anything within ${UTILITY_BRIDGE_RADIUS} cells connects` },
     { id: 'pump', label: 'Pump 💧', key: 'u', title: 'Water pump ($500): place on land RIGHT NEXT to water. Supplies 300 units through Pipes' },
-    { id: 'pipe', label: 'Pipe', key: 'j', title: 'Water pipe ($3/cell): runs under roads and buildings. Anything within 2 cells of a pump-connected pipe gets water' },
+    { id: 'pipe', label: 'Pipe', key: 'j', title: `Water pipe ($3/cell): takes no space and runs underground. Anything within ${UTILITY_BRIDGE_RADIUS} cells of a pump-connected pipe gets water` },
   ],
 ];
 
@@ -288,7 +288,7 @@ export class Tools {
     return cells;
   }
 
-  /** Full footprint in bounds and every cell free of water, roads, buildings, and structures. */
+  /** Full footprint in bounds and free of water, roads, and other special structures. */
   private isFootprintPlaceable(cells: Cell[]): boolean {
     return this.footprintProblem(cells) === null;
   }
@@ -303,8 +303,9 @@ export class Tools {
       const index = cellIndex(cell.x, cell.y, this.host.gridWidth);
       if (this.host.isWater(cell.x, cell.y)) return 'Cannot build on water';
       if (this.host.hasRoad(index)) return 'A road is in the way';
-      if (this.host.hasBuilding(index) || this.host.hasStructure(index)) {
-        return 'A building is in the way — bulldoze first';
+      // Growable R/C/I buildings are replaced automatically by special stamps.
+      if (this.host.hasStructure(index)) {
+        return 'A service building is in the way — bulldoze first';
       }
       if (this.host.hasUtilityFootprint(index)) {
         return 'A plant or pump is in the way — bulldoze first';

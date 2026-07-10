@@ -36,6 +36,11 @@ import {
 import { attachInput } from './input';
 import { activeTips, isConnectedToHighway, utilityTipFacts, type TipContext } from './tips';
 import { CITY_TITLES, cityRank } from './milestones';
+import {
+  computeNetworkOverlayState,
+  networkOverlayInputsChanged,
+} from './network-overlay-state';
+import { collectZoneOcclusionCells, replaceFootprintOwner } from './occupancy';
 import { TOOL_GROUPS, Tools, type ToolName } from './tools';
 import type {
   BuildingView,
@@ -349,7 +354,6 @@ export class Game {
         for (const view of message.upserts) this.applyBuildingUpsert(view);
         for (const id of message.removed) this.applyBuildingRemoval(id);
         this.refreshInspect();
-        this.refreshNetworkOverlay();
         break;
       case 'structures':
         for (const view of message.upserts) this.applyStructureUpsert(view);
@@ -369,7 +373,6 @@ export class Game {
         this.powerLineCells = new Set(message.power.lineCells);
         this.pipeCells = new Set(message.water.pipeCells);
         this.occupancyDirty = true;
-        this.refreshNetworkOverlay();
         break;
       case 'vehicles':
         this.vehiclesOnScreen = message.list.length;
@@ -425,6 +428,7 @@ export class Game {
         });
         break;
     }
+    if (networkOverlayInputsChanged(message.type)) this.refreshNetworkOverlay();
   }
 
   /**
@@ -457,37 +461,18 @@ export class Game {
         ? [...this.powerInfraCells]
         : [...this.waterInfraCells],
     );
-    const supplied = new Set<number>();
-    const problems = new Set<number>();
-    for (const view of this.buildings.values()) {
-      if (view.abandoned) continue;
-      const ok = mode === 'power' ? view.powered : view.watered;
-      for (let dy = 0; dy < view.h; dy++) {
-        for (let dx = 0; dx < view.w; dx++) {
-          (ok ? supplied : problems).add(cellIndex(view.x + dx, view.y + dy));
-        }
-      }
-    }
-    // Connection reach: everything within the bridge radius of the network
-    // (infrastructure + supplied buildings — both conduct).
-    const reach = new Set<number>();
-    const expand = (cells: Iterable<number>) => {
-      for (const cell of cells) {
-        const x = cell % GRID_WIDTH;
-        const y = Math.floor(cell / GRID_WIDTH);
-        for (let dy = -UTILITY_BRIDGE_RADIUS; dy <= UTILITY_BRIDGE_RADIUS; dy++) {
-          for (let dx = -UTILITY_BRIDGE_RADIUS; dx <= UTILITY_BRIDGE_RADIUS; dx++) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= GRID_WIDTH || ny >= GRID_HEIGHT) continue;
-            reach.add(cellIndex(nx, ny));
-          }
-        }
-      }
-    };
-    expand(infrastructure);
-    expand(supplied);
-    this.networkOverlay.update(mode, { infrastructure, reach, supplied, problems });
+    this.networkOverlay.update(
+      mode,
+      computeNetworkOverlayState({
+        mode,
+        infrastructure,
+        buildings: this.buildings.values(),
+        structures: this.structures.values(),
+        gridWidth: GRID_WIDTH,
+        gridHeight: GRID_HEIGHT,
+        radius: UTILITY_BRIDGE_RADIUS,
+      }),
+    );
   }
 
   private applyBuildingUpsert(view: BuildingView): void {
@@ -502,64 +487,48 @@ export class Game {
         performance.now(),
       );
     }
-    const footprintChanged =
-      !previous ||
-      previous.x !== view.x ||
-      previous.y !== view.y ||
-      previous.w !== view.w ||
-      previous.h !== view.h;
-    if (previous && footprintChanged) this.setFootprintOwner(previous, null);
+    const footprintChanged = replaceFootprintOwner(
+      this.buildingCellOwner,
+      previous,
+      view,
+      GRID_WIDTH,
+    );
     this.buildings.set(view.id, view);
-    if (footprintChanged) {
-      this.setFootprintOwner(view, view.id);
-      this.occupancyDirty = true;
-    }
+    if (footprintChanged) this.occupancyDirty = true;
     this.buildingsView.upsert(view);
     this.utilityIconsFx.sync(view);
   }
 
-  /** The removal stream covers all destroyed entities (citizens too) — ignore non-buildings. */
+  /** Applies a component-specific building removal emitted by the worker. */
   private applyBuildingRemoval(id: number): void {
     const previous = this.buildings.get(id);
     if (!previous) return;
-    this.setFootprintOwner(previous, null);
+    replaceFootprintOwner(this.buildingCellOwner, previous, null, GRID_WIDTH);
     this.buildings.delete(id);
     this.buildingsView.remove(id);
     this.utilityIconsFx.remove(id);
     this.occupancyDirty = true;
   }
 
-  private setFootprintOwner(view: BuildingView, owner: number | null): void {
-    for (let dy = 0; dy < view.h; dy++) {
-      for (let dx = 0; dx < view.w; dx++) {
-        const index = cellIndex(view.x + dx, view.y + dy);
-        if (owner === null) this.buildingCellOwner.delete(index);
-        else this.buildingCellOwner.set(index, owner);
-      }
-    }
-  }
-
   private applyStructureUpsert(view: StructureView): void {
+    const previous = this.structures.get(view.id);
+    const footprintChanged = replaceFootprintOwner(
+      this.structureCellOwner,
+      previous,
+      view,
+      GRID_WIDTH,
+    );
     this.structures.set(view.id, view);
-    for (let dy = 0; dy < view.h; dy++) {
-      for (let dx = 0; dx < view.w; dx++) {
-        this.structureCellOwner.set(cellIndex(view.x + dx, view.y + dy), view.id);
-      }
-    }
     this.structuresView.upsert(view);
-    this.occupancyDirty = true;
+    if (footprintChanged) this.occupancyDirty = true;
   }
 
-  /** The removal stream covers all destroyed entities — ignore non-structures. */
+  /** Applies a component-specific structure removal emitted by the worker. */
   private applyStructureRemoval(id: number): void {
     const previous = this.structures.get(id);
     if (!previous) return;
     this.structures.delete(id);
-    for (let dy = 0; dy < previous.h; dy++) {
-      for (let dx = 0; dx < previous.w; dx++) {
-        this.structureCellOwner.delete(cellIndex(previous.x + dx, previous.y + dy));
-      }
-    }
+    replaceFootprintOwner(this.structureCellOwner, previous, null, GRID_WIDTH);
     this.structuresView.remove(id);
     this.occupancyDirty = true;
   }
@@ -568,8 +537,11 @@ export class Game {
   private flushDirtyViews(): void {
     if (this.occupancyDirty) {
       this.occupancyDirty = false;
-      const footprintCells = new Set(this.buildingCellOwner.keys());
-      for (const index of this.structureCellOwner.keys()) footprintCells.add(index);
+      const footprintCells = collectZoneOcclusionCells(
+        this.buildingCellOwner,
+        this.structureCellOwner,
+        this.utilityFootprintCells,
+      );
       this.zonesView.setOccludedCells(footprintCells);
       const occupied = new Set<number>(footprintCells);
       for (const index of this.roadCells) occupied.add(index);

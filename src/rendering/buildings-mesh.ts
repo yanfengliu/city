@@ -144,7 +144,7 @@ export class BuildingsView {
     this.writeInstance(archetype, slot, view);
   }
 
-  /** Tolerates unknown ids — the sim's removal stream covers all destroyed entities. */
+  /** Tolerates unknown ids during defensive rebuild or full-sync reconciliation. */
   remove(id: number): void {
     const entry = this.slots.get(id);
     if (!entry) return;

@@ -163,3 +163,23 @@ Non-obvious failure modes worth preserving. Each entry starts with its evidence 
 | Behavior delta | Before: engine 2.0.0's strict-by-default recording silently refused the dogfood's `verified` finding (evidence was step/metric/text only — no replayable ref, no method), so `findingsFromMarkers` returned nothing and the dogfood test failed on main while the repo was believed migrated-green. After: `CityImprovementFindingInput` carries `verificationMethod`, the dogfood finding anchors a `tick` ref + `verificationMethod: 'replay'`, and the strict engine accepts it because it is now actually honest. |
 
 The engine 2.0.0 fleet validation ran this repo's suite once and recorded "green" — but the strict-default flip bites at RECORD time inside a host `annotate` callback, and the belief persisted unchecked while other repos' evidence accumulated. Two rules: (1) a migration claim needs the full gate list named next to it, not "green"; (2) when an engine major flips validation defaults, grep the consumers for every construction site of the newly-validated payload (here: `verificationStatus: 'verified'`) instead of trusting suite output alone — a swallowed throw inside a callback turns a hard error into a silent no-op.
+
+## Immediate entity-id recycling must be handled at both sides of a render diff
+
+| Field | Value |
+|---|---|
+| Surfaced by | Adversarial review of special-building replacement: demolition can release a growable/service id and civ-engine may reuse it before the tick diff is emitted. |
+| Reviewer findings | Generic `entities.destroyed` removals can erase a same-tick replacement upsert. After switching to component-specific removals, a recycled structure id can instead arrive as upsert-only, so the client must clear that id's previous footprint before claiming its new one. |
+| Fix commit | (this commit) |
+| Test added | `tests/worker/diff-projection.test.ts` pins destroyed + component-upsert-only projection; `tests/app/occupancy.test.ts` pins clearing the recycled id's old footprint before claiming the new footprint. |
+| Behavior delta | Worker removal streams now follow the `building`/`structure` component diffs, and the client reconciles old and new footprints for every upsert. Rule: component-specific projection and cache reconciliation are a pair—fixing only one side converts a disappearing replacement into stale invisible occupancy. |
+
+## A utility reach halo must mirror the conduction closure, not supplied status
+
+| Field | Value |
+|---|---|
+| Surfaced by | Gameplay/UI adversarial review after increasing `UTILITY_BRIDGE_RADIUS` from 3 to 5. |
+| Reviewer findings | The overlay expanded from infrastructure plus currently supplied growables only, but the sim lets every attached non-abandoned growable and service conduct even during a brownout. Service messages also did not trigger overlay recomputation. |
+| Fix commit | (this commit) |
+| Test added | `tests/app/network-overlay-state.test.ts` pins brownout conduction, service bridging, abandoned/disconnected behavior, source-less conductor planning reach, utility-specific coloring, and refresh dependencies for building/structure/network messages. |
+| Behavior delta | The client now repeats the same monotone attachment closure as the sim and refreshes whenever any closure input changes. Source-less lines/pipes still show planning reach, while nearby buildings remain red because allocation has no source capacity. Rule: a topology visualization must derive from topology; allocation flags are a separate layer and cannot stand in for graph membership. |
