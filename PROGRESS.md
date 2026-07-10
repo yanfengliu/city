@@ -24,6 +24,14 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-10 — Recursive playtest pass: no fix candidate
+
+Ran a targeted recorded city shift through the fleet recursive-playtest workflow with the deterministic scripted player (LLM exploration remains locked by `loop-ops/DIRECTIVES.md`). The player-surface run completed 10 steps and stopped normally with zero findings. Its persisted replay self-check passed with 1 checked segment and 0 skipped segments; the run and pass manifests agree on session/bundle `38ed0261-2389-4beb-aaf6-5dd3d0a0363e`, civ-engine `2.2.0`, and the terminal outcome `no-fix-candidate`.
+
+No game, harness, test, or dependency change was justified: there is no confirmed bug class to promote or fix, and inventing a marginal change would violate the loop's evidence-first contract. Local append-only evidence lives under ignored `output/playtests-llm/2026-07-10T17-01-56-852Z/`; the remembered shift is recorded in `loop-ops/digests/2026-07-10.md` and its dashboard.
+
+Closeout verification: `npm test` passed 157/157, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. The build retains the pre-existing >500 kB chunk warning and exits successfully. The sibling `loop-ops` suite passed 31/31 after the shift regenerated its digest/dashboard rollups.
+
 ### 2026-07-08 - Recursive loop dogfood runner
 
 Shipped a durable headless dogfood path for the recursive self-improvement loop: `dogfoodRecursiveImprovementLoop()` builds a deterministic city session, records it with `SessionRecorder`, runs civ-engine's `runVisualPlaytestLoop()`, stores a verified/accepted `ImprovementFinding`, takes a terminal snapshot before replay verification, inspects the finding tick, and returns a before/after comparison. This is now the executable repo evidence that the loop can run through standardized findings, classification, replay/self-check, rerun, and comparison without relying on a one-off browser automation transcript.
