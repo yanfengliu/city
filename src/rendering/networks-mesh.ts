@@ -22,12 +22,14 @@ interface Placement {
 /** An InstancedMesh of unit blocks that regrows (power of two) when the instance count exceeds capacity. */
 class CellInstances {
   mesh: InstancedMesh;
+  private visible = true;
 
   constructor(
     private readonly parent: Group,
     private readonly geometry: BoxGeometry,
     private readonly material: MeshLambertMaterial,
     private capacity: number,
+    private readonly name = '',
   ) {
     this.mesh = this.make();
     parent.add(this.mesh);
@@ -35,6 +37,8 @@ class CellInstances {
 
   private make(): InstancedMesh {
     const mesh = new InstancedMesh(this.geometry, this.material, this.capacity);
+    mesh.name = this.name;
+    mesh.visible = this.visible;
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.count = 0;
     mesh.frustumCulled = false;
@@ -73,13 +77,18 @@ class CellInstances {
     this.mesh.count = positions.length;
     this.mesh.instanceMatrix.needsUpdate = true;
   }
+
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    this.mesh.visible = visible;
+  }
 }
 
 /**
  * Renders utility-network geometry from the worker's `networks` message:
  * power plants as tall blocks per footprint cell, power lines as sparse poles
- * with overhead wires strung between them, pumps as blue blocks, pipes as flat
- * underground-hint quads.
+ * with overhead wires strung between them, pumps as blue blocks, and pipes as
+ * flat underground-hint quads shown only in the Water overlay.
  */
 export class NetworksView {
   readonly group = new Group();
@@ -100,7 +109,19 @@ export class NetworksView {
     this.eastWires = new CellInstances(this.group, new BoxGeometry(1, 0.04, 0.04), material(WIRE_COLOR), 256);
     this.southWires = new CellInstances(this.group, new BoxGeometry(0.04, 0.04, 1), material(WIRE_COLOR), 256);
     this.pumps = new CellInstances(this.group, new BoxGeometry(0.9, 0.8, 0.9), material(PUMP_COLOR), 32);
-    this.pipes = new CellInstances(this.group, new BoxGeometry(0.6, 0.02, 0.6), material(PIPE_COLOR), 512);
+    this.pipes = new CellInstances(
+      this.group,
+      new BoxGeometry(0.6, 0.02, 0.6),
+      material(PIPE_COLOR),
+      512,
+      'water-pipes',
+    );
+    this.pipes.setVisible(false);
+  }
+
+  /** Underground pipes are inspectable only while the Water overlay is active. */
+  setWaterOverlayActive(active: boolean): void {
+    this.pipes.setVisible(active);
   }
 
   update(power: { plantCells: number[]; lineCells: number[] }, water: { pumpCells: number[]; pipeCells: number[] }): void {

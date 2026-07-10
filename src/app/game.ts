@@ -440,6 +440,7 @@ export class Game {
     this.send({ type: 'setFieldSubscriptions', fields: field ? [field] : [] });
     this.fieldOverlay.hide();
     this.trafficOverlay.setActive(overlay === 'traffic');
+    this.networksView.setWaterOverlayActive(overlay === 'water');
     this.refreshNetworkOverlay();
     this.refreshHud();
   }

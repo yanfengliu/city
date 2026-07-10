@@ -24,6 +24,16 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-10 — Underground pipes visible only in the Water overlay
+
+User request: water pipelines should not be visible above ground during normal play and should appear only in the Water overlay.
+
+Shipped a rendering-only visibility contract. `NetworksView` now creates the named `water-pipes` instance layer hidden by default and exposes `setWaterOverlayActive`; `Game.setOverlay` enables it only for the Water overlay. `CellInstances` persists its visibility state when capacity growth replaces the underlying `InstancedMesh`, so a large network cannot accidentally reveal or hide pipes. Pumps, power plants, poles/wires, simulation behavior, placement ghosts, protocol messages, saves, and utility connectivity are unchanged. The game-design and architecture docs now describe the underground/overlay-only presentation.
+
+TDD: the focused renderer test first failed because the named pipe layer and overlay visibility contract did not exist. GREEN `tests/rendering/networks-mesh.test.ts` proves pipes stay hidden by default, appear in Water mode, retain visibility through a 513-instance capacity rebuild, and hide again when the overlay clears. Browser verification used the real Pipe tool to place a 13-cell run (exact $39 charge), then captured the same view hidden with `None`, visible with `Water 💧`, and hidden again after clearing the overlay; the browser console had no errors. Ignored evidence: `output/playwright/pipes-hidden-normal.png`, `pipes-visible-water-overlay.png`, and `pipes-hidden-after-overlay.png`.
+
+Verification: `npm test` passed 158/158, `npm run typecheck`, `npm run lint`, and `npm run build` all passed; the build retains the pre-existing >500 kB chunk warning. Independent adversarial review checked initial state, overlay switching, network updates, mesh replacement, save/load/HMR behavior, test strength, and docs consistency, with no substantive findings.
+
 ### 2026-07-10 — Recursive playtest pass: no fix candidate
 
 Ran a targeted recorded city shift through the fleet recursive-playtest workflow with the deterministic scripted player (LLM exploration remains locked by `loop-ops/DIRECTIVES.md`). The player-surface run completed 10 steps and stopped normally with zero findings. Its persisted replay self-check passed with 1 checked segment and 0 skipped segments; the run and pass manifests agree on session/bundle `38ed0261-2389-4beb-aaf6-5dd3d0a0363e`, civ-engine `2.2.0`, and the terminal outcome `no-fix-candidate`.

@@ -238,7 +238,7 @@ export const PLANT_COLOR = 0x5a5f66;
 export const POLE_COLOR = 0x8a7754;
 export const PUMP_COLOR = 0x3f74c9;
 export const PIPE_COLOR = 0x2e4a5f;
-/** Pipes are underground; render as a faint hint just above the terrain. */
+/** Pipes are underground; expose this near-ground hint only in the Water overlay. */
 export const PIPE_Y = 0.006;
 /** Overhead cable strung between poles (near-black), just below the pole cap. */
 export const WIRE_COLOR = 0x232323;
