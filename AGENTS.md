@@ -6,6 +6,10 @@ Treat the rest of this file as defaults, not rigid law. The right approach is th
 
 Scale the approach to the task: trivial fixes → just do them; substantial work (multi-file features, audits, broad refactors) → orchestrate with parallel subagents/workflows, verify adversarially, and keep the main thread for decisions and integration. This does not lower the verification bar — tests still pass, diffs still get reviewed, docs still stay current.
 
+## Session start
+
+Read `PROGRESS.md` and `docs/architecture/architecture.md` before starting work.
+
 ## Continuing through plans
 
 - No stopping points within a multi-task plan. Work through all N tasks continuously; do not ask whether to keep going. Harness reminders are administrative noise, not stop signals.
@@ -64,13 +68,29 @@ Run the smallest relevant check while iterating. All four gates (`test`, `typech
 
 - Test-driven development for sim behavior: write the failing contract test first (scenario-level where possible: "after N ticks of X, Y holds"), then implement. Test the contract, not the implementation.
 - For each desired change, make the change easy, then make the easy change.
-- Before broad implementation work, write or update the relevant docs under `docs/`.
+- Before implementing a non-trivial change, write a plan — for broad implementation work, write or update the relevant docs under `docs/`. (Trivial changes: just make them, per the working-style preamble.)
 - No magic numbers — tunable gameplay values live in `src/sim/constants/` domain files.
 - Files under 500 LOC — extract helpers or split. 2-space indentation. `import type` for type-only imports. Remove dead code and duplicated logic.
 - Do not ship a visual feature without verifying it in a browser screenshot.
 - Expose `window.render_game_to_text()` and `window.advanceTime(ms)` for automated playtesting; init Three.js with `preserveDrawingBuffer: true` so screenshots capture WebGL.
-- Adversarially review non-trivial changes before declaring them done: fan out independent reviewer agents over the diff (correctness, sim-determinism, engine-contract, rendering/perf lenses), verify each claim against the live code, fix real findings, re-review until reviewers only nitpick. For high-risk changes (persistence/save-format, agent-loop or concurrency, anything with data-loss blast radius) also run the multi-CLI review (Codex + Claude) — a different model catches blind spots same-model subagents share.
+- Adversarially review non-trivial changes before declaring them done: fan out independent reviewer agents over the diff (correctness, sim-determinism, engine-contract, rendering/perf lenses), verify each claim against the live code, fix real findings, re-review until reviewers only nitpick. For high-risk changes (persistence/save-format, agent-loop or concurrency, anything with data-loss blast radius) also run the multi-CLI review (Codex + Claude, each reviewing independently; see Code review) — a different model catches blind spots same-model subagents share.
+- Verify reviewer claims against the codebase before acting on them: a reviewer might be working from training knowledge, a stale snapshot, or a hallucinated symbol — grep or read the actual file before merging the fix. The cost of one extra read is negligible; the cost of acting on a wrong claim is rework. This pairs with the "Reviewers MUST read the codebase" rule in the Code review section.
 - Record non-obvious failure modes in `docs/learning/lessons.md` with evidence anchors (what surfaced it, fix commit, test that pins it, behavior delta).
+
+## Code review
+
+The default adversarial pass for non-trivial work is the in-process Workflow (see Core rules). Run the multi-CLI review (Codex + Claude, each reviewing independently) on high-risk changes and full-codebase audits. All multi-CLI mechanics — current review model pins, exact commands, sandbox flags, the background-run/poller pattern, the Codex output-extraction recipe, and CLI failure modes — live in `.claude/skills/multi-cli-review/SKILL.md`; read it before every multi-CLI session and bump review pins there first.
+
+Policy for every reviewer, in-process subagent or CLI:
+
+- **Reviewers MUST read the codebase to ground their claims.** Every review prompt must include the directive: *"Verify each claim in the plan/diff against the live codebase — grep for the symbols, function signatures, column names, and file paths it references; do not approve based on prompt text alone."* Without this directive baked in, two reviewers can APPROVE a design with a real defect that only the codebase-reading reviewer catches. Convergence is measured by *substantive finding count*, not *vote count* — a HIGH defect from one reviewer outweighs APPROVED from two.
+- Aspects to review:
+  1. Design — easily scales, generalizes, debugs, can be understood and reasoned about, stays lean.
+  2. Test coverage.
+  3. Correctness.
+  4. Clean code, typing, efficiency, memory leaks. No duplicated logic, inconsistent implementations, violation of boundaries. File size: keep every file under 500 LOC (hard ceiling 1000) — split god-objects by lifecycle/role. Prefer composition over inheritance. Clean up dead code. Do not change app mechanics or behavior unless explicitly asked.
+- **Enrich the baseline prompt** (quoted in the runbook skill) **with task-specific context** — the change's intent, prior-iteration findings to verify, files to focus on, and an anti-regression checklist. The bare baseline returns generic feedback; useful reviews need the specifics.
+- **Keep model IDs current.** Use the latest-family alias when a command is meant to track the newest model (for example, `opus[1m]`); bump pinned strings whenever a more capable fixed variant ships. Verify with a one-line smoke test (`echo "ok" | <cli> ...`) before committing the bump — silent fallback to an older model is the failure mode to guard against. Review-command pins live in the runbook skill.
 
 ## civ-engine usage rules (hard-won; violating these causes silent breakage)
 
