@@ -13,4 +13,3 @@ city-specific notes:
 - App-facing LLM pins: none to bump from here — the visual-loop harness LLM is env-var-driven (`CITY_LLM_VISUAL_LOOP_COMMAND` in `scripts/llm-visual-loop.mjs`; deterministic scripted agent by default), not a pinned model string.
 - Unreachable-CLI notes go to `PROGRESS.md` — this repo has no devlog, so the canonical's "devlog or progress log" maps to PROGRESS.md here.
 - Review capture home: the canonical default `tmp/review-runs/<objective>/<date>/<iteration_number>/` (never staged; cleaned up after synthesis) — no repo override.
-- Candidate for canonical: extra marker-missing fallback for raw codex stdout, `sed -n '/<\/stdin>/,$p' codex.txt | head -300` (slices from the end of the echoed stdin) — carried from this repo's pre-stub runbook; not in the canonical's fallback list yet.
