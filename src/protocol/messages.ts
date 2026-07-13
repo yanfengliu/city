@@ -88,6 +88,8 @@ export interface FrameStats {
 
 export interface VehicleView {
   id: number;
+  /** ECS incarnation; a recycled id starts a new presentation identity. */
+  generation: number;
   /** Current edge id in the road graph (see the `roads` message edges). */
   edge: number;
   /** Progress along the edge in [0,1). */

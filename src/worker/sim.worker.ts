@@ -337,7 +337,13 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
     const data = world.getComponent(id, 'vehicle');
     if (!data || data.legIndex >= data.legs.length) continue;
     const leg = data.legs[data.legIndex];
-    vehicles.push({ id, edge: leg.edge, t: data.t, reverse: leg.reverse });
+    vehicles.push({
+      id,
+      generation: world.getEntityGeneration(id),
+      edge: leg.edge,
+      t: data.t,
+      reverse: leg.reverse,
+    });
   }
   // O(population)/O(buildings) scans — refresh on a small cadence, not every tick.
   if (world.tick % EMPLOYED_STAT_INTERVAL === 0 || cachedEmployed < 0) {

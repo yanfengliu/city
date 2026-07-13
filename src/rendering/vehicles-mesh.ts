@@ -23,10 +23,16 @@ import {
   VEHICLE_Y,
 } from './constants';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
+import {
+  retargetVehicleMotion,
+  sampleVehicleMotionInto,
+  type VehicleMotionSegment,
+} from './vehicle-motion';
 
 /** Plain-data vehicle view (mirrors the protocol VehicleView). */
 export interface VehicleRenderView {
   id: number;
+  generation: number;
   edge: number;
   /** Progress along the edge in [0,1). */
   t: number;
@@ -42,14 +48,12 @@ export interface RoadEdgeView {
 
 interface VehicleState {
   edge: number;
-  fromX: number;
-  fromZ: number;
-  toX: number;
-  toZ: number;
-  yaw: number;
+  generation: number;
+  motion: VehicleMotionSegment;
 }
 
 const MATRIX = new Matrix4();
+const MOTION_POSE = { x: 0, z: 0, yaw: 0 };
 const COLOR = new Color();
 
 /**
@@ -70,11 +74,14 @@ export class VehiclesView {
   /** Vehicles message that arrived before its topologyVersion's roads message. */
   private pending: { version: number; list: VehicleRenderView[] } | null = null;
   private buckets: ReadonlyMap<number, number> = new Map();
-  private lastMessageAt = 0;
+  private lastMessageAt: number | null = null;
   private messageIntervalMs = VEHICLE_LERP_DEFAULT_MS;
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
-  constructor(private readonly gridWidth: number) {
+  constructor(
+    private readonly gridWidth: number,
+    private readonly now: () => number = () => performance.now(),
+  ) {
     const body = new BoxGeometry(VEHICLE_BODY_WIDTH, VEHICLE_BODY_HEIGHT, VEHICLE_BODY_LENGTH)
       .translate(0, VEHICLE_BODY_HEIGHT / 2, 0);
     const roof = new BoxGeometry(VEHICLE_ROOF_WIDTH, VEHICLE_ROOF_HEIGHT, VEHICLE_ROOF_LENGTH)
@@ -98,7 +105,7 @@ export class VehiclesView {
 
   setTerrainSurface(surface: TerrainSurfaceView): void {
     this.surface = surface;
-    this.updateFrame(performance.now());
+    this.updateFrame(this.now());
   }
 
   /** Registers a `roads` message's edge geometry under its topologyVersion. */
@@ -136,20 +143,26 @@ export class VehiclesView {
   /** Per-render-frame smoothing: lerp each car from its previous to newest sampled position. */
   updateFrame(now: number): void {
     if (this.states.size === 0) return;
-    const alpha = Math.min(1, (now - this.lastMessageAt) / this.messageIntervalMs);
+    const alpha =
+      this.lastMessageAt === null
+        ? 1
+        : Math.min(1, Math.max(0, (now - this.lastMessageAt) / this.messageIntervalMs));
     let slot = 0;
     for (const state of this.states.values()) {
-      const x = state.fromX + (state.toX - state.fromX) * alpha;
-      const z = state.fromZ + (state.toZ - state.fromZ) * alpha;
-      MATRIX.makeRotationY(state.yaw).setPosition(x, this.surface.heightAt(x, z) + VEHICLE_Y, z);
+      const { x, z, yaw } = sampleVehicleMotionInto(state.motion, alpha, MOTION_POSE);
+      MATRIX.makeRotationY(yaw).setPosition(x, this.surface.heightAt(x, z) + VEHICLE_Y, z);
       this.mesh.setMatrixAt(slot++, MATRIX);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 
   private apply(topologyVersion: number, list: VehicleRenderView[]): void {
-    const now = performance.now();
-    if (this.lastMessageAt > 0) {
+    const now = this.now();
+    const previousAlpha =
+      this.lastMessageAt === null
+        ? 1
+        : Math.min(1, Math.max(0, (now - this.lastMessageAt) / this.messageIntervalMs));
+    if (this.lastMessageAt !== null) {
       this.messageIntervalMs = Math.min(
         Math.max(now - this.lastMessageAt, VEHICLE_LERP_MIN_MS),
         VEHICLE_LERP_MAX_MS,
@@ -165,13 +178,13 @@ export class VehiclesView {
       if (!cells || cells.length === 0) continue;
       const { x, z, yaw } = this.samplePolyline(cells, vehicle.t, vehicle.reverse);
       const previous = this.states.get(vehicle.id);
+      const continuing = previous?.generation === vehicle.generation
+        ? previous
+        : undefined;
       next.set(vehicle.id, {
         edge: vehicle.edge,
-        fromX: previous ? previous.toX : x,
-        fromZ: previous ? previous.toZ : z,
-        toX: x,
-        toZ: z,
-        yaw,
+        generation: vehicle.generation,
+        motion: retargetVehicleMotion(continuing?.motion, previousAlpha, { x, z, yaw }),
       });
     }
     this.states = next;

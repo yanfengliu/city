@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "capturedOn": "2026-07-13",
+  "fixture": {
+    "sha256": "2f4823cfb03bd38deea97a3b6aae0491c1ca97b9aa6b60c1c8e582285190c7ec",
+    "buildings": 453,
+    "population": 936,
+    "vehicles": 88
+  },
+  "environment": {
+    "browser": "Headless Chrome 150",
+    "os": "Windows 11 10.0.26100",
+    "cpu": "13th Gen Intel Core i9-13900KF",
+    "gpu": "NVIDIA GeForce RTX 4090 via ANGLE D3D11",
+    "viewportCssPixels": [1280, 720],
+    "framesPerProfile": 600
+  },
+  "acceptance": {
+    "minimumMeanFps": 58,
+    "maximumP95IntervalMs": 18.5,
+    "maximumP99IntervalMs": 25,
+    "maximumConsecutiveIntervalsAbove20Ms": 2
+  },
+  "runs": [
+    {
+      "capturedAt": "2026-07-13T19:59:19.372Z",
+      "sourceTreeSha256": "cf115599ab2859e1e8891bfbaaf55919f0d5c1eaeb253cfb3bf51c1658c4d879",
+      "binaryTreeSha256": "d1bbb14e8a2ac6d4b114d22f4755ff070f7bc4f3ed77d2b01873f594e12ba2fc",
+      "acceptedProfiles": 5,
+      "profileCount": 6,
+      "fpsRange": [59.6, 60.0],
+      "p95IntervalMsRange": [16.8, 16.9],
+      "p95RenderWorkMsRange": [0.9, 1.1],
+      "rejections": ["DPR 2 / 1x: three consecutive intervals above 20 ms"]
+    },
+    {
+      "capturedAt": "2026-07-13T20:03:13.292Z",
+      "sourceTreeSha256": "cf115599ab2859e1e8891bfbaaf55919f0d5c1eaeb253cfb3bf51c1658c4d879",
+      "binaryTreeSha256": "d1bbb14e8a2ac6d4b114d22f4755ff070f7bc4f3ed77d2b01873f594e12ba2fc",
+      "acceptedProfiles": 3,
+      "profileCount": 6,
+      "fpsRange": [59.21, 60.0],
+      "p95IntervalMsRange": [16.8, 17.5],
+      "p95RenderWorkMsRange": [0.9, 1.1],
+      "rejections": [
+        "DPR 1 / 4x: p99 25.4 ms and four consecutive intervals above 20 ms",
+        "DPR 2 / pause: p99 25.9 ms",
+        "DPR 2 / 1x: p99 25.8 ms and four consecutive intervals above 20 ms"
+      ]
+    }
+  ],
+  "conclusion": "The named reference scene sustains 60 Hz ordinary-frame throughput with substantial callback headroom. Strict tail latency is not yet repeatably accepted, so this is not evidence of an unconditional 60 FPS minimum."
+}
