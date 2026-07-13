@@ -96,6 +96,10 @@ const FIELD_OVERLAYS: readonly OverlayName[] = ['pollution', 'noise', 'landValue
 /** A clicked map object: a grown RCI building or a player-placed service structure. */
 type Inspected = { kind: 'building' | 'structure'; id: number };
 
+interface GameOptions {
+  recordPlaytest?: boolean;
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -179,8 +183,10 @@ export class Game {
   private employed = 0;
   private disconnectedTrips = 0;
   private ready = false;
+  private readonly recordPlaytest: boolean;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options: GameOptions = {}) {
+    this.recordPlaytest = options.recordPlaytest === true;
     this.scene = new CityScene(container, GRID_WIDTH, GRID_HEIGHT);
     this.hud = new Hud<ToolName>(container, TOOL_GROUPS, {
       onSetSpeed: (speed) => this.setSpeed(speed),
@@ -305,6 +311,7 @@ export class Game {
 
     this.worker = new Worker(new URL('../worker/sim.worker.ts', import.meta.url), {
       type: 'module',
+      name: this.recordPlaytest ? 'city-playtest-recorder' : 'city-game',
     });
     this.worker.addEventListener('message', (event: MessageEvent<WorkerToClient>) => {
       this.onWorkerMessage(event.data);
@@ -519,6 +526,9 @@ export class Game {
     this.buildings.set(view.id, view);
     if (footprintChanged) this.occupancyDirty = true;
     this.buildingsView.upsert(view);
+    if (previous && (previous.level !== view.level || previous.zone !== view.zone)) {
+      this.scene.invalidateShadows();
+    }
     this.utilityIconsFx.sync(view);
   }
 
@@ -544,6 +554,7 @@ export class Game {
     this.structures.set(view.id, view);
     this.structuresView.upsert(view);
     if (footprintChanged) this.occupancyDirty = true;
+    if (previous && previous.service !== view.service) this.scene.invalidateShadows();
   }
 
   /** Applies a component-specific structure removal emitted by the worker. */
@@ -570,6 +581,7 @@ export class Game {
       for (const index of this.roadCells) occupied.add(index);
       for (const index of this.networksView.occupiedCells) occupied.add(index);
       this.treesView?.updateOccupied(occupied);
+      this.scene.invalidateShadows();
     }
     this.zonesView.flushIfDirty();
   }
@@ -817,6 +829,9 @@ export class Game {
   }
 
   private harnessRequest<T>(send: (id: number) => void): Promise<T> {
+    if (!this.recordPlaytest) {
+      return Promise.reject(new Error('playtest recording unavailable; reload with ?record=1'));
+    }
     const id = ++this.harnessReqId;
     return new Promise<T>((resolve) => {
       this.harnessPending.set(id, resolve as (value: unknown) => void);

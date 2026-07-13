@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-12 — Measured render and localhost-play latency optimization
+
+User request: optimize performance with measurable latency numbers.
+
+Profiled before editing instead of using requestAnimationFrame cadence as a proxy. The highest-confidence presentation bottleneck was Three.js rerendering a 2048² directional shadow map every frame even when the paused city, sun, trees, and buildings were unchanged. Shadows remain fully enabled; the renderer now caches that map, refreshes it every four sim ticks as the sun moves (about 5 Hz at 1× and 20 Hz at 4×), and invalidates it immediately when building, structure, bridge, or tree-caster occupancy changes. Policy tests pin thresholding, day wrap, caster invalidation, night-to-day dirty retention, and WebGL context-restoration recovery.
+
+The second bottleneck was dev-only rather than production: every ordinary localhost game connected a `SessionRecorder`, which cloned the worker diff stream and retained the entire session in a `MemorySink`. Recording and `window.__harness` now require explicit `?record=1`; `npm run playtest:llm` adds that flag itself. The retained recorded–lean–lean–recorded 3,000-tick profile measured 4.234/4.870 s with capture versus 1.772/1.790 s lean, aggregating to 4.552 → 1.781 s (−2.771 s, −60.9%) and 2.54× throughput while removing 73.4 MB of recorder-retained JSON-equivalent bundle data. This is explicitly a headless sim-loop proxy with one protocol-like no-op diff listener, not a browser heap or full worker-projection claim; the driver, raw results, scope, and complete sim/civ-engine runtime source manifest live under `benchmarks/`.
+
+Render evidence uses a generated seed-12345 production save so loaded simulation, terrain, water, and trees agree: tick 1203, 453 buildings, 88 vehicles, 1280×720 at DPR 1, headless Chrome 150 on ANGLE D3D11 / RTX 4090. The committed headless driver stops rAF, warms 1,800 direct renderer calls, and records 600 GPU-finished calls in A–B–B–A order: the paired means clustered at 0.189–0.196 ms before and 0.110–0.114 ms after, aggregating to 0.1923 → 0.1123 ms (−0.0800 ms, −41.6%). Calls fell 53 → 34 (−35.8%) and submitted triangles 713,931 → 394,815 (−44.7%). The exact fixture generator, fixture, binary manifests, driver, run order, environment, pooled summaries, and all 2,400 raw samples live under `benchmarks/`; these figures describe this machine/run, not every GPU. During a separate live 1× check, 21 of 240 sampled frames performed the shadow pass and 219 reused it, proving shadows were throttled rather than removed; the ignored local capture `output/playwright/performance-pass/final-shadows-cached.png` visually confirms tree/building shadows remain.
+
+Verification: `npm test` passed 220/220 across 53 files; `npm run typecheck`, `npm run lint`, and `npm run build` all passed. The build gate confirmed the production worker contains no recorder symbols and is 111,167/120,000 bytes; Vite's pre-existing >500 kB main-chunk warning remains non-blocking. Headless browser checks verified a normal localhost session has no harness, `?record=1` records a non-vacuous three-segment replay check, normal-mode recorder calls reject immediately, the benchmark fixture loads to its exact expected state, and tree/building shadows remain visible. Three adversarial review lenses converged with no substantive findings after fixes for WebGL context restoration, vacuous zero-segment determinism checks, normal-mode request hangs, benchmark seed drift, incomplete source/binary identity, and under-pinned aggregate math.
+
 ### 2026-07-12 — Shared rolling terrain elevation
 
 User request: the terrain needs elevation change.

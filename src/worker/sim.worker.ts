@@ -31,6 +31,7 @@ import type {
 } from '../sim/types';
 
 const workerScope = self as unknown as {
+  name: string;
   postMessage(message: WorkerToClient): void;
 };
 
@@ -49,8 +50,8 @@ let currentSeed = 12345;
 let sim = createCitySim({ seed: currentSeed, ...SIM_FLAGS });
 let world = sim.world;
 
-// Playtest harness (docs/harness.md): every world is one recorded session, so
-// commands/ticks/snapshots/markers can be replayed and inspected deterministically.
+// Opt-in playtest harness (docs/harness.md): a recorder-named dev worker treats
+// every world as one session so commands/ticks/markers replay deterministically.
 function makeRecorder(w: typeof world): SessionRecorder<CityEvents, CityCommands> {
   return new SessionRecorder({ world: w, sink: new MemorySink() }) as SessionRecorder<
     CityEvents,
@@ -60,10 +61,11 @@ function makeRecorder(w: typeof world): SessionRecorder<CityEvents, CityCommands
 let recorder: ReturnType<typeof makeRecorder> | undefined;
 function startRecorder(): void {
   // Recording is a dev/playtest tool: it accumulates every tick's diff, so it
-  // is off in production builds (the harness handlers no-op without a recorder).
-  if (!import.meta.env.DEV) return;
-  recorder = makeRecorder(world);
-  recorder.connect();
+  // is opt-in on localhost and off in production builds.
+  if (import.meta.env.DEV && workerScope.name === 'city-playtest-recorder') {
+    recorder = makeRecorder(world);
+    recorder.connect();
+  }
 }
 function recordedBundle(): SessionBundle<CityEvents, CityCommands> {
   return recorder!.toBundle() as unknown as SessionBundle<CityEvents, CityCommands>;

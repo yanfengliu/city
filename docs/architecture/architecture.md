@@ -24,7 +24,7 @@ overlay plane ◀── FieldStore  ◀──┼─── field chunks (on each 
 - `src/rendering/` — Three.js only. Consumes protocol messages into a RenderStore (entity views keyed by id+generation), builds/updates GPU resources. Never imports `sim/`.
 - `src/ui/` — DOM HUD (vanilla TS, no framework; keep it lean). Reads UiStore, dispatches commands via a single `submitCommand` funnel. Shared UI chrome lives in `hud-style.ts` so the top HUD, advisor, budget, inspect, legend, warning, toast, and milestone surfaces keep one light frosted-aqua civic planning skin without pulling render or sim code into UI.
 - `src/app/` — composition root: boot worker, wire stores, input → active tool → command, render loop.
-- `src/harness/` — dev-only playtest/replay adapters. It wraps the composition-root game surface, recorder messages, and real `PlayerInput` events. The civ-engine visual playtest host lives here and may read UI labels / screenshot / text state, but it must not bypass the real player surface for visual-loop actions.
+- `src/harness/` — opt-in dev playtest/replay adapters. `?record=1` enables the worker recorder and `window.__harness`; an ordinary localhost session keeps both off so diff cloning and the unbounded in-memory session sink do not tax normal play. The harness wraps the composition-root game surface, recorder messages, and real `PlayerInput` events. The civ-engine visual playtest host lives here and may read UI labels / screenshot / text state, but it must not bypass the real player surface for visual-loop actions.
 - `src/persistence/` — save/load: requests snapshot from worker, versions it, localStorage + file export/import; load path re-creates the worker world from snapshot.
 
 ## Worker protocol (v1)
@@ -48,7 +48,7 @@ Projected render views are minimal per archetype: growables use `BuildingView {x
 - Vehicles: single `InstancedMesh` (capacity 600). Per frame: for each vehicle view, sample its edge polyline at `t` (+ per-tick lerp between last two sim states, renderer-owned), set instance matrix. Instance color by speed (white→red) for readable congestion.
 - Field overlays: one 64x64 (or 32x32 for blockSize 4) `DataTexture` per active field on a transparent `(width+1)×(height+1)` grid draped above terrain; updated from sparse `field` messages. Only the active overlay is subscribed. The client-computed power/water overlay uses the same draped geometry and mirrors the sim's monotone conduction fixpoint—starting at source/conductor cells and repeatedly attaching in-range live growables plus services—so its connection-reach halo remains accurate during brownouts.
 - Camera: `MapControls` (orbit/pan/zoom, angle-clamped); mouse and keyboard panning re-sample the focus height while shifting the camera equally, preserving view angle/distance across relief. Picking: clip the ray to the finite map/height bounds, traverse intersected cells front-to-back with bounded grid DDA, and test each cell's two visible triangles exactly; active off-map drags use a constant-work terrain-edge datum fallback before clamping. `worldToScreen` projects the same sampled surface so automated input stays invertible. Tools draw terrain-anchored ghost previews client-side and validate optimistically (authoritative validation in-sim; rejection → toast + ghost flash).
-- Day/night (phase 6): renderer-local sun/ambient animation keyed to sim day fraction from `frame`.
+- Day/night (phase 6): renderer-local sun/ambient animation keyed to sim day fraction from `frame`. Directional shadows remain enabled, but the 2048² map is cached between caster changes and meaningful sun movement (1/1024 day, four sim ticks); tree/building/structure/bridge occupancy invalidates it immediately.
 
 ## Sim internals worth pinning
 
@@ -64,7 +64,7 @@ Projected render views are minimal per archetype: growables use `BuildingView {x
 - Entities ≤ ~6,000 (2k citizens + ≤600 vehicles + ~1–2k buildings + services): engine ticks this in ≤ ~5 ms; budget 50 ms/tick at 20 TPS.
 - Pathfinding: road graph ≤ ~1k nodes; 8 path resolutions/tick budgeted through the queue; cached hits ~0.01 ms.
 - Diff payloads at this scale ~25–50 KB/tick worst case; fields throttled to their cadence and subscription.
-- Render: instancing keeps draw calls ≈ #archetypes + chunks + overlays ≤ ~50. Target 60 fps; hard floor 30 fps at v1 acceptance scale.
+- Render: instancing keeps draw calls ≈ #archetypes + chunks + overlays ≤ ~50. Target 60 fps; hard floor 30 fps at v1 acceptance scale. The reproducible fixed-fixture benchmark (`benchmarks/results/2026-07-12-shadow-cache.json`) uses a paused, seed-aligned 453-building/88-vehicle production save at 1280×720 DPR 1 on headless Chrome 150 / RTX 4090. After 1,800 warmup calls, its 600-sample A–B–B–A direct-render aggregate measured 0.1923 → 0.1123 ms mean GPU-completed latency (−41.6%), with 53 → 34 calls (−35.8%) and 713,931 → 394,815 submitted triangles (−44.7%).
 
 ## Testing strategy
 

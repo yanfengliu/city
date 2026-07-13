@@ -18,6 +18,7 @@ import {
 import type { Object3D } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { ATMOSPHERE_COLORS, ATMOSPHERE_LIGHT_INTENSITY } from './constants';
+import { refreshShadowsAfterContextRestore, ShadowMapUpdatePolicy } from './shadow-update';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** WASD pan speed as a fraction of the camera-to-target distance, per second
@@ -77,6 +78,7 @@ export class CityScene {
   private readonly gridWidth: number;
   private readonly gridHeight: number;
   private terrainSurface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
+  private readonly shadowUpdates = new ShadowMapUpdatePolicy();
 
   constructor(container: HTMLElement, gridWidth: number, gridHeight: number) {
     this.gridWidth = gridWidth;
@@ -90,6 +92,15 @@ export class CityScene {
     this.renderer.toneMappingExposure = 1.15;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
+    // The sun and all casters are static between sim/caster changes. Reusing
+    // the map avoids a 2048² shadow pass on every presentation frame.
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
+    refreshShadowsAfterContextRestore(
+      this.renderer.domElement,
+      this.shadowUpdates,
+      this.renderer.shadowMap,
+    );
     container.appendChild(this.renderer.domElement);
 
     this.scene = new Scene();
@@ -189,6 +200,11 @@ export class CityScene {
     this.terrainSurface = surface;
     this.conformCameraTargetToTerrain();
     this.controls.update();
+  }
+
+  /** Call after tree/building/structure/bridge caster geometry changes. */
+  invalidateShadows(): void {
+    this.shadowUpdates.invalidate();
   }
 
   getTerrainSurface(): TerrainSurfaceView {
@@ -387,7 +403,12 @@ export class CityScene {
       this.gridHeight / 2 + Math.sin(angle * 0.5) * 40,
     );
     const daylight = Math.max(0, height);
-    this.sun.castShadow = daylight > 0.15;
+    const castShadow = daylight > 0.15;
+    if (this.sun.castShadow !== castShadow) this.shadowUpdates.invalidate();
+    this.sun.castShadow = castShadow;
+    if (this.shadowUpdates.consume(fraction, castShadow)) {
+      this.renderer.shadowMap.needsUpdate = true;
+    }
 
     // Sun: warm and dim near the horizon, bright and neutral when high.
     const warmth = 1 - Math.min(1, Math.max(0, height) / 0.4);

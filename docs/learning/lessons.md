@@ -203,3 +203,33 @@ The engine 2.0.0 fleet validation ran this repo's suite once and recorded "green
 | Fix commit | n/a — evidence-driver workaround, not shipped game behavior. |
 | Test added | Headless `output/playwright/terrain-elevation/playtest-elevation.mjs` disables backdrop filters only in the evidence page, records page/console errors, then captures `final-road-on-relief.png`; the clean image was inspected at original resolution. |
 | Behavior delta | Browser evidence now injects `* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }` before full-page capture. Rule: when screenshot artifacts align exactly with composited CSS chrome, isolate the capture compositor before changing the rendered product; keep the workaround in the evidence driver so production visuals remain untouched. |
+
+## A DEV guard only tree-shakes recorder code when all recorder state stays inside it
+
+| Field | Value |
+|---|---|
+| Surfaced by | Comparing production worker artifacts while making localhost recording opt-in: an otherwise harmless unconditional `recorder = undefined` in the world-swap path grew the minified worker from 111.16 kB to 162.95 kB. |
+| Reviewer findings | n/a — surfaced by before/after production bundle inspection. |
+| Fix commit | (this commit) |
+| Test added | `tests/harness/recording-mode.test.ts` pins explicit `record=1`; `tests/harness/llm-loop-script.test.ts` pins the unattended runner's opt-in. `npm run build` now rejects recorder symbols or a worker above the 120,000-byte budget and reports the current 111,167-byte artifact. |
+| Behavior delta | Recorder construction, connection, and assignment now remain inside the `import.meta.env.DEV` branch; production dead-code elimination removes the recorder implementation, while normal dev workers select the lean path by name. Rule: a compile-time environment guard is not enough if mutable state associated with the guarded feature is also touched from unconditional code—inspect the emitted artifact, not just the source branch. |
+
+## A green determinism result is vacuous when it checked no segments
+
+| Field | Value |
+|---|---|
+| Surfaced by | Adversarial review of the unattended visual-loop gate: an idle recorder returned `selfCheck.ok: true` with `checkedSegments: 0`. |
+| Reviewer findings | The runner treated `ok` alone as proof, so a run that recorded no command boundary could publish a false-green determinism result. Normal-mode recorder requests also remained pending forever because no worker recorder existed to answer them. |
+| Fix commit | (this commit) |
+| Test added | `tests/harness/llm-loop-script.test.ts` requires both `selfCheck.ok === true` and `checkedSegments > 0`; `tests/harness/recording-mode.test.ts` pins immediate rejection with the `?record=1` instruction outside recording mode. Live checks covered an idle zero-segment rejection and a three-segment recorded pass. |
+| Behavior delta | Unattended verification now fails closed unless it replayed at least one real segment, and disabled recorder APIs reject instead of leaking unresolved promises. Rule: always pair a verification status with the amount of evidence actually checked. |
+
+## A browser performance fixture must share the boot world's seed
+
+| Field | Value |
+|---|---|
+| Surfaced by | Determinism review of the first render profile: its save was generated with seed 3 while the browser's renderer booted terrain and tree state with seed 12345. |
+| Reviewer findings | Building counts could still reach the expected values, masking that the loaded sim and already-created visual world described different terrain. That made the first before/after scene identity claim too weak. |
+| Fix commit | (this commit) |
+| Test added | `tests/performance/render-benchmark.test.ts` pins the generated fixture's SHA-256, seed 12345, and exact post-load tick/building/vehicle state; the benchmark driver rejects any other fixture seed before launching Chromium. |
+| Behavior delta | The committed render profile now compares identical seed-aligned terrain, water, trees, simulation state, viewport, and binaries. Rule: for save-driven visual benchmarks, state counts are not enough—pin every world-construction input that survives outside the loaded snapshot. |

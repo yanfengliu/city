@@ -27,6 +27,14 @@ describe('llm-visual-loop script wiring', () => {
     expect(source).toContain('window.__harness.selfCheck()');
   });
 
+  it('explicitly opts its dev page into replay recording', () => {
+    expect(source).toContain("url.searchParams.set('record', '1')");
+  });
+
+  it('never reports a zero-segment self-check as verified', () => {
+    expect(source).toContain('selfCheck.ok === true && checkedSegments > 0');
+  });
+
   it('never uses the command backdoor or private harness state', () => {
     expect(source).not.toContain('__harness.command');
     expect(source).not.toContain('__harness.state()');

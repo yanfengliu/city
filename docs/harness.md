@@ -26,7 +26,7 @@ Both were studied before building this (`../civ-engine`, `../aoe2`).
 
 The city runs the sim in a Web Worker; the main thread drives it with `{type:'command'}` / `advance` messages and observes via `render_game_to_text()` + frame diffs. So:
 
-- **Record** lives in the worker: a `SessionRecorder` connected to `world` from boot, torn down and restarted on New/Load (each city is one session, seeded by `currentSeed`).
+- **Record** lives in the worker when the dev page explicitly opts in with `?record=1`: a `SessionRecorder` connects to `world` from boot, then is torn down and restarted on New/Load (each city is one session, seeded by `currentSeed`). Ordinary localhost play does not clone or retain tick diffs.
 - **Annotate** is a main-thread -> worker message that normalizes a `CityImprovementFindingInput`, maps it into civ-engine's shared `ImprovementFinding`, and calls `recorder.addMarker(improvementFindingToMarker(...))` with the worker's current tick. New markers do not emit `data.playtestFinding`; that shape is read only for old bundles.
 - **Replay-debug** is `inspectAt(tick)`: the worker folds `snapshotAtTick(recorder.toBundle(), tick)` into a throwaway probe sim (the live world is untouched) and returns the exact deterministic `simSummary` there — so you can jump to any finding's tick and read ground-truth state without a world swap.
 - **Verify** with `SessionReplayer.selfCheck()` — the same check the project already gates on.
@@ -37,7 +37,9 @@ Nothing new is needed on the determinism side; the sim is already replay-clean.
 
 ## `window.__harness` (main thread)
 
-Installed **only in the dev build** (`import.meta.env.DEV`), matching the DEV-gated worker recorder — a production build carries no harness.
+Installed only in a dev build (`import.meta.env.DEV`) whose URL includes `?record=1`, matching the named opt-in worker recorder. An ordinary dev URL has no live recorder or `window.__harness`; production exposes neither surface, and its emitted worker contains no `SessionRecorder`/`MemorySink` implementation.
+
+The unconditional `window.__game` debug object remains available for basic automation, but its recorder-only request methods reject immediately with the `?record=1` instruction when recording is disabled. The unattended loop accepts determinism verification only when `selfCheck.ok` is true **and** `checkedSegments > 0`; a quiet or missed-action run must not publish a vacuous green check.
 
 | Method | Purpose |
 |---|---|
@@ -112,7 +114,7 @@ run -> record -> find -> verify -> classify -> promote/propose -> review -> reru
 ```
 
 1. **Run through the player surface** - use `__harness.visualHost()` or `__harness.player` for real screenshots, HUD clicks, map drags, keys, and waits. Use `command(name,data)` only when testing sim mechanics rather than player experience.
-2. **Record evidence** - every dev harness run is recorded in the worker by `SessionRecorder`; visual observations include screenshot, visible text, controls, hidden-state channels, prior findings, and last replay diagnostics.
+2. **Record evidence** - every recorder-enabled dev harness run is recorded in the worker by `SessionRecorder`; visual observations include screenshot, visible text, controls, hidden-state channels, prior findings, and last replay diagnostics.
 3. **Find and annotate** - on noticing something, call `__harness.annotate({ category, severity, area, observed, expected, suggestion, evidence })`. The worker anchors it to the authoritative tick and stores a shared `ImprovementFinding`.
 4. **Verify before acting** - call `__harness.inspectAt(finding.tick)` and `__harness.selfCheck()` before treating the finding as real. A self-check failure is a determinism bug, not evidence about game design. A finding that cannot be reproduced should stay `unverified` or become `falsePositive`.
 5. **Classify next action** - set or update `verificationStatus`, `nextAction`, and `disposition` when evidence is strong enough: `manualFix` for code work, `autoFix` only for bounded safe edits, `observeMore` for weak evidence, `proposalOnly` when the agent should report but not edit.
@@ -130,7 +132,7 @@ run -> record -> find -> verify -> classify -> promote/propose -> review -> reru
 
 ## Autonomous loop (`npm run playtest:llm`)
 
-`scripts/llm-visual-loop.mjs` is the unattended runner: it boots the vite dev server plus headless Chromium, proxies civ-engine's `runVisualPlaytestLoop` through the in-page `window.__harness.visualHost()` (real pointer/keyboard events; the `command()` backdoor is never touched — pinned by `tests/harness/llm-loop-script.test.ts`), and runs with the engine's hardened options: `promptMode: 'oracleAssisted'`, `agentObservation: 'redacted'` (the engine enforces the hidden-state wall at the agent boundary), `onActionFailure: 'continue'`, and wall-clock/action budgets.
+`scripts/llm-visual-loop.mjs` is the unattended runner: it boots the vite dev server plus headless Chromium, adds `record=1` to its configured or local URL, proxies civ-engine's `runVisualPlaytestLoop` through the in-page `window.__harness.visualHost()` (real pointer/keyboard events; the `command()` backdoor is never touched — pinned by `tests/harness/llm-loop-script.test.ts`), and runs with the engine's hardened options: `promptMode: 'oracleAssisted'`, `agentObservation: 'redacted'` (the engine enforces the hidden-state wall at the agent boundary), `onActionFailure: 'continue'`, and wall-clock/action budgets.
 
 The default agent is a deterministic scripted bootstrapper (road, R/C zones, coal plant + line, then watch) so the command runs without API keys. Set `CITY_LLM_VISUAL_LOOP_COMMAND` to plug in an LLM: the command receives `{step, promptParts, controls}` on stdin — `promptParts` come from civ-engine's `buildVisualPlaytestPromptParts`, so the screenshot arrives as a typed image part — and prints a decision JSON on stdout. Tune with `CITY_VISUAL_LOOP_STEPS` and `CITY_VISUAL_LOOP_WALL_CLOCK_MS`; `CITY_PLAYTEST_URL` reuses a running server.
 

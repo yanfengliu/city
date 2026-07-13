@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/check-production-bundle.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
+    "benchmark:render": "node scripts/benchmark-render.mjs",
+    "benchmark:fixture": "node scripts/generate-performance-fixture.mjs",
+    "benchmark:recorder": "node scripts/benchmark-recorder.mjs",
     "playtest:llm": "node scripts/llm-visual-loop.mjs",
     "playtest:recursive": "node scripts/playtest-recursive.mjs"
   },

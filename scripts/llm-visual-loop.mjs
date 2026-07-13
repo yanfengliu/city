@@ -52,10 +52,11 @@ try {
     });
     await server.listen();
   }
-  const url = configuredUrl || server?.resolvedUrls?.local?.[0] || 'http://127.0.0.1:5176/';
+  const url = new URL(configuredUrl || server?.resolvedUrls?.local?.[0] || 'http://127.0.0.1:5176/');
+  url.searchParams.set('record', '1');
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-  await page.goto(url, { waitUntil: 'networkidle' });
+  await page.goto(url.href, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => Boolean(window.__harness), null, { timeout: 30_000 });
   await page.waitForSelector('canvas');
 
@@ -97,10 +98,11 @@ try {
   // unreplayable JSON that the reported self-check never saw).
   const selfCheck = await page.evaluate(() => window.__harness.selfCheck());
   const exported = await page.evaluate(() => window.__harness.getBundle());
+  const checkedSegments = selfCheck?.checkedSegments ?? 0;
   const verification = selfCheck
     ? {
-        ok: selfCheck.ok === true,
-        checkedSegments: selfCheck.checkedSegments ?? 0,
+        ok: selfCheck.ok === true && checkedSegments > 0,
+        checkedSegments,
         skippedSegments: Array.isArray(selfCheck.skippedSegments)
           ? selfCheck.skippedSegments.length
           : selfCheck.skippedSegments ?? 0,
