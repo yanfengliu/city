@@ -64,22 +64,72 @@ export const HIGHWAY_LINE_WIDTH = 0.09;
 export const HIGHWAY_DASH_LENGTH = 0.55;
 export const HIGHWAY_DASH_GAP = 0.55;
 
-// Trees.
-export const TREE_TRUNK_COLOR = 0x765034;
-export const TREE_CANOPY_COLOR = 0x4f8c45;
-export const TREE_CANOPY_HIGHLIGHT_COLOR = 0x72aa5c;
-export const TREE_CANOPY_EMISSIVE_INTENSITY = 0.1;
-export const TREE_TRUNK_HEIGHT = 0.35;
-export const TREE_TRUNK_RADIUS = 0.06;
-export const TREE_CANOPY_HEIGHT = 0.72;
-export const TREE_CANOPY_RADIUS = 0.38;
-export const TREE_UPPER_CANOPY_HEIGHT = 0.62;
-export const TREE_UPPER_CANOPY_RADIUS = 0.27;
-export const TREE_UPPER_CANOPY_LIFT = 0.48;
-export const TREE_CANOPY_HUE_JITTER = 0.018;
-export const TREE_CANOPY_LIGHT_JITTER = 0.055;
-export const TREE_SCALE_MIN = 0.75;
-export const TREE_SCALE_RANGE = 0.55;
+// Trees. Archetypes vary geometry while palettes vary as coordinated
+// trunk/lower/upper families, all assigned from deterministic cell hashes.
+export type TreeArchetypeName = 'conifer' | 'broadleaf' | 'columnar';
+export type TreeCanopyShape = 'cone' | 'faceted';
+
+export interface TreeCanopyLayerSpec {
+  shape: TreeCanopyShape;
+  radius: number;
+  height: number;
+  lift: number;
+}
+
+export interface TreeArchetypeSpec {
+  name: TreeArchetypeName;
+  trunkHeight: number;
+  trunkRadius: number;
+  lower: TreeCanopyLayerSpec;
+  upper: TreeCanopyLayerSpec;
+}
+
+export const TREE_ARCHETYPES: readonly TreeArchetypeSpec[] = [
+  {
+    name: 'conifer',
+    trunkHeight: 0.34,
+    trunkRadius: 0.055,
+    lower: { shape: 'cone', radius: 0.39, height: 0.84, lift: 0 },
+    upper: { shape: 'cone', radius: 0.3, height: 0.7, lift: 0.5 },
+  },
+  {
+    name: 'broadleaf',
+    trunkHeight: 0.48,
+    trunkRadius: 0.075,
+    lower: { shape: 'faceted', radius: 0.385, height: 0.62, lift: 0.08 },
+    upper: { shape: 'faceted', radius: 0.34, height: 0.48, lift: 0.48 },
+  },
+  {
+    name: 'columnar',
+    trunkHeight: 0.5,
+    trunkRadius: 0.06,
+    lower: { shape: 'faceted', radius: 0.24, height: 1.1, lift: 0.04 },
+    upper: { shape: 'faceted', radius: 0.19, height: 0.78, lift: 0.67 },
+  },
+] as const;
+
+export const TREE_FOLIAGE_PALETTES = [
+  { trunk: 0x765034, lower: 0x4f8c45, upper: 0x72aa5c },
+  { trunk: 0x84573b, lower: 0x5da64d, upper: 0x8acb69 },
+  { trunk: 0x6f5237, lower: 0x789348, upper: 0xa9b965 },
+  { trunk: 0x69513c, lower: 0x407f69, upper: 0x64a98a },
+] as const;
+
+/** Backward-compatible primary colors used by the general landscape contract. */
+export const TREE_TRUNK_COLOR = TREE_FOLIAGE_PALETTES[0].trunk;
+export const TREE_CANOPY_COLOR = TREE_FOLIAGE_PALETTES[0].lower;
+export const TREE_CANOPY_HIGHLIGHT_COLOR = TREE_FOLIAGE_PALETTES[0].upper;
+export const TREE_CANOPY_EMISSIVE_COLOR = 0x2f4934;
+export const TREE_CANOPY_EMISSIVE_INTENSITY = 0.08;
+export const TREE_CANOPY_HUE_JITTER = 0.012;
+export const TREE_CANOPY_LIGHT_JITTER = 0.035;
+export const TREE_SCALE_MIN = 0.82;
+export const TREE_SCALE_RANGE = 0.3;
+export const TREE_WIDTH_SCALE_MIN = 0.92;
+export const TREE_WIDTH_SCALE_RANGE = 0.13;
+export const TREE_HEIGHT_SCALE_MIN = 0.88;
+export const TREE_HEIGHT_SCALE_RANGE = 0.3;
+export const TREE_POSITION_JITTER = 0.04;
 
 // Zone tint overlay (translucent quads over zoned-but-empty cells).
 export const ZONE_TINT_OPACITY = 0.45;

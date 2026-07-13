@@ -24,6 +24,20 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-12 — Deterministic tree diversity
+
+User request: make trees look more diverse in both form and color.
+
+Replaced the single repeated two-cone tree with three deterministic low-poly archetypes: pointed conifers, rounded broadleaf crowns, and tall columnar trees. Four coordinated trunk/lower-canopy/upper-canopy color families span fresh green, spring green, olive, and blue-green; independent width/height scaling, rotation, subtle color jitter, and small within-cell offsets break up the grid repetition. The renderer still consumes the same tree mask and remains independent of simulation state. Each archetype uses synchronized instanced trunk/lower/upper meshes, for at most nine fixed tree draw calls regardless of forest size.
+
+TDD: the new `trees.test.ts` first failed all four contracts because only one unnamed archetype and one foliage family existed. GREEN proves all three geometry profiles render and partition the full mask, all four separated color families reach live instance buffers, assignments are byte-stable across identical views, and occupancy filtering restores the original archetype/count instead of rerolling it. Focused renderer tests, typecheck, and focused lint pass.
+
+Adversarial review found that the first broadleaf/conifer width range could overhang a neighboring occupied cell even though filtering is keyed to each tree's source cell. The final radii, horizontal scale, and offset now pin every archetype's worst-case horizontal reach to at most half a cell, and the occupancy regression compares every restored instance matrix plus trunk/lower/upper color—not only aggregate counts.
+
+Headless visual evidence uses the same untouched seed/camera: `output/playwright/tree-diversity/baseline-uniform.png` shows the repeated conifer rows; `final-diverse-noon.png` shows the mixed silhouettes and foliage families at the deterministic noon phase. A fresh browser session reported 0 console errors and only Three.js's pre-existing `PCFSoftShadowMap` deprecation warning.
+
+Closeout verification: `npm test` passed 184/184 across 43 files; `npm run typecheck`, `npm run lint`, and `npm run build` all passed, with only the pre-existing >500 kB chunk warning. Three independent adversarial lenses converged with no substantive findings after the source-cell-envelope fix (renderer/performance, determinism/tests, and headless visual/docs evidence).
+
 ### 2026-07-12 — Friendlier, brighter game palette
 
 User request: make the game color palette friendlier and not so dark. This supersedes the uncommitted darker-building direction while retaining its useful zone-specific silhouettes.
