@@ -4,10 +4,11 @@ import {
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
-  PlaneGeometry,
   RGBAFormat,
 } from 'three';
 import { NETWORK_OVERLAY_Y } from './constants';
+import { buildDrapedPlaneGeometry } from './surface-geometry';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 export interface NetworkOverlayData {
   /** Infrastructure cells (plants+lines / pumps+pipes) — drawn brightest. */
@@ -33,15 +34,19 @@ export class NetworkOverlayView {
   readonly mesh: Mesh;
   private readonly texture: DataTexture;
   private readonly data: Uint8Array;
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
-  constructor(gridWidth: number, gridHeight: number) {
+  constructor(
+    private readonly gridWidth: number,
+    private readonly gridHeight: number,
+  ) {
     this.data = new Uint8Array(gridWidth * gridHeight * 4);
     this.texture = new DataTexture(this.data, gridWidth, gridHeight, RGBAFormat);
     this.texture.magFilter = NearestFilter;
     this.texture.minFilter = NearestFilter;
     this.texture.flipY = false;
     this.mesh = new Mesh(
-      new PlaneGeometry(gridWidth, gridHeight),
+      buildDrapedPlaneGeometry(gridWidth, gridHeight, this.surface, NETWORK_OVERLAY_Y, 0),
       new MeshBasicMaterial({
         map: this.texture,
         transparent: true,
@@ -49,12 +54,22 @@ export class NetworkOverlayView {
         side: DoubleSide,
       }),
     );
-    this.mesh.rotation.x = -Math.PI / 2;
-    // PlaneGeometry UV v runs bottom-up; with flipY=false, texel row 0 lands
-    // at +z after this rotation — matching cell y = world z directly.
-    this.mesh.position.set(gridWidth / 2, NETWORK_OVERLAY_Y, gridHeight / 2);
-    this.mesh.scale.y = -1;
+    // The draped geometry flips V so DataTexture row 0 lands at world z=0.
+    this.mesh.position.set(gridWidth / 2, 0, gridHeight / 2);
     this.mesh.visible = false;
+  }
+
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+    const old = this.mesh.geometry;
+    this.mesh.geometry = buildDrapedPlaneGeometry(
+      this.gridWidth,
+      this.gridHeight,
+      surface,
+      NETWORK_OVERLAY_Y,
+      0,
+    );
+    old.dispose();
   }
 
   update(mode: 'power' | 'water', overlay: NetworkOverlayData): void {

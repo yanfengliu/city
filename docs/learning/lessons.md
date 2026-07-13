@@ -183,3 +183,23 @@ The engine 2.0.0 fleet validation ran this repo's suite once and recorded "green
 | Fix commit | (this commit) |
 | Test added | `tests/app/network-overlay-state.test.ts` pins brownout conduction, service bridging, abandoned/disconnected behavior, source-less conductor planning reach, utility-specific coloring, and refresh dependencies for building/structure/network messages. |
 | Behavior delta | The client now repeats the same monotone attachment closure as the sim and refreshes whenever any closure input changes. Source-less lines/pipes still show planning reach, while nearby buildings remain red because allocation has no source capacity. Rule: a topology visualization must derive from topology; allocation flags are a separate layer and cannot stand in for graph membership. |
+
+## A shared heightfield also needs shared triangle and lifecycle contracts
+
+| Field | Value |
+|---|---|
+| Surfaced by | Adversarial rendering/determinism review of the rolling-terrain elevation diff. |
+| Reviewer findings | One whole-ray bisection could converge on a hidden far crossing after a foreground ridge; the first sampling fix could still skip a grazing triangle or explode in work near the horizon; finite-map clipping then broke the active-drag off-map clamp fallback. Inset quads sampled the right corner heights but bridged the terrain cell's opposite diagonal, and the automation player captured the flat boot surface before the worker `ready` message. |
+| Fix commit | (this commit) |
+| Test added | `tests/rendering/picking.test.ts` pins first-visible shallow ridges, a narrow grazing apex before distant ground, bounded height sampling, and off-map `pick` versus `pickClamped`; `tests/rendering/surface-geometry.test.ts` pins seam-split patches; `tests/harness/player.test.ts` pins post-ready surface refresh. |
+| Behavior delta | Picking now clips to the finite map/height slab, traverses cells front-to-back with bounded grid DDA, and intersects the exact two visible triangles per cell; this avoids both skipped grazing ridges and near-horizontal sampling explosions. `pickClamped` alone adds a constant-work terrain-edge fallback so pointer drags remain usable outside the finite map. Every inset road/zone/shore rectangle is likewise clipped into triangles that stay on one underlying terrain plane, and harness picks refresh from `CityScene` at call time. Rule: once ground is piecewise-linear rather than one plane, merely sharing `heightAt()` is insufficient — consumers must also share its triangulation, nearest-hit semantics, finite bounds, off-map interaction contract, and late-initialization lifecycle. |
+
+## Backdrop-filter can corrupt an otherwise-correct headless screenshot
+
+| Field | Value |
+|---|---|
+| Surfaced by | Visual evidence review: the WebGL scene was correct, but Chromium's full-page capture replaced frosted HUD regions with opaque black rectangles. |
+| Reviewer findings | The canvas-only render and a separate overview were healthy; corruption aligned with DOM elements using `backdrop-filter`, not terrain geometry. |
+| Fix commit | n/a — evidence-driver workaround, not shipped game behavior. |
+| Test added | Headless `output/playwright/terrain-elevation/playtest-elevation.mjs` disables backdrop filters only in the evidence page, records page/console errors, then captures `final-road-on-relief.png`; the clean image was inspected at original resolution. |
+| Behavior delta | Browser evidence now injects `* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }` before full-page capture. Rule: when screenshot artifacts align exactly with composited CSS chrome, isolate the capture compositor before changing the rendered product; keep the workaround in the evidence driver so production visuals remain untouched. |

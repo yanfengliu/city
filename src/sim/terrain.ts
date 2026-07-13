@@ -13,6 +13,10 @@ import {
 export interface TerrainData {
   width: number;
   height: number;
+  /** Normalized seeded elevation in [0,1], per cell index. */
+  elevation: Float32Array;
+  /** Normalized waterline used to interpret elevation renderer-side. */
+  seaLevel: number;
   /** 1 = water, 0 = land, per cell index. */
   water: Uint8Array;
   /** 1 = decorative tree (always on land), per cell index. */
@@ -24,13 +28,14 @@ export interface TerrainData {
 function generateOnce(seed: number, width: number, height: number): TerrainData {
   const elevationNoise = createNoise2D(seed);
   const treeNoise = createNoise2D(seed + 1);
+  const elevation = new Float32Array(width * height);
   const water = new Uint8Array(width * height);
   const trees = new Uint8Array(width * height);
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
-      const elevation =
+      const sample =
         (octaveNoise2D(
           elevationNoise,
           x * ELEVATION_NOISE_SCALE,
@@ -39,14 +44,23 @@ function generateOnce(seed: number, width: number, height: number): TerrainData 
         ) +
           1) /
         2;
-      if (elevation < WATER_THRESHOLD) {
+      elevation[i] = sample;
+      if (sample < WATER_THRESHOLD) {
         water[i] = 1;
       } else if ((treeNoise(x * TREE_NOISE_SCALE, y * TREE_NOISE_SCALE) + 1) / 2 > TREE_THRESHOLD) {
         trees[i] = 1;
       }
     }
   }
-  return { width, height, water, trees, effectiveSeed: seed };
+  return {
+    width,
+    height,
+    elevation,
+    seaLevel: WATER_THRESHOLD,
+    water,
+    trees,
+    effectiveSeed: seed,
+  };
 }
 
 function largestWaterBody(terrain: TerrainData): number {

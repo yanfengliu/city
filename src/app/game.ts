@@ -13,6 +13,7 @@ import { RoadsView } from '../rendering/roads-mesh';
 import { HighwayView } from '../rendering/highway-mesh';
 import { StructuresView } from '../rendering/structures-mesh';
 import { buildTerrainMesh } from '../rendering/terrain-mesh';
+import { TerrainSurface } from '../rendering/terrain-surface';
 import { TreesView } from '../rendering/trees';
 import { VehiclesView } from '../rendering/vehicles-mesh';
 import { ZonesView } from '../rendering/zones-mesh';
@@ -125,6 +126,7 @@ export class Game {
   private readonly focusMarker = new RadiusIndicator();
   private focusMarkerTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly networkOverlay: NetworkOverlayView;
+  private readonly picker: GroundPicker;
   private hasPlant = false;
   private hasPump = false;
   private powerInfraCells: ReadonlySet<number> = new Set();
@@ -293,13 +295,13 @@ export class Game {
         this.refreshHud();
       },
     });
-    const picker = new GroundPicker(
+    this.picker = new GroundPicker(
       this.scene.camera,
       this.scene.renderer.domElement,
       GRID_WIDTH,
       GRID_HEIGHT,
     );
-    attachInput(this.scene.renderer.domElement, picker, this.tools);
+    attachInput(this.scene.renderer.domElement, this.picker, this.tools);
 
     this.worker = new Worker(new URL('../worker/sim.worker.ts', import.meta.url), {
       type: 'module',
@@ -322,9 +324,30 @@ export class Game {
         if (this.ready) break;
         this.ready = true;
         this.terrain = message.terrain;
+        const surface = new TerrainSurface(message.terrain, HIGHWAY_CELL_SET);
+        this.scene.setTerrainSurface(surface);
+        this.picker.setTerrainSurface(surface);
         this.roadsView.setWater(message.terrain.water);
-        this.scene.add(buildTerrainMesh(message.terrain));
-        this.treesView = new TreesView({ width: message.terrain.width, trees: message.terrain.trees });
+        this.roadsView.setTerrainSurface(surface);
+        this.zonesView.setTerrainSurface(surface);
+        this.buildingsView.setTerrainSurface(surface);
+        this.vehiclesView.setTerrainSurface(surface);
+        this.structuresView.setTerrainSurface(surface);
+        this.fieldOverlay.setTerrainSurface(surface);
+        this.trafficOverlay.setTerrainSurface(surface);
+        this.networksView.setTerrainSurface(surface);
+        this.networkOverlay.setTerrainSurface(surface);
+        this.ghost.setTerrainSurface(surface);
+        this.radiusIndicator.setTerrainSurface(surface);
+        this.inspectCoverage.setTerrainSurface(surface);
+        this.focusMarker.setTerrainSurface(surface);
+        this.levelUpFx.setTerrainSurface(surface);
+        this.utilityIconsFx.setTerrainSurface(surface);
+        this.scene.add(buildTerrainMesh(message.terrain, surface));
+        this.treesView = new TreesView(
+          { width: message.terrain.width, trees: message.terrain.trees },
+          surface,
+        );
         this.scene.add(this.treesView.group);
         this.occupancyDirty = true;
         if (consumePendingLoad()) {

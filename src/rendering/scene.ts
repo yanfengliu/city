@@ -18,6 +18,7 @@ import {
 import type { Object3D } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { ATMOSPHERE_COLORS, ATMOSPHERE_LIGHT_INTENSITY } from './constants';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** WASD pan speed as a fraction of the camera-to-target distance, per second
  * (so panning is faster when zoomed out and slower when zoomed in). */
@@ -75,6 +76,7 @@ export class CityScene {
   private readonly panKeys = new Set<string>();
   private readonly gridWidth: number;
   private readonly gridHeight: number;
+  private terrainSurface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor(container: HTMLElement, gridWidth: number, gridHeight: number) {
     this.gridWidth = gridWidth;
@@ -183,15 +185,25 @@ export class CityScene {
     return this.controls.target;
   }
 
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.terrainSurface = surface;
+    this.conformCameraTargetToTerrain();
+    this.controls.update();
+  }
+
+  getTerrainSurface(): TerrainSurfaceView {
+    return this.terrainSurface;
+  }
+
   /**
-   * Projects a ground point (world x, z at y=0) to CSS client pixels — the
+   * Projects a point on the visible terrain (world x, z) to CSS client pixels — the
    * inverse of GroundPicker. Lets an automated player aim real pointer events
    * at a sim cell. `onScreen` is false when the point is behind the camera or
    * outside the viewport.
    */
   worldToScreen(x: number, z: number): { sx: number; sy: number; onScreen: boolean } {
     this.camera.updateMatrixWorld(); // background tabs throttle rAF → stale matrices
-    const ndc = new Vector3(x, 0, z).project(this.camera);
+    const ndc = new Vector3(x, this.terrainSurface.groundHeightAt(x, z), z).project(this.camera);
     const rect = this.renderer.domElement.getBoundingClientRect();
     return {
       sx: rect.left + (ndc.x * 0.5 + 0.5) * rect.width,
@@ -236,9 +248,11 @@ export class CityScene {
     const targetZ = fromTarget.z + (toTarget.z - fromTarget.z) * t;
     // Keep a pleasant inspection distance/angle at the destination.
     const destCamX = toTarget.x;
-    const destCamY = 18;
+    const destinationY = this.terrainSurface.heightAt(toTarget.x, toTarget.z);
+    const targetY = this.terrainSurface.heightAt(targetX, targetZ);
+    const destCamY = destinationY + 18;
     const destCamZ = toTarget.z + 16;
-    this.controls.target.set(targetX, 0, targetZ);
+    this.controls.target.set(targetX, targetY, targetZ);
     this.camera.position.set(
       fromCamera.x + (destCamX - fromCamera.x) * t,
       fromCamera.y + (destCamY - fromCamera.y) * t,
@@ -248,7 +262,7 @@ export class CityScene {
   }
 
   /**
-   * WASD nudges the camera across the ground plane, screen-relative (W = into
+   * WASD nudges the camera across the terrain surface, screen-relative (W = into
    * the view, A/D = left/right of it), scaled by zoom distance and frame time.
    * Interrupts any in-progress fly-to and keeps the focus over the map.
    */
@@ -276,6 +290,9 @@ export class CityScene {
     this.camera.position.z += cz - this.controls.target.z;
     this.controls.target.x = cx;
     this.controls.target.z = cz;
+    const targetY = this.terrainSurface.heightAt(cx, cz);
+    this.camera.position.y += targetY - this.controls.target.y;
+    this.controls.target.y = targetY;
   }
 
   /** One presentation pass: run frame callbacks (view sync, vehicle/FX
@@ -285,7 +302,20 @@ export class CityScene {
     for (const callback of this.frameCallbacks) callback();
     this.updateFlight(now);
     this.controls.update();
+    this.conformCameraTargetToTerrain();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Keep mouse-drag panning at the terrain datum without changing its view angle. */
+  private conformCameraTargetToTerrain(): void {
+    const targetY = this.terrainSurface.heightAt(
+      this.controls.target.x,
+      this.controls.target.z,
+    );
+    const deltaY = targetY - this.controls.target.y;
+    if (Math.abs(deltaY) < 1e-8) return;
+    this.controls.target.y = targetY;
+    this.camera.position.y += deltaY;
   }
 
   private renderFrame(): void {

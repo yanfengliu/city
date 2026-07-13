@@ -30,6 +30,7 @@ import {
   TREE_WIDTH_SCALE_RANGE,
 } from './constants';
 import type { TreeArchetypeSpec, TreeCanopyLayerSpec } from './constants';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data view of the tree mask (mirrors protocol TerrainPayload). */
 export interface TreesData {
@@ -104,7 +105,10 @@ export class TreesView {
   private readonly archetypes: TreeArchetypeMeshes[] = [];
   private readonly width: number;
 
-  constructor(data: TreesData) {
+  constructor(
+    data: TreesData,
+    private readonly surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE,
+  ) {
     this.width = data.width;
     const cellsByArchetype = TREE_ARCHETYPES.map(() => [] as number[]);
     for (let index = 0; index < data.trees.length; index++) {
@@ -181,11 +185,11 @@ export class TreesView {
           TREE_WIDTH_SCALE_MIN + cellHash01(index + WIDTH_HASH_OFFSET) * TREE_WIDTH_SCALE_RANGE;
         const heightScale =
           TREE_HEIGHT_SCALE_MIN + cellHash01(index + HEIGHT_HASH_OFFSET) * TREE_HEIGHT_SCALE_RANGE;
-        position.set(
-          x + 0.5 + (cellHash01(index + POSITION_X_HASH_OFFSET) - 0.5) * TREE_POSITION_JITTER * 2,
-          0,
-          z + 0.5 + (cellHash01(index + POSITION_Z_HASH_OFFSET) - 0.5) * TREE_POSITION_JITTER * 2,
-        );
+        const px =
+          x + 0.5 + (cellHash01(index + POSITION_X_HASH_OFFSET) - 0.5) * TREE_POSITION_JITTER * 2;
+        const pz =
+          z + 0.5 + (cellHash01(index + POSITION_Z_HASH_OFFSET) - 0.5) * TREE_POSITION_JITTER * 2;
+        position.set(px, this.surface.heightAt(px, pz), pz);
         rotation.setFromAxisAngle(UP, cellHash01(index + ROTATION_HASH_OFFSET) * Math.PI * 2);
         scale.set(
           uniformScale * widthScale,

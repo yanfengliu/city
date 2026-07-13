@@ -10,6 +10,7 @@ import {
   LEVELUP_SPRITE_SCALE,
   LEVELUP_START_Y,
 } from './constants';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 interface FxEntry {
   sprite: Sprite;
@@ -50,9 +51,14 @@ export class LevelUpFx {
   celebrated = 0;
   private readonly active: FxEntry[] = [];
   private readonly textures = new Map<number, CanvasTexture>();
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor() {
     this.group.name = 'levelUpFx';
+  }
+
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
   }
 
   private texture(level: number): CanvasTexture {
@@ -73,7 +79,7 @@ export class LevelUpFx {
     });
     const sprite = new Sprite(material);
     sprite.scale.set(LEVELUP_SPRITE_SCALE * (256 / 96), LEVELUP_SPRITE_SCALE, 1);
-    sprite.position.set(x, LEVELUP_START_Y, z);
+    sprite.position.set(x, this.surface.heightAt(x, z) + LEVELUP_START_Y, z);
     this.group.add(sprite);
     this.active.push({ sprite, material, startMs: nowMs, x, z });
     this.celebrated++;
@@ -90,7 +96,11 @@ export class LevelUpFx {
         this.active.splice(i, 1);
         continue;
       }
-      fx.sprite.position.set(fx.x, LEVELUP_START_Y + LEVELUP_RISE_UNITS * t, fx.z);
+      fx.sprite.position.set(
+        fx.x,
+        this.surface.heightAt(fx.x, fx.z) + LEVELUP_START_Y + LEVELUP_RISE_UNITS * t,
+        fx.z,
+      );
       fx.material.opacity = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
     }
   }

@@ -9,6 +9,8 @@ import {
   ZONE_TINT_OPACITY,
   type ZoneKind,
 } from './constants';
+import { buildSurfacePatch, writeSurfaceQuad } from './surface-geometry';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data zoned cell (mirrors the protocol `zones` message payload). */
 export interface ZoneCellView {
@@ -30,6 +32,7 @@ export class ZonesView {
   readonly detailMesh: Mesh;
   private cells: readonly ZoneCellView[] = [];
   private occludedCells: ReadonlySet<number> = new Set();
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private dirty = false;
 
   constructor(private readonly gridWidth: number) {
@@ -65,6 +68,11 @@ export class ZonesView {
     this.dirty = true;
   }
 
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+    this.dirty = true;
+  }
+
   /** Cells hidden under building footprints. */
   setOccludedCells(cells: ReadonlySet<number>): void {
     this.occludedCells = cells;
@@ -82,9 +90,9 @@ export class ZonesView {
     const positions = new Float32Array(visible.length * 12);
     const colors = new Float32Array(visible.length * 12);
     const indices = new Uint32Array(visible.length * 6);
-    const detailPositions = new Float32Array(visible.length * 12);
-    const detailColors = new Float32Array(visible.length * 12);
-    const detailIndices = new Uint32Array(visible.length * 6);
+    const detailPositions: number[] = [];
+    const detailColors: number[] = [];
+    const detailIndices: number[] = [];
     const color = new Color();
     const y = ZONE_SURFACE_Y;
     const detailY = ZONE_GROUND_DETAIL_Y;
@@ -93,36 +101,36 @@ export class ZonesView {
     for (let i = 0; i < visible.length; i++) {
       const x = visible[i].i % this.gridWidth;
       const z = Math.floor(visible[i].i / this.gridWidth);
-      positions.set([x, y, z, x + 1, y, z, x, y, z + 1, x + 1, y, z + 1], i * 12);
+      writeSurfaceQuad(positions, i * 12, this.surface, x, z, x + 1, z + 1, y);
       color.setHex(ZONE_COLORS[visible[i].zone]);
       for (let n = 0; n < 4; n++) colors.set([color.r, color.g, color.b], i * 12 + n * 3);
       const base = i * 4;
       indices.set([base, base + 2, base + 1, base + 1, base + 2, base + 3], i * 6);
 
-      detailPositions.set(
-        [
-          x + inset,
-          detailY,
-          z + inset,
-          x + 1 - inset,
-          detailY,
-          z + inset,
-          x + inset,
-          detailY,
-          z + 1 - inset,
-          x + 1 - inset,
-          detailY,
-          z + 1 - inset,
-        ],
-        i * 12,
+      const patch = buildSurfacePatch(
+        this.surface,
+        x + inset,
+        z + inset,
+        x + 1 - inset,
+        z + 1 - inset,
+        detailY,
       );
+      const detailBase = detailPositions.length / 3;
+      detailPositions.push(...patch.positions);
       color.setHex(ZONE_GROUND_DETAIL_COLORS[visible[i].zone]);
-      for (let n = 0; n < 4; n++) detailColors.set([color.r, color.g, color.b], i * 12 + n * 3);
-      detailIndices.set([base, base + 2, base + 1, base + 1, base + 2, base + 3], i * 6);
+      for (let n = 0; n < patch.positions.length / 3; n++) {
+        detailColors.push(color.r, color.g, color.b);
+      }
+      for (const index of patch.indices) detailIndices.push(detailBase + index);
     }
 
     this.replaceGeometry(this.mesh, positions, colors, indices);
-    this.replaceGeometry(this.detailMesh, detailPositions, detailColors, detailIndices);
+    this.replaceGeometry(
+      this.detailMesh,
+      new Float32Array(detailPositions),
+      new Float32Array(detailColors),
+      new Uint32Array(detailIndices),
+    );
     this.mesh.visible = visible.length > 0;
     this.detailMesh.visible = visible.length > 0;
   }

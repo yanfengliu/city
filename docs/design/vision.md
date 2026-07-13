@@ -8,7 +8,7 @@ A browser city-building game in the spirit of Cities: Skylines: the player draws
 
 1. **The city is alive.** Growth, traffic, and fields respond continuously to the player's decisions. Cause and effect are observable: zone next to industry and watch land value sink; add a road and watch traffic reroute.
 2. **Simulation you can trust.** The sim is deterministic, headless, and testable. Every mechanic has a contract test. What the renderer shows is a faithful projection of sim state.
-3. **Readable 3D.** Low-poly, clean-silhouette buildings with zone-coded accents, smooth vehicle motion, soft daylight. Clarity over realism — the reference is Cities: Skylines' readable urban planning view, not its asset fidelity.
+3. **Readable 3D.** Low-poly, clean-silhouette buildings with zone-coded accents, smooth vehicle motion, gently rolling but fully buildable terrain, and soft daylight. Clarity over realism — the reference is Cities: Skylines' readable urban planning view, not its asset fidelity.
 4. **Friendly civic planning readability.** Visual polish may borrow broad lessons from Cities: Skylines screenshots: clean translucent planning HUDs, bright service/status icons, cheerful blue active tool accents, legible zoning overlays, modern roads, welcoming waterfronts and trees, and readable urban silhouettes. The base landscape and chrome stay light enough to feel inviting, with dark roads reserved for functional contrast. This is a feel and interface-language reference only: no copied assets, silhouettes, UI layouts, names, or source art.
 5. **Desktop browser, instant play.** One canvas, no landing page, no install. 60 fps render on a mid-range laptop with a mid-size city.
 
@@ -23,7 +23,7 @@ Mayor of a growing town. Minute-to-minute: draw roads → zone → watch demand 
 - Agent-based traffic on the road graph with congestion feedback; target ~1–3k active vehicles+citizens.
 - Power and water networks, four coverage services, pollution/noise/land-value fields, taxes and upkeep.
 - Save/load. Speed controls. Overlay views. Day/night lighting as polish.
-- Out of scope for v1: public transport, terrain sculpting, districts/policies, disasters, high-density zoning, freight economy chains, mobile.
+- Out of scope for v1: public transport, player terrain sculpting and slope-dependent gameplay, districts/policies, disasters, high-density zoning, freight economy chains, mobile.
 
 ## Non-negotiables
 

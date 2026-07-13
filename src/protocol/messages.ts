@@ -3,6 +3,7 @@ import type {
   CityCommands,
   DemandState,
   FieldName,
+  PowerPlantKind,
   ServiceType,
   TaxRates,
   ZoneType,
@@ -49,6 +50,10 @@ export type ClientToWorker =
 export interface TerrainPayload {
   width: number;
   height: number;
+  /** Normalized deterministic elevation in [0,1], per cell index. */
+  elevation: Float32Array;
+  /** Normalized waterline used by the presentation-only relief curve. */
+  seaLevel: number;
   /** 1 = water, per cell index. */
   water: Uint8Array;
   /** 1 = decorative tree, per cell index. */
@@ -120,6 +125,27 @@ export interface StructureView {
   service: ServiceType;
 }
 
+/** One levelled utility footprint within the flattened `plantCells` set. */
+export interface PowerPlantFootprintView {
+  kind: PowerPlantKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  cells: number[];
+}
+
+export interface PowerNetworkView {
+  plants: PowerPlantFootprintView[];
+  plantCells: number[];
+  lineCells: number[];
+}
+
+export interface WaterNetworkView {
+  pumpCells: number[];
+  pipeCells: number[];
+}
+
 export type WorkerToClient =
   | {
       type: 'ready';
@@ -146,8 +172,8 @@ export type WorkerToClient =
    */
   | {
       type: 'networks';
-      power: { plantCells: number[]; lineCells: number[] };
-      water: { pumpCells: number[]; pipeCells: number[] };
+      power: PowerNetworkView;
+      water: WaterNetworkView;
     }
   /**
    * Sparse field snapshot, pushed on each subscribed field's recompute and on

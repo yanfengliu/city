@@ -4,8 +4,13 @@
  * src/sim/constants/ — nothing here may affect sim behavior.
  */
 
-// Vertical layering (world y). Terrain land sits at y=0.
+// Vertical layering (world y). Per-layer values are offsets above the shared
+// terrain surface; water remains one absolute recessed plane.
 export const WATER_SURFACE_Y = -0.12;
+/** Highest renderer-only land relief; kept near the nominal level-one wall scale. */
+export const TERRAIN_MAX_RELIEF = 0.9;
+/** Normalized elevation at which relief reaches TERRAIN_MAX_RELIEF. */
+export const TERRAIN_RELIEF_CEILING = 0.85;
 export const ZONE_SURFACE_Y = 0.015;
 export const ZONE_GROUND_DETAIL_Y = 0.017;
 export const ROAD_SURFACE_Y = 0.02;
@@ -19,6 +24,8 @@ export type ZoneKind = 'R' | 'C' | 'I';
 // while retaining enough saturation for roads, zones, and buildings to stand out.
 export const LAND_COLOR = 0xa3bf72;
 export const LAND_LIGHTNESS_JITTER = 0.075;
+/** Gentle height tint so uplands remain legible at strategy zoom. */
+export const LAND_ELEVATION_LIGHTNESS_RANGE = 0.045;
 export const WATER_COLOR = 0x49a6d7;
 export const SHORE_COLOR = 0xd1bc80;
 export const SHORE_DETAIL_COLOR = 0xe4d39b;

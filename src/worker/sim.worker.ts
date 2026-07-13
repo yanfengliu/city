@@ -157,12 +157,29 @@ function postNetworksIfChanged(): void {
   if (!networksDirty) return;
   networksDirty = false;
   const plantCells: number[] = [];
+  const plants: Array<{
+    kind: 'coal' | 'wind';
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    cells: number[];
+  }> = [];
   for (const id of [...world.query('powerPlant', 'position')].sort((a, b) => a - b)) {
     const plant = world.getComponent(id, 'powerPlant');
     const position = world.getComponent(id, 'position');
     if (!plant || !position) continue;
     const side = POWER_PLANT_FOOTPRINT[plant.kind];
-    plantCells.push(...footprintCells(position.x, position.y, side, side));
+    const cells = footprintCells(position.x, position.y, side, side);
+    plantCells.push(...cells);
+    plants.push({
+      kind: plant.kind,
+      x: position.x,
+      y: position.y,
+      w: side,
+      h: side,
+      cells,
+    });
   }
   const pumpCells: number[] = [];
   for (const id of [...world.query('waterPump', 'position')].sort((a, b) => a - b)) {
@@ -172,6 +189,7 @@ function postNetworksIfChanged(): void {
   post({
     type: 'networks',
     power: {
+      plants,
       plantCells,
       lineCells: [...sim.powerLineCells.keys()].sort((a, b) => a - b),
     },
@@ -254,6 +272,8 @@ function postBootSync(): void {
     terrain: {
       width: sim.terrain.width,
       height: sim.terrain.height,
+      elevation: sim.terrain.elevation,
+      seaLevel: sim.terrain.seaLevel,
       water: sim.terrain.water,
       trees: sim.terrain.trees,
     },

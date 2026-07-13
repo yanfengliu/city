@@ -22,6 +22,7 @@ import {
   VEHICLE_ROOF_WIDTH,
   VEHICLE_Y,
 } from './constants';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data vehicle view (mirrors the protocol VehicleView). */
 export interface VehicleRenderView {
@@ -71,6 +72,7 @@ export class VehiclesView {
   private buckets: ReadonlyMap<number, number> = new Map();
   private lastMessageAt = 0;
   private messageIntervalMs = VEHICLE_LERP_DEFAULT_MS;
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor(private readonly gridWidth: number) {
     const body = new BoxGeometry(VEHICLE_BODY_WIDTH, VEHICLE_BODY_HEIGHT, VEHICLE_BODY_LENGTH)
@@ -92,6 +94,11 @@ export class VehiclesView {
   /** Live vehicle count from the newest applied message. */
   get count(): number {
     return this.states.size;
+  }
+
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+    this.updateFrame(performance.now());
   }
 
   /** Registers a `roads` message's edge geometry under its topologyVersion. */
@@ -134,7 +141,7 @@ export class VehiclesView {
     for (const state of this.states.values()) {
       const x = state.fromX + (state.toX - state.fromX) * alpha;
       const z = state.fromZ + (state.toZ - state.fromZ) * alpha;
-      MATRIX.makeRotationY(state.yaw).setPosition(x, VEHICLE_Y, z);
+      MATRIX.makeRotationY(state.yaw).setPosition(x, this.surface.heightAt(x, z) + VEHICLE_Y, z);
       this.mesh.setMatrixAt(slot++, MATRIX);
     }
     this.mesh.instanceMatrix.needsUpdate = true;

@@ -12,6 +12,7 @@ import type { Object3D } from 'three';
 import {
   cellHash01,
   LAND_COLOR,
+  LAND_ELEVATION_LIGHTNESS_RANGE,
   LAND_LIGHTNESS_JITTER,
   SHORE_COLOR,
   SHORE_DETAIL_COLOR,
@@ -21,11 +22,15 @@ import {
   WATER_COLOR,
   WATER_SURFACE_Y,
 } from './constants';
+import { buildSurfacePatch, type SurfacePatch } from './surface-geometry';
+import { TerrainSurface, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data view of the generated terrain (mirrors protocol TerrainPayload). */
 export interface TerrainMeshData {
   width: number;
   height: number;
+  elevation: Float32Array;
+  seaLevel: number;
   /** 1 = water, per cell index (index = y * width + x). */
   water: Uint8Array;
 }
@@ -49,6 +54,17 @@ class MeshBuilder {
     this.indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
   }
 
+  surfacePatch(patch: SurfacePatch, color: Color): void {
+    const base = this.positions.length / 3;
+    this.positions.push(...patch.positions);
+    const count = patch.positions.length / 3;
+    for (let i = 0; i < count; i++) {
+      this.normals.push(0, 1, 0);
+      this.colors.push(color.r, color.g, color.b);
+    }
+    for (const index of patch.indices) this.indices.push(base + index);
+  }
+
   build(vertexColors: boolean): BufferGeometry {
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(this.positions), 3));
@@ -57,6 +73,7 @@ class MeshBuilder {
       geometry.setAttribute('color', new BufferAttribute(new Float32Array(this.colors), 3));
     }
     geometry.setIndex(new BufferAttribute(new Uint32Array(this.indices), 1));
+    geometry.computeVertexNormals();
     return geometry;
   }
 }
@@ -64,12 +81,15 @@ class MeshBuilder {
 /**
  * Builds the static terrain as three merged meshes under one group: land +
  * vertical shore skirts, sandy shoreline top strips, and the recessed water
- * surface. Land sits at y=0 with subtle per-cell lightness jitter; water at
- * WATER_SURFACE_Y; vertical shore skirts close the gap where land meets water
- * or the map edge; sandy top strips soften real land-water transitions without
- * touching the sim terrain mask.
+ * surface. Land follows the shared elevation field with subtle per-cell
+ * lightness jitter; water stays at WATER_SURFACE_Y; vertical shore skirts close
+ * the gap where land meets water or the map edge; sandy top strips soften real
+ * land-water transitions without touching the sim terrain mask.
  */
-export function buildTerrainMesh(terrain: TerrainMeshData): Object3D {
+export function buildTerrainMesh(
+  terrain: TerrainMeshData,
+  surface: TerrainSurfaceView = new TerrainSurface(terrain),
+): Object3D {
   const { width, height, water } = terrain;
   const land = new MeshBuilder();
   const shoreDetails = new MeshBuilder();
@@ -89,11 +109,17 @@ export function buildTerrainMesh(terrain: TerrainMeshData): Object3D {
   const addShoreDetail = (
     index: number,
     salt: number,
-    corners: [Corner, Corner, Corner, Corner],
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
   ): void => {
     const jitter = (cellHash01(index + salt) - 0.5) * 2 * SHORE_DETAIL_LIGHTNESS_JITTER;
     detailColor.copy(shoreDetailColor).offsetHSL(0, 0, jitter);
-    shoreDetails.quad(corners, [0, 1, 0], detailColor);
+    shoreDetails.surfacePatch(
+      buildSurfacePatch(surface, x0, z0, x1, z1, SHORE_DETAIL_Y),
+      detailColor,
+    );
   };
 
   for (let z = 0; z < height; z++) {
@@ -111,12 +137,19 @@ export function buildTerrainMesh(terrain: TerrainMeshData): Object3D {
       }
 
       const jitter = (cellHash01(index) - 0.5) * 2 * LAND_LIGHTNESS_JITTER;
-      cellColor.copy(landColor).offsetHSL(0, 0, jitter);
+      const heightTint =
+        (surface.cellHeight(x, z) / Math.max(surface.maxHeight, Number.EPSILON) - 0.5) *
+        LAND_ELEVATION_LIGHTNESS_RANGE;
+      cellColor.copy(landColor).offsetHSL(0, 0, jitter + heightTint);
+      const h00 = surface.cornerHeight(x, z);
+      const h10 = surface.cornerHeight(x + 1, z);
+      const h01 = surface.cornerHeight(x, z + 1);
+      const h11 = surface.cornerHeight(x + 1, z + 1);
       land.quad([
-        [x, 0, z],
-        [x + 1, 0, z],
-        [x, 0, z + 1],
-        [x + 1, 0, z + 1],
+        [x, h00, z],
+        [x + 1, h10, z],
+        [x, h01, z + 1],
+        [x + 1, h11, z + 1],
       ], [0, 1, 0], cellColor);
 
       // Shore skirts on land edges exposed to water or the map boundary.
@@ -131,56 +164,36 @@ export function buildTerrainMesh(terrain: TerrainMeshData): Object3D {
       const eastWater = isWaterCellAt(x + 1, z);
 
       if (northSkirt) {
-        land.quad([[x, 0, z], [x, w, z], [x + 1, 0, z], [x + 1, w, z]], [0, 0, -1], shoreColor);
+        land.quad([[x, h00, z], [x, w, z], [x + 1, h10, z], [x + 1, w, z]], [0, 0, -1], shoreColor);
       }
       if (northWater) {
         const x0 = x + (westWater ? SHORE_DETAIL_INSET : 0);
         const x1 = x + 1 - (eastWater ? SHORE_DETAIL_INSET : 0);
-        addShoreDetail(index, 0x1515, [
-          [x0, SHORE_DETAIL_Y, z],
-          [x1, SHORE_DETAIL_Y, z],
-          [x0, SHORE_DETAIL_Y, z + SHORE_DETAIL_INSET],
-          [x1, SHORE_DETAIL_Y, z + SHORE_DETAIL_INSET],
-        ]);
+        addShoreDetail(index, 0x1515, x0, z, x1, z + SHORE_DETAIL_INSET);
       }
       if (southSkirt) {
-        land.quad([[x, 0, z + 1], [x + 1, 0, z + 1], [x, w, z + 1], [x + 1, w, z + 1]], [0, 0, 1], shoreColor);
+        land.quad([[x, h01, z + 1], [x + 1, h11, z + 1], [x, w, z + 1], [x + 1, w, z + 1]], [0, 0, 1], shoreColor);
       }
       if (southWater) {
         const x0 = x + (westWater ? SHORE_DETAIL_INSET : 0);
         const x1 = x + 1 - (eastWater ? SHORE_DETAIL_INSET : 0);
-        addShoreDetail(index, 0x2525, [
-          [x0, SHORE_DETAIL_Y, z + 1 - SHORE_DETAIL_INSET],
-          [x1, SHORE_DETAIL_Y, z + 1 - SHORE_DETAIL_INSET],
-          [x0, SHORE_DETAIL_Y, z + 1],
-          [x1, SHORE_DETAIL_Y, z + 1],
-        ]);
+        addShoreDetail(index, 0x2525, x0, z + 1 - SHORE_DETAIL_INSET, x1, z + 1);
       }
       if (westSkirt) {
-        land.quad([[x, 0, z], [x, 0, z + 1], [x, w, z], [x, w, z + 1]], [-1, 0, 0], shoreColor);
+        land.quad([[x, h00, z], [x, h01, z + 1], [x, w, z], [x, w, z + 1]], [-1, 0, 0], shoreColor);
       }
       if (westWater) {
         const z0 = z + (northWater ? SHORE_DETAIL_INSET : 0);
         const z1 = z + 1 - (southWater ? SHORE_DETAIL_INSET : 0);
-        addShoreDetail(index, 0x3535, [
-          [x, SHORE_DETAIL_Y, z0],
-          [x + SHORE_DETAIL_INSET, SHORE_DETAIL_Y, z0],
-          [x, SHORE_DETAIL_Y, z1],
-          [x + SHORE_DETAIL_INSET, SHORE_DETAIL_Y, z1],
-        ]);
+        addShoreDetail(index, 0x3535, x, z0, x + SHORE_DETAIL_INSET, z1);
       }
       if (eastSkirt) {
-        land.quad([[x + 1, 0, z], [x + 1, w, z], [x + 1, 0, z + 1], [x + 1, w, z + 1]], [1, 0, 0], shoreColor);
+        land.quad([[x + 1, h10, z], [x + 1, w, z], [x + 1, h11, z + 1], [x + 1, w, z + 1]], [1, 0, 0], shoreColor);
       }
       if (eastWater) {
         const z0 = z + (northWater ? SHORE_DETAIL_INSET : 0);
         const z1 = z + 1 - (southWater ? SHORE_DETAIL_INSET : 0);
-        addShoreDetail(index, 0x4545, [
-          [x + 1 - SHORE_DETAIL_INSET, SHORE_DETAIL_Y, z0],
-          [x + 1, SHORE_DETAIL_Y, z0],
-          [x + 1 - SHORE_DETAIL_INSET, SHORE_DETAIL_Y, z1],
-          [x + 1, SHORE_DETAIL_Y, z1],
-        ]);
+        addShoreDetail(index, 0x4545, x + 1 - SHORE_DETAIL_INSET, z0, x + 1, z1);
       }
     }
   }

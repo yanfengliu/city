@@ -7,6 +7,7 @@ import {
   GHOST_SURFACE_Y,
   GHOST_VALID_COLOR,
 } from './constants';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Sim cell coordinates (plain data; rendering must not import sim types). */
 export interface GhostCell {
@@ -25,6 +26,7 @@ export interface GhostCell {
  */
 export class GhostView {
   readonly mesh: InstancedMesh;
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor() {
     const material = new MeshBasicMaterial({
@@ -41,6 +43,10 @@ export class GhostView {
     this.mesh.count = 0;
   }
 
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+  }
+
   update(
     cells: readonly GhostCell[],
     validity: boolean | readonly boolean[],
@@ -49,7 +55,13 @@ export class GhostView {
     const matrix = new Matrix4();
     const count = Math.min(cells.length, GHOST_CAPACITY);
     for (let i = 0; i < count; i++) {
-      matrix.makeTranslation(cells[i].x + 0.5, GHOST_SURFACE_Y + GHOST_HEIGHT / 2, cells[i].y + 0.5);
+      const x = cells[i].x + 0.5;
+      const z = cells[i].y + 0.5;
+      matrix.makeTranslation(
+        x,
+        this.surface.heightAt(x, z) + GHOST_SURFACE_Y + GHOST_HEIGHT / 2,
+        z,
+      );
       this.mesh.setMatrixAt(i, matrix);
       const valid = typeof validity === 'boolean' ? validity : (validity[i] ?? false);
       this.color.setHex(valid ? tint : GHOST_INVALID_COLOR);

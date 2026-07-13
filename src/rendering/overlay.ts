@@ -6,7 +6,6 @@ import {
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
-  PlaneGeometry,
   RGBAFormat,
   SRGBColorSpace,
 } from 'three';
@@ -19,6 +18,8 @@ import {
   TRAFFIC_OVERLAY_Y,
   type FieldKind,
 } from './constants';
+import { buildDrapedPlaneGeometry, writeSurfaceQuad } from './surface-geometry';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data field snapshot (mirrors the protocol `field` message). */
 export interface FieldOverlayData {
@@ -42,18 +43,41 @@ export class FieldOverlayView {
   readonly mesh: Mesh;
   private readonly material: MeshBasicMaterial;
   private texture: DataTexture | null = null;
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
-  constructor(gridWidth: number, gridHeight: number) {
+  constructor(
+    private readonly gridWidth: number,
+    private readonly gridHeight: number,
+  ) {
     this.material = new MeshBasicMaterial({
       transparent: true,
       opacity: FIELD_OVERLAY_OPACITY,
       depthWrite: false,
     });
-    const geometry = new PlaneGeometry(gridWidth, gridHeight).rotateX(-Math.PI / 2);
+    const geometry = buildDrapedPlaneGeometry(
+      gridWidth,
+      gridHeight,
+      this.surface,
+      FIELD_OVERLAY_Y,
+      1,
+    );
     this.mesh = new Mesh(geometry, this.material);
-    this.mesh.position.set(gridWidth / 2, FIELD_OVERLAY_Y, gridHeight / 2);
+    this.mesh.position.set(gridWidth / 2, 0, gridHeight / 2);
     this.mesh.name = 'fieldOverlay';
     this.mesh.visible = false;
+  }
+
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+    const old = this.mesh.geometry;
+    this.mesh.geometry = buildDrapedPlaneGeometry(
+      this.gridWidth,
+      this.gridHeight,
+      surface,
+      FIELD_OVERLAY_Y,
+      1,
+    );
+    old.dispose();
   }
 
   /** Fills the texture from a field snapshot and shows the plane. */
@@ -123,6 +147,7 @@ export class TrafficOverlayView {
   private edges: readonly TrafficEdgeView[] = [];
   private buckets: ReadonlyMap<number, number> = new Map();
   private active = false;
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor(private readonly gridWidth: number) {
     this.mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true }));
@@ -132,6 +157,11 @@ export class TrafficOverlayView {
 
   setRoads(edges: readonly TrafficEdgeView[]): void {
     this.edges = edges;
+    if (this.active) this.rebuild();
+  }
+
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
     if (this.active) this.rebuild();
   }
 
@@ -162,12 +192,20 @@ export class TrafficOverlayView {
     const colors = new Float32Array(count * 12);
     const indices = new Uint32Array(count * 6);
     const color = new Color();
-    const y = TRAFFIC_OVERLAY_Y;
     let i = 0;
     for (const [cell, bucket] of cellBucket) {
       const x = cell % this.gridWidth;
       const z = Math.floor(cell / this.gridWidth);
-      positions.set([x, y, z, x + 1, y, z, x, y, z + 1, x + 1, y, z + 1], i * 12);
+      writeSurfaceQuad(
+        positions,
+        i * 12,
+        this.surface,
+        x,
+        z,
+        x + 1,
+        z + 1,
+        TRAFFIC_OVERLAY_Y,
+      );
       color.setHex(TRAFFIC_BUCKET_COLORS[bucket]);
       for (let n = 0; n < 4; n++) colors.set([color.r, color.g, color.b], i * 12 + n * 3);
       const base = i * 4;

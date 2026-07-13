@@ -20,6 +20,7 @@ import {
   STRUCTURE_WALL_HEIGHT,
   type ServiceKind,
 } from './constants';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data service structure view (structurally mirrors the protocol StructureView). */
 export interface StructureRenderView {
@@ -55,6 +56,8 @@ export class StructuresView {
   readonly group = new Group();
   private readonly archetypes: Record<ServiceKind, Archetype>;
   private readonly slots = new Map<number, { service: ServiceKind; slot: number }>();
+  private readonly views = new Map<number, StructureRenderView>();
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private readonly unitBox: BufferGeometry;
   private readonly detailBox: BufferGeometry;
 
@@ -72,9 +75,18 @@ export class StructuresView {
     return this.slots.size;
   }
 
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+    for (const view of this.views.values()) {
+      const entry = this.slots.get(view.id);
+      if (entry) this.writeInstance(this.archetypes[entry.service], entry.slot, view);
+    }
+  }
+
   upsert(view: StructureRenderView): void {
     const existing = this.slots.get(view.id);
     if (existing && existing.service !== view.service) this.remove(view.id); // defensive: type never changes
+    this.views.set(view.id, view);
     const current = this.slots.get(view.id);
     const archetype = this.archetypes[view.service];
     if (current) {
@@ -95,6 +107,7 @@ export class StructuresView {
   remove(id: number): void {
     const entry = this.slots.get(id);
     if (!entry) return;
+    this.views.delete(id);
     this.slots.delete(id);
     const archetype = this.archetypes[entry.service];
     const last = archetype.ids.length - 1;
@@ -175,15 +188,25 @@ export class StructuresView {
     const cz = view.y + view.h / 2;
     const sx = view.w * STRUCTURE_FOOTPRINT_MARGIN;
     const sz = view.h * STRUCTURE_FOOTPRINT_MARGIN;
-    MATRIX.makeScale(sx, STRUCTURE_WALL_HEIGHT, sz).setPosition(cx, 0, cz);
+    const foundation = this.surface.footprintRange(view.x, view.y, view.w, view.h);
+    const baseY = foundation.max;
+    MATRIX.makeScale(sx, STRUCTURE_WALL_HEIGHT + baseY - foundation.min, sz).setPosition(
+      cx,
+      foundation.min,
+      cz,
+    );
     archetype.walls.setMatrixAt(slot, MATRIX);
-    MATRIX.makeScale(sx, STRUCTURE_ROOF_HEIGHT, sz).setPosition(cx, STRUCTURE_WALL_HEIGHT, cz);
+    MATRIX.makeScale(sx, STRUCTURE_ROOF_HEIGHT, sz).setPosition(
+      cx,
+      baseY + STRUCTURE_WALL_HEIGHT,
+      cz,
+    );
     archetype.roofs.setMatrixAt(slot, MATRIX);
     const detailLength = Math.min(STRUCTURE_DETAIL_LENGTH, sx * 0.55);
     const detailWidth = Math.min(STRUCTURE_DETAIL_WIDTH, sz * 0.35);
     MATRIX.makeScale(detailLength, STRUCTURE_DETAIL_HEIGHT, detailWidth).setPosition(
       cx,
-      STRUCTURE_WALL_HEIGHT + STRUCTURE_ROOF_HEIGHT,
+      baseY + STRUCTURE_WALL_HEIGHT + STRUCTURE_ROOF_HEIGHT,
       cz,
     );
     archetype.details.setMatrixAt(slot, MATRIX);

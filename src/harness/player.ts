@@ -66,6 +66,7 @@ function pointer(el: HTMLElement, type: string, sx: number, sy: number, button: 
 export function createPlayerInput(scene: CityScene): PlayerInput {
   const el = scene.renderer.domElement;
   const picker = new GroundPicker(scene.camera, el, GRID_WIDTH, GRID_HEIGHT);
+  picker.setTerrainSurface(scene.getTerrainSurface());
 
   const dragAt: PlayerInput['dragAt'] = (sx1, sy1, sx2, sy2, button = 0) => {
     const buttons = button === 0 ? 1 : button === 2 ? 2 : 4;
@@ -89,7 +90,10 @@ export function createPlayerInput(scene: CityScene): PlayerInput {
   return {
     screenshot: (quality) => scene.screenshot(quality),
     where,
-    cellAt: (sx, sy) => picker.pick(sx, sy),
+    cellAt: (sx, sy) => {
+      picker.setTerrainSurface(scene.getTerrainSurface());
+      return picker.pick(sx, sy);
+    },
     dragMap: (from, to) => {
       const a = where(from.x, from.y);
       const b = where(to.x, to.y);

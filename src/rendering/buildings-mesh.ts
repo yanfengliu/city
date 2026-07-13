@@ -43,6 +43,7 @@ import {
   cellHash01,
   type ZoneKind,
 } from './constants';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data building view (structurally mirrors the protocol BuildingView). */
 export interface BuildingRenderView {
@@ -82,6 +83,8 @@ export class BuildingsView {
   readonly group = new Group();
   private readonly archetypes: Record<ZoneKind, Archetype>;
   private readonly slots = new Map<number, { zone: ZoneKind; slot: number }>();
+  private readonly views = new Map<number, BuildingRenderView>();
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private readonly unitBox: BufferGeometry;
   private readonly pyramidRoof: BufferGeometry;
   private readonly detailBox: BufferGeometry;
@@ -123,9 +126,18 @@ export class BuildingsView {
     this.facadeMaterial.emissiveIntensity = afterDusk * BUILDING_FACADE_GLOW_MAX;
   }
 
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+    for (const view of this.views.values()) {
+      const entry = this.slots.get(view.id);
+      if (entry) this.writeInstance(this.archetypes[entry.zone], entry.slot, view);
+    }
+  }
+
   upsert(view: BuildingRenderView): void {
     const existing = this.slots.get(view.id);
     if (existing && existing.zone !== view.zone) this.remove(view.id); // defensive: zone never changes in-place
+    this.views.set(view.id, view);
     const current = this.slots.get(view.id);
     const archetype = this.archetypes[view.zone];
     if (current) {
@@ -147,6 +159,7 @@ export class BuildingsView {
   remove(id: number): void {
     const entry = this.slots.get(id);
     if (!entry) return;
+    this.views.delete(id);
     this.slots.delete(id);
     const archetype = this.archetypes[entry.zone];
     const last = archetype.ids.length - 1;
@@ -243,23 +256,26 @@ export class BuildingsView {
     const height = BUILDING_LEVEL_HEIGHTS[levelIndex] * jitter;
     const cx = view.x + view.w / 2;
     const cz = view.y + view.h / 2;
+    const foundation = this.surface.footprintRange(view.x, view.y, view.w, view.h);
+    const foundationDepth = foundation.max - foundation.min;
+    const baseY = foundation.max;
     // Independent per-axis footprint shrink so neighbours don't read as clones.
     const sx = view.w * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x1111) * BUILDING_FOOTPRINT_JITTER);
     const sz = view.h * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x2222) * BUILDING_FOOTPRINT_JITTER);
 
-    MATRIX.makeScale(sx, height, sz).setPosition(cx, 0, cz);
+    MATRIX.makeScale(sx, height + foundationDepth, sz).setPosition(cx, foundation.min, cz);
     archetype.walls.setMatrixAt(slot, MATRIX);
     const roofSx = Math.min(view.w * 0.98, sx + BUILDING_ROOF_OVERHANG);
     const roofSz = Math.min(view.h * 0.98, sz + BUILDING_ROOF_OVERHANG);
     const roofHeight = BUILDING_ROOF_HEIGHTS[view.zone];
-    MATRIX.makeScale(roofSx, roofHeight, roofSz).setPosition(cx, height, cz);
+    MATRIX.makeScale(roofSx, roofHeight, roofSz).setPosition(cx, baseY + height, cz);
     archetype.roofs.setMatrixAt(slot, MATRIX);
     const detailX = cx + (cellHash01(view.id + 0x6666) - 0.5) * sx * 0.35;
     const detailZ = cz + (cellHash01(view.id + 0x7777) - 0.5) * sz * 0.35;
     const detailWidth = Math.min(BUILDING_DETAIL_WIDTHS[view.zone], Math.min(sx, sz) * 0.65);
     MATRIX.makeScale(detailWidth, BUILDING_DETAIL_HEIGHTS[view.zone], detailWidth).setPosition(
       detailX,
-      height + roofHeight * 0.82,
+      baseY + height + roofHeight * 0.82,
       detailZ,
     );
     archetype.details.setMatrixAt(slot, MATRIX);
@@ -269,7 +285,7 @@ export class BuildingsView {
     const facadeZ = cz + sz / 2 + BUILDING_FACADE_DEPTH / 2 + BUILDING_FACADE_FRONT_OFFSET;
     MATRIX.makeScale(facadeWidth, facadeHeight, BUILDING_FACADE_DEPTH).setPosition(
       facadeX,
-      BUILDING_FACADE_BASE_Y,
+      baseY + BUILDING_FACADE_BASE_Y,
       facadeZ,
     );
     archetype.facades.setMatrixAt(slot, MATRIX);
@@ -288,7 +304,7 @@ export class BuildingsView {
       archetype.facades.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
       // Facade emissive is shared per material, so abandoned windows must have
       // no geometry rather than merely a dark instance tint.
-      MATRIX.makeScale(0, 0, 0).setPosition(cx, 0, cz);
+      MATRIX.makeScale(0, 0, 0).setPosition(cx, baseY, cz);
       archetype.facades.setMatrixAt(slot, MATRIX);
     } else {
       // Subtle per-building tint (walls and roof shift together) on top of the

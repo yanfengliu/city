@@ -9,6 +9,7 @@ import {
 } from './constants';
 import { drawUtilityIconBadges, utilityIconBadgeLayout } from './utility-icon-badge';
 import { utilityIconKey, type UtilityIconView } from './utility-icon-key';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** What the fx needs from a building view to place its problem icon. */
 export interface IconBuildingView extends UtilityIconView {
@@ -54,6 +55,7 @@ export class UtilityIconsFx {
   readonly group = new Group();
   private readonly entries = new Map<number, IconEntry>();
   private readonly textures = new Map<string, CanvasTexture>();
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor() {
     this.group.name = 'utilityIcons';
@@ -62,6 +64,10 @@ export class UtilityIconsFx {
   /** Live count of shown icons (for the automation text state). */
   get count(): number {
     return this.entries.size;
+  }
+
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
   }
 
   private texture(key: string): CanvasTexture {
@@ -88,7 +94,11 @@ export class UtilityIconsFx {
     const cx = view.x + view.w / 2;
     const cz = view.y + view.h / 2;
     const levelIdx = Math.min(Math.max(view.level, 1), BUILDING_LEVEL_HEIGHTS.length) - 1;
-    const baseY = BUILDING_LEVEL_HEIGHTS[levelIdx] + BUILDING_ROOF_HEIGHTS[view.zone] + UTILITY_ICON_Y_GAP;
+    const baseY =
+      this.surface.footprintRange(view.x, view.y, view.w, view.h).max +
+      BUILDING_LEVEL_HEIGHTS[levelIdx] +
+      BUILDING_ROOF_HEIGHTS[view.zone] +
+      UTILITY_ICON_Y_GAP;
     if (existing) {
       existing.baseY = baseY;
       existing.sprite.position.set(cx, baseY, cz);

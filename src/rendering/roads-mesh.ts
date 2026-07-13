@@ -18,6 +18,8 @@ import {
   ROAD_LANE_MARKING_Y,
   ROAD_SURFACE_Y,
 } from './constants';
+import { buildSurfacePatch } from './surface-geometry';
+import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Accumulates merged quads/boxes into one BufferGeometry. */
 class GeometryBuilder {
@@ -26,6 +28,16 @@ class GeometryBuilder {
   private readonly colors: number[] = [];
   private readonly indices: number[] = [];
 
+  private corners(
+    points: ReadonlyArray<readonly [number, number, number]>,
+    normal: readonly [number, number, number] = [0, 1, 0],
+  ): void {
+    const base = this.positions.length / 3;
+    for (const point of points) this.positions.push(point[0], point[1], point[2]);
+    for (let i = 0; i < 4; i++) this.normals.push(normal[0], normal[1], normal[2]);
+    this.indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+  }
+
   /** One rectangular face: origin o plus edge vectors u and v, flat normal n. */
   private face(
     o: readonly [number, number, number],
@@ -33,15 +45,12 @@ class GeometryBuilder {
     v: readonly [number, number, number],
     n: readonly [number, number, number],
   ): void {
-    const base = this.positions.length / 3;
-    this.positions.push(
-      o[0], o[1], o[2],
-      o[0] + u[0], o[1] + u[1], o[2] + u[2],
-      o[0] + v[0], o[1] + v[1], o[2] + v[2],
-      o[0] + u[0] + v[0], o[1] + u[1] + v[1], o[2] + u[2] + v[2],
-    );
-    for (let i = 0; i < 4; i++) this.normals.push(n[0], n[1], n[2]);
-    this.indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+    this.corners([
+      o,
+      [o[0] + u[0], o[1] + u[1], o[2] + u[2]],
+      [o[0] + v[0], o[1] + v[1], o[2] + v[2]],
+      [o[0] + u[0] + v[0], o[1] + u[1] + v[1], o[2] + u[2] + v[2]],
+    ], n);
   }
 
   /** Upward-facing quad covering [x0,x1]×[z0,z1] at height y. */
@@ -49,10 +58,56 @@ class GeometryBuilder {
     this.face([x0, y, z0], [x1 - x0, 0, 0], [0, 0, z1 - z0], [0, 1, 0]);
   }
 
+  surfaceQuad(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    lift: number,
+    surface: TerrainSurfaceView,
+  ): void {
+    this.corners([
+      [x0, surface.heightAt(x0, z0) + lift, z0],
+      [x1, surface.heightAt(x1, z0) + lift, z0],
+      [x0, surface.heightAt(x0, z1) + lift, z1],
+      [x1, surface.heightAt(x1, z1) + lift, z1],
+    ]);
+  }
+
+  surfacePatch(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    lift: number,
+    surface: TerrainSurfaceView,
+  ): number {
+    const patch = buildSurfacePatch(surface, x0, z0, x1, z1, lift);
+    const base = this.positions.length / 3;
+    this.positions.push(...patch.positions);
+    const count = patch.positions.length / 3;
+    for (let i = 0; i < count; i++) this.normals.push(0, 1, 0);
+    for (const index of patch.indices) this.indices.push(base + index);
+    return count;
+  }
+
   /** Upward-facing quad with a per-vertex color for one merged detail layer. */
   coloredQuad(x0: number, z0: number, x1: number, z1: number, y: number, color: Color): void {
     this.quad(x0, z0, x1, z1, y);
     for (let i = 0; i < 4; i++) this.colors.push(color.r, color.g, color.b);
+  }
+
+  coloredSurfacePatch(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    lift: number,
+    surface: TerrainSurfaceView,
+    color: Color,
+  ): void {
+    const count = this.surfacePatch(x0, z0, x1, z1, lift, surface);
+    for (let i = 0; i < count; i++) this.colors.push(color.r, color.g, color.b);
   }
 
   /** Axis-aligned box between opposite corners (all six faces). */
@@ -76,6 +131,7 @@ class GeometryBuilder {
       geometry.setAttribute('color', new BufferAttribute(new Float32Array(this.colors), 3));
     }
     geometry.setIndex(new BufferAttribute(new Uint32Array(this.indices), 1));
+    geometry.computeVertexNormals();
     return geometry;
   }
 }
@@ -107,6 +163,7 @@ export class RoadsView {
   private readonly highwayCells: ReadonlySet<number>;
   /** Terrain water mask; null until boot's `ready` message delivers it. */
   private water: Uint8Array | null = null;
+  private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private lastCells: readonly number[] = [];
   /** Road cell count from the last update, for automation/text state. */
   cellCount = 0;
@@ -153,6 +210,11 @@ export class RoadsView {
     if (this.lastCells.length > 0) this.update(this.lastCells);
   }
 
+  setTerrainSurface(surface: TerrainSurfaceView): void {
+    this.surface = surface;
+    if (this.lastCells.length > 0) this.update(this.lastCells);
+  }
+
   /** Rebuilds the merged geometry from road cell indices (index = y * width + x). */
   update(cells: readonly number[]): void {
     this.lastCells = cells;
@@ -172,13 +234,14 @@ export class RoadsView {
       }
       const x = index % this.gridWidth;
       const z = Math.floor(index / this.gridWidth);
-      roads.quad(x, z, x + 1, z + 1, ROAD_SURFACE_Y);
-      roadDetails.coloredQuad(
+      roads.surfaceQuad(x, z, x + 1, z + 1, ROAD_SURFACE_Y, this.surface);
+      roadDetails.coloredSurfacePatch(
         x + ROAD_DETAIL_SIDE_INSET,
         z + ROAD_DETAIL_END_INSET,
         x + 1 - ROAD_DETAIL_SIDE_INSET,
         z + 1 - ROAD_DETAIL_END_INSET,
         ROAD_DETAIL_Y,
+        this.surface,
         roadDetailColor(index),
       );
       this.addLaneMarking(roadLanes, roadCellSet, index, x, z);
@@ -210,10 +273,24 @@ export class RoadsView {
     const cx = x + 0.5;
     const cz = z + 0.5;
     if (vertical) {
-      b.quad(cx - halfWidth, cz - halfLength, cx + halfWidth, cz + halfLength, ROAD_LANE_MARKING_Y);
+      b.surfacePatch(
+        cx - halfWidth,
+        cz - halfLength,
+        cx + halfWidth,
+        cz + halfLength,
+        ROAD_LANE_MARKING_Y,
+        this.surface,
+      );
     }
     if (horizontal) {
-      b.quad(cx - halfLength, cz - halfWidth, cx + halfLength, cz + halfWidth, ROAD_LANE_MARKING_Y);
+      b.surfacePatch(
+        cx - halfLength,
+        cz - halfWidth,
+        cx + halfLength,
+        cz + halfWidth,
+        ROAD_LANE_MARKING_Y,
+        this.surface,
+      );
     }
   }
 

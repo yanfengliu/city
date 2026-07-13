@@ -8,9 +8,11 @@ import {
   ROAD_LANE_MARKING_LENGTH,
   ROAD_LANE_MARKING_WIDTH,
   ROAD_LANE_MARKING_Y,
+  ROAD_SURFACE_Y,
   TRAFFIC_OVERLAY_Y,
 } from '../../src/rendering/constants';
 import { RoadsView } from '../../src/rendering/roads-mesh';
+import { TerrainSurface } from '../../src/rendering/terrain-surface';
 
 const mesh = (view: RoadsView, name: string): Mesh => {
   const child = view.group.getObjectByName(name);
@@ -23,6 +25,23 @@ const expectClose = (actual: number, expected: number): void => {
 };
 
 describe('RoadsView', () => {
+  it('drapes road vertices over the shared terrain surface', () => {
+    const view = new RoadsView(10);
+    const surface = new TerrainSurface({
+      width: 10,
+      height: 10,
+      elevation: new Float32Array(100).fill(0.85),
+      seaLevel: 0.35,
+      water: new Uint8Array(100),
+    });
+    view.setTerrainSurface(surface);
+    view.setWater(new Uint8Array(100));
+    view.update([11]);
+
+    const positions = mesh(view, 'road-surface').geometry.getAttribute('position').array as Float32Array;
+    expectClose(positions[1], surface.maxHeight + ROAD_SURFACE_Y);
+  });
+
   it('keeps a named inset surface-detail layer synchronized with ordinary land roads', () => {
     expect(TRAFFIC_OVERLAY_Y - ROAD_DETAIL_Y).toBeGreaterThanOrEqual(0.004);
 
@@ -38,22 +57,23 @@ describe('RoadsView', () => {
     const detailMesh = mesh(view, 'road-surface-details');
 
     expect(roadMesh.geometry.getAttribute('position').count).toBe(8);
-    expect(detailMesh.geometry.getAttribute('position').count).toBe(8);
+    expect(detailMesh.geometry.getAttribute('position').count).toBe(16);
 
     const positions = detailMesh.geometry.getAttribute('position').array as Float32Array;
-    expectClose(positions[0], ROAD_DETAIL_SIDE_INSET);
-    expectClose(positions[1], ROAD_DETAIL_Y);
-    expectClose(positions[2], 1 + ROAD_DETAIL_END_INSET);
-    expectClose(positions[3], 1 - ROAD_DETAIL_SIDE_INSET);
-    expectClose(positions[5], 1 + ROAD_DETAIL_END_INSET);
-    expectClose(positions[6], ROAD_DETAIL_SIDE_INSET);
-    expectClose(positions[8], 2 - ROAD_DETAIL_END_INSET);
+    const firstDetailX = Array.from({ length: 8 }, (_, i) => positions[i * 3]);
+    const firstDetailY = Array.from({ length: 8 }, (_, i) => positions[i * 3 + 1]);
+    const firstDetailZ = Array.from({ length: 8 }, (_, i) => positions[i * 3 + 2]);
+    expectClose(Math.min(...firstDetailX), ROAD_DETAIL_SIDE_INSET);
+    expectClose(Math.max(...firstDetailX), 1 - ROAD_DETAIL_SIDE_INSET);
+    expect(firstDetailY.every((value) => Math.abs(value - ROAD_DETAIL_Y) < 1e-5)).toBe(true);
+    expectClose(Math.min(...firstDetailZ), 1 + ROAD_DETAIL_END_INSET);
+    expectClose(Math.max(...firstDetailZ), 2 - ROAD_DETAIL_END_INSET);
 
     const colorAttribute = detailMesh.geometry.getAttribute('color');
     expect(colorAttribute).toBeDefined();
     const colors = colorAttribute.array as Float32Array;
-    expect(colors.length).toBe(24);
-    expect(colors[0]).not.toBe(colors[12]);
+    expect(colors.length).toBe(48);
+    expect(colors[0]).not.toBe(colors[24]);
 
     view.update([11, 12]);
 
@@ -74,20 +94,21 @@ describe('RoadsView', () => {
 
     expect(roadMesh.material).toBeInstanceOf(MeshLambertMaterial);
     expect((roadMesh.material as MeshLambertMaterial).color.getHex()).toBe(ROAD_COLOR);
-    expect(laneMesh.geometry.getAttribute('position').count).toBe(12);
+    expect(laneMesh.geometry.getAttribute('position').count).toBe(24);
 
     const positions = laneMesh.geometry.getAttribute('position').array as Float32Array;
     const x0 = 1.5 - ROAD_LANE_MARKING_WIDTH / 2;
     const x1 = 1.5 + ROAD_LANE_MARKING_WIDTH / 2;
     const z0 = 2.5 - ROAD_LANE_MARKING_LENGTH / 2;
     const z1 = 2.5 + ROAD_LANE_MARKING_LENGTH / 2;
-    expectClose(positions[0], x0);
-    expectClose(positions[1], ROAD_LANE_MARKING_Y);
-    expectClose(positions[2], z0);
-    expectClose(positions[3], x1);
-    expectClose(positions[5], z0);
-    expectClose(positions[6], x0);
-    expectClose(positions[8], z1);
+    const firstLaneX = Array.from({ length: 8 }, (_, i) => positions[i * 3]);
+    const firstLaneY = Array.from({ length: 8 }, (_, i) => positions[i * 3 + 1]);
+    const firstLaneZ = Array.from({ length: 8 }, (_, i) => positions[i * 3 + 2]);
+    expectClose(Math.min(...firstLaneX), x0);
+    expectClose(Math.max(...firstLaneX), x1);
+    expect(firstLaneY.every((value) => Math.abs(value - ROAD_LANE_MARKING_Y) < 1e-5)).toBe(true);
+    expectClose(Math.min(...firstLaneZ), z0);
+    expectClose(Math.max(...firstLaneZ), z1);
 
     view.update([]);
 
@@ -103,10 +124,14 @@ describe('RoadsView', () => {
     const laneMesh = mesh(view, 'road-lane-markings');
     const positions = laneMesh.geometry.getAttribute('position').array as Float32Array;
 
-    expect(laneMesh.geometry.getAttribute('position').count).toBe(8);
-    expectClose(positions[0], 9.5 - ROAD_LANE_MARKING_WIDTH / 2);
-    expectClose(positions[2], 0.5 - ROAD_LANE_MARKING_LENGTH / 2);
-    expectClose(positions[12], 0.5 - ROAD_LANE_MARKING_WIDTH / 2);
-    expectClose(positions[14], 1.5 - ROAD_LANE_MARKING_LENGTH / 2);
+    expect(laneMesh.geometry.getAttribute('position').count).toBe(16);
+    const firstX = Array.from({ length: 8 }, (_, i) => positions[i * 3]);
+    const firstZ = Array.from({ length: 8 }, (_, i) => positions[i * 3 + 2]);
+    const secondX = Array.from({ length: 8 }, (_, i) => positions[(i + 8) * 3]);
+    const secondZ = Array.from({ length: 8 }, (_, i) => positions[(i + 8) * 3 + 2]);
+    expectClose(Math.min(...firstX), 9.5 - ROAD_LANE_MARKING_WIDTH / 2);
+    expectClose(Math.min(...firstZ), 0.5 - ROAD_LANE_MARKING_LENGTH / 2);
+    expectClose(Math.min(...secondX), 0.5 - ROAD_LANE_MARKING_WIDTH / 2);
+    expectClose(Math.min(...secondZ), 1.5 - ROAD_LANE_MARKING_LENGTH / 2);
   });
 });

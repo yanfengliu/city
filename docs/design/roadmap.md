@@ -10,7 +10,7 @@ Accept: empty scene at 60 fps, worker round-trip visible (tick counter in HUD), 
 
 ## Phase 1 — Terrain and roads
 
-Seeded terrain (water/land/trees) sent once to renderer; road place/bulldoze commands with validators, cost, L-drag expansion; road graph derivation + topologyVersion; chunked road mesh; camera controls; ground picking with ghost preview; treasury debits.
+Seeded terrain (normalized elevation/water/trees) sent once to renderer; renderer-only rolling relief shared by ground meshes and picking; road place/bulldoze commands with validators, cost, L-drag expansion; road graph derivation + topologyVersion; chunked road mesh; camera controls; terrain picking with ghost preview; treasury debits.
 
 Accept: draw/bulldoze road networks in browser; graph unit tests pass (corners, intersections, islands); terrain deterministic per seed.
 
@@ -52,4 +52,4 @@ Accept: the game-design doc's "Definition of fully functioning" checklist passes
 
 ## Later (explicitly out of v1)
 
-Freeform spline roads (design must stay compatible: graph + rasterization already abstract over cell geometry), public transport, districts/policies, fires/crime/health incidents, high density, freight chains, terrain height, milestones/unlock progression, ambient audio.
+Freeform spline roads (design must stay compatible: graph + rasterization already abstract over cell geometry), public transport, districts/policies, fires/crime/health incidents, high density, freight chains, player terrain sculpting and slope gameplay, milestones/unlock progression, ambient audio.

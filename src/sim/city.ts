@@ -181,6 +181,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
     for (const i of HIGHWAY_CELLS) {
       terrain.water[i] = 0;
       terrain.trees[i] = 0;
+      terrain.elevation[i] = terrain.seaLevel;
     }
   }
   const world = new World({

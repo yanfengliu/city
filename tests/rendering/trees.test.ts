@@ -12,6 +12,7 @@ import {
   type TreeArchetypeName,
 } from '../../src/rendering/constants';
 import { TreesView } from '../../src/rendering/trees';
+import { TerrainSurface } from '../../src/rendering/terrain-surface';
 
 const ARCHETYPE_NAMES: TreeArchetypeName[] = ['conifer', 'broadleaf', 'columnar'];
 const LAYERS = ['trunks', 'lower-canopies', 'upper-canopies'] as const;
@@ -69,6 +70,23 @@ const snapshot = (view: TreesView): unknown[] => {
 };
 
 describe('TreesView diversity', () => {
+  it('anchors every tree archetype to the shared terrain surface', () => {
+    const surface = new TerrainSurface({
+      width: 16,
+      height: 16,
+      elevation: new Float32Array(256).fill(0.85),
+      seaLevel: 0.35,
+      water: new Uint8Array(256),
+    });
+    const view = new TreesView({ width: 16, trees: new Uint8Array(256).fill(1) }, surface);
+    const matrix = new Matrix4();
+    for (const name of ARCHETYPE_NAMES) {
+      const trunks = mesh(view, name, 'trunks');
+      trunks.getMatrixAt(0, matrix);
+      expect(matrix.elements[13]).toBeCloseTo(surface.maxHeight, 5);
+    }
+  });
+
   it('partitions trees across three visibly different low-poly silhouettes', () => {
     const view = makeTrees();
 

@@ -9,6 +9,7 @@ import {
   type ZoneKind,
 } from '../../src/rendering/constants';
 import { BuildingsView } from '../../src/rendering/buildings-mesh';
+import { TerrainSurface } from '../../src/rendering/terrain-surface';
 
 const zoneKinds: readonly ZoneKind[] = ['R', 'C', 'I'];
 
@@ -65,6 +66,24 @@ const expectCloseArray = (actual: readonly number[], expected: readonly number[]
 };
 
 describe('BuildingsView', () => {
+  it('grounds level foundations at the highest shared terrain corner', () => {
+    const view = new BuildingsView();
+    const surface = new TerrainSurface({
+      width: 4,
+      height: 4,
+      elevation: new Float32Array(16).fill(0.85),
+      seaLevel: 0.35,
+      water: new Uint8Array(16),
+    });
+    view.setTerrainSurface(surface);
+    view.upsert({ id: 1, zone: 'R', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+
+    const wallMatrix = matrixAt(mesh(view, 'R-walls'), 0);
+    const facadeMatrix = matrixAt(mesh(view, 'R-facades'), 0);
+    expect(wallMatrix[13]).toBeCloseTo(surface.maxHeight, 5);
+    expect(facadeMatrix[13]).toBeCloseTo(surface.maxHeight + BUILDING_FACADE_BASE_Y, 5);
+  });
+
   it('keeps named wall, roof, roof-detail, and facade layers synchronized per zone', () => {
     const view = new BuildingsView();
 

@@ -27,6 +27,7 @@ describe('highway outside connection', () => {
     for (const c of HIGHWAY_CELLS) {
       expect(sim.terrain.water[c]).toBe(0);
       expect(sim.terrain.trees[c]).toBe(0);
+      expect(sim.terrain.elevation[c]).toBeCloseTo(sim.terrain.seaLevel, 6);
     }
   });
 
