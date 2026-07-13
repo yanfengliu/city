@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Headless-first execution
+
+Always work headlessly by default. This is a mandatory execution rule, not an adaptable default. Use a visible browser window, desktop application, GUI automation, or another non-headless interaction only when it is absolutely necessary to complete or adequately verify the task and no headless alternative is sufficient. State the reason before launching the non-headless path.
+
 ## Agentic working style
 
 Treat the rest of this file as defaults, not rigid law. The right approach is the one that fits the task in front of you — when a rule here would make the work worse, deviate and say why. Optimize for the outcome: correct, verified, readable, and fun to play.
