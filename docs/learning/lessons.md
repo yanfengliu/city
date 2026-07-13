@@ -243,3 +243,13 @@ The engine 2.0.0 fleet validation ran this repo's suite once and recorded "green
 | Fix commit | (this commit) |
 | Test added | `tests/rendering/water-depth.test.ts` pins raw depth normalization, coast-aware corner smoothing, and the exact friendly ramp; `tests/rendering/terrain-mesh.test.ts` pins flat y, deterministic color buffers, mask authority, vertex-color material configuration, and one water mesh. |
 | Behavior delta | `buildTerrainMesh` derives bathymetry directly from `seaLevel - elevation`, writes it as vertex color into the existing white/default-base water material, and leaves every geometry/gameplay surface flat. Rule: when a shared presentation projection intentionally discards source information for one contract, semantic rendering that needs that information must consume the raw immutable payload—not reverse-engineer the projection. |
+
+## Water motion should animate lighting before it animates the mechanical plane
+
+| Field | Value |
+|---|---|
+| Surfaced by | Boundary and visual review of wind-driven surface waves after depth-colored water landed. |
+| Reviewer findings | GPU vertex displacement would make visible water diverge from flat CPU picking and could expose fixed shoreline skirts at troughs; a separate wall clock inside the material would also split rAF and screenshot timing. |
+| Fix commit | (this commit) |
+| Test added | `tests/rendering/water-wave-material.test.ts` pins the two-band wind field, bounded and seamless phase, analytic slopes, normal-only standard-material injection, flat-normal restoration before shadow lookup, live uniform reuse across context recompilation, and clear failure when Three.js removes a shader hook; `tests/rendering/scene-water-waves.test.ts` pins CityScene material discovery plus shared-clock advancement; terrain tests keep flat y, bathymetry colors, one mesh, received shadows, and no water shadow casting. |
+| Behavior delta | `WaterWaveMaterial` moves only analytic lighting normals, restores the flat normal before Three.js applies receiver shadow bias, and lets `CityScene` own its wrapped presentation time. The water visibly ripples even while gameplay is paused without changing geometry buffers, shadow edges, picking, saves, sim state, draw count, or the cached caster shadow map. Rule: for decorative environmental motion over a mechanically fixed surface, start with a renderer-time normal field; add geometry only when collision/picking and boundary seams are explicitly updated too. |

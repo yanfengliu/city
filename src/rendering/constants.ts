@@ -36,6 +36,27 @@ export const WATER_COLOR = WATER_MID_COLOR;
 export const WATER_DEEP_ELEVATION_DELTA = 0.18;
 /** Position of the middle palette stop in normalized presentation depth. */
 export const WATER_MID_DEPTH = 1 / 3;
+/** Prevailing renderer-only wind direction across the map (normalized by the material). */
+export const WATER_WIND_DIRECTION = { x: 0.82, z: 0.57 } as const;
+/** Long, gentle wind swell: amplitude is in world-space render units. */
+export const WATER_WAVE_PRIMARY = {
+  amplitude: 0.026,
+  waveNumber: 0.62,
+  angularSpeed: 1.05,
+} as const;
+/** Smaller angled ripples keep the surface organic without becoming noisy. */
+export const WATER_WAVE_SECONDARY = {
+  amplitude: 0.012,
+  waveNumber: 1.18,
+  angularSpeed: 1.62,
+  crosswindMix: 0.62,
+  phase: 1.7,
+} as const;
+/** Amplifies virtual surface slope for visible glints without moving any geometry. */
+export const WATER_WAVE_NORMAL_STRENGTH = 4;
+/** Both angular speeds close exactly after 35 primary / 54 secondary cycles. */
+export const WATER_WAVE_TIME_CYCLE_SECONDS =
+  (Math.PI * 2 * 35) / WATER_WAVE_PRIMARY.angularSpeed;
 export const SHORE_COLOR = 0xd1bc80;
 export const SHORE_DETAIL_COLOR = 0xe4d39b;
 export const SHORE_DETAIL_LIGHTNESS_JITTER = 0.065;

@@ -6,7 +6,6 @@ import {
   Group,
   Mesh,
   MeshLambertMaterial,
-  MeshStandardMaterial,
 } from 'three';
 import type { Object3D } from 'three';
 import {
@@ -24,6 +23,7 @@ import {
 import { buildSurfacePatch, type SurfacePatch } from './surface-geometry';
 import { TerrainSurface, type TerrainSurfaceView } from './terrain-surface';
 import { buildWaterCornerDepths, waterDepthColor } from './water-depth';
+import { WaterWaveMaterial } from './water-wave-material';
 
 /** Plain-data view of the generated terrain (mirrors protocol TerrainPayload). */
 export interface TerrainMeshData {
@@ -243,10 +243,8 @@ export function buildTerrainMesh(
   shoreDetailMesh.receiveShadow = true;
   group.add(shoreDetailMesh);
 
-  const water3d = new Mesh(
-    waterMesh.build(true),
-    new MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.0 }),
-  );
+  const waterMaterial = new WaterWaveMaterial();
+  const water3d = new Mesh(waterMesh.build(true), waterMaterial);
   water3d.name = 'terrain-water';
   water3d.receiveShadow = true;
   group.add(water3d);

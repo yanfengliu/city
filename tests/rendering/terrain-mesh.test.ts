@@ -4,6 +4,7 @@ import type { BufferAttribute } from 'three';
 import { SHORE_DETAIL_Y, ZONE_SURFACE_Y } from '../../src/rendering/constants';
 import { buildTerrainMesh } from '../../src/rendering/terrain-mesh';
 import { waterDepthColor } from '../../src/rendering/water-depth';
+import { WaterWaveMaterial } from '../../src/rendering/water-wave-material';
 
 const mesh = (root: ReturnType<typeof buildTerrainMesh>, name: string): Mesh => {
   const child = root.getObjectByName(name);
@@ -105,7 +106,9 @@ describe('buildTerrainMesh', () => {
     const repeatedColors = repeatedWater.geometry.getAttribute('color') as BufferAttribute;
 
     expect(colors.count).toBe(positions.count);
+    expect(waterSurface.material).toBeInstanceOf(WaterWaveMaterial);
     expect(waterSurface.material).toBeInstanceOf(MeshStandardMaterial);
+    expect(waterSurface.castShadow).toBe(false);
     const material = waterSurface.material as MeshStandardMaterial;
     expect(material.vertexColors).toBe(true);
     expect(material.color.getHex()).toBe(0xffffff);

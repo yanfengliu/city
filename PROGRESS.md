@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-13 — Wind-driven water surface ripples
+
+User request: water should have surface waves as wind blows through the terrain.
+
+Added a renderer-only `WaterWaveMaterial` that keeps the existing friendly bathymetry vertex colors, standard lighting, fog, one water mesh/draw call, and received tree/building shadows. Two deterministic wave bands travel along a prevailing `(0.82, 0.57)` wind, with 10.13/5.32-cell wavelengths and 5.98/3.88-second periods; their analytic slopes perturb lighting normals by at most about 7° but never move a CPU or GPU vertex. That choice keeps the flat y=-0.12 picking/mechanics plane, shoreline skirts, bridges, pumps, overlays, protocol, simulation, replay, and saves exact. The 35/54-cycle phase wraps seamlessly every 209.44 seconds to preserve float precision. Presentation wind intentionally continues while the simulation is paused and resets with the page rather than entering save state.
+
+TDD began red on the missing wave material. Focused contracts now pin exact wind/tuning, bounded motion, seamless wrapping, finite-difference slope agreement, normal-only standard-material shader injection, flat receiver-normal restoration before shadow lookup, white vertex-color base, missing Three.js hook failure, shared live uniforms across recompilation, and the real `CityScene.add()` → `presentFrame(now)` material-discovery/clock path. `CityScene` owns the one presentation timestamp used by rAF, screenshots, vehicles, effects, and water; the material registry updates one float uniform per frame, with no buffer writes or shadow invalidation.
+
+Headless Chrome 150 at 1280×720 DPR 1 on ANGLE D3D11 / RTX 4090 verified the real compiled shader with zero browser errors. In a paused scene the live wave clock advanced 0.2505 seconds; controlled phases 0.75 seconds apart changed 62,458 pixels (6,412 by at least three RGB levels, 536 by at least eight, maximum 22) while position/color buffer versions stayed zero, water remained one mesh with `receiveShadow=true`/`castShadow=false`, and the clean captures `output/playwright/water-waves/waves-phase-a.png` plus `waves-phase-b-clean.png` retain depth colors and long shadows. A separate pixel diff of those independently captured phases found 59,808 changed pixels with no HUD-row changes. Repeated page captures showed an observed headless compositor artifact with black tiles; fresh isolated sessions and direct WebGL framebuffer reads stayed clean, so that capture artifact is not evidence of a game-render defect.
+
+Performance evidence used 800 warmups per material and 600 GPU-finished direct-render samples per A–B–B–A leg. Flat-water legs measured 0.1115/0.1145 ms and wave legs 0.1167/0.1063 ms, aggregating to 0.1130 versus 0.1115 ms: the −0.0015 ms result is measurement noise, so no wave overhead was measurable on this run. Draw calls remained 13 and submitted triangles 402,395 in the paused close-water view. Verification: `npm test` passed 234/234 across 56 files; `npm run typecheck`, `npm run lint`, and `npm run build` all passed. The production worker remains 111,167/120,000 bytes and the pre-existing >500 kB main-chunk warning remains non-blocking. Three adversarial lenses converged with no substantive findings after fixes for CPU/render-plane divergence, split presentation clocks, under-visible motion, shader-recompile coverage, received-shadow bias wobble, missing scene-clock integration coverage, and overclaimed capture-artifact causality.
+
 ### 2026-07-13 — Depth-colored water
 
 User request: water should have different depths and therefore different colors.

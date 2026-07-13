@@ -243,9 +243,8 @@ export class Game {
       this.levelUpFx.group,
       this.utilityIconsFx.group,
     );
-    this.scene.onFrame(() => {
+    this.scene.onFrame((now) => {
       this.flushDirtyViews();
-      const now = performance.now();
       this.vehiclesView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
       this.utilityIconsFx.updateFrame(now);

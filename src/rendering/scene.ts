@@ -20,6 +20,7 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import { ATMOSPHERE_COLORS, ATMOSPHERE_LIGHT_INTENSITY } from './constants';
 import { refreshShadowsAfterContextRestore, ShadowMapUpdatePolicy } from './shadow-update';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
+import { WaterWaveMaterial } from './water-wave-material';
 
 /** WASD pan speed as a fraction of the camera-to-target distance, per second
  * (so panning is faster when zoomed out and slower when zoomed in). */
@@ -72,13 +73,14 @@ export class CityScene {
   private frameCount = 0;
   private lastFpsSample = performance.now();
   private lastFrameTime = performance.now();
-  private readonly frameCallbacks: Array<() => void> = [];
+  private readonly frameCallbacks: Array<(now: number) => void> = [];
   /** Currently-held WASD keys, drained each frame into a camera pan. */
   private readonly panKeys = new Set<string>();
   private readonly gridWidth: number;
   private readonly gridHeight: number;
   private terrainSurface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private readonly shadowUpdates = new ShadowMapUpdatePolicy();
+  private readonly waterWaveMaterials = new Set<WaterWaveMaterial>();
 
   constructor(container: HTMLElement, gridWidth: number, gridHeight: number) {
     this.gridWidth = gridWidth;
@@ -176,11 +178,20 @@ export class CityScene {
   }
 
   add(...objects: Object3D[]): void {
+    for (const object of objects) {
+      object.traverse((child) => {
+        if (!(child instanceof Mesh)) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const material of materials) {
+          if (material instanceof WaterWaveMaterial) this.waterWaveMaterials.add(material);
+        }
+      });
+    }
     this.scene.add(...objects);
   }
 
   /** Registers a callback run once per rendered frame, before drawing (dirty-flag flushes). */
-  onFrame(callback: () => void): void {
+  onFrame(callback: (now: number) => void): void {
     this.frameCallbacks.push(callback);
   }
 
@@ -315,7 +326,8 @@ export class CityScene {
    * interpolation), advance any camera flight, sync controls, render. Shared by
    * the rAF loop and the on-demand `screenshot()` so both produce a live frame. */
   private presentFrame(now: number): void {
-    for (const callback of this.frameCallbacks) callback();
+    for (const material of this.waterWaveMaterials) material.setWaveTime(now / 1000);
+    for (const callback of this.frameCallbacks) callback(now);
     this.updateFlight(now);
     this.controls.update();
     this.conformCameraTargetToTerrain();
