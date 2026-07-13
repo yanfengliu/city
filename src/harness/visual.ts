@@ -78,12 +78,17 @@ export function cityVisualObservation(
       dataUrl: screenshot,
       mime: mimeFromDataUrl(screenshot),
       ...canvasViewport(),
-      alt: 'City playtest browser screenshot',
+      alt: 'City playtest map-canvas screenshot (DOM HUD not composited)',
     },
     visibleText: visibleTextFromState(state),
     controls: cityVisualControls(),
     state: channels,
-    metadata: toJsonValue({ source: 'city.__harness', findingCount: findings.length }),
+    metadata: toJsonValue({
+      source: 'city.__harness',
+      findingCount: findings.length,
+      captureScope: 'map-canvas-only',
+      pointInputRouting: 'synthetic-canvas-events',
+    }),
   };
 }
 
@@ -275,7 +280,8 @@ function canvasViewport(): Pick<NonNullable<VisualPlaytestObservation['screensho
   if (typeof document === 'undefined') return {};
   const canvas = document.querySelector('canvas');
   if (!canvas) return {};
-  return { width: canvas.width, height: canvas.height };
+  const rect = canvas.getBoundingClientRect();
+  return { width: Math.round(rect.width), height: Math.round(rect.height) };
 }
 
 function canvasBounds(): VisualPlaytestControl['bounds'] {

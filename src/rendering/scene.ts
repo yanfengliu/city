@@ -18,6 +18,8 @@ import {
 import type { Object3D } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { ATMOSPHERE_COLORS, ATMOSPHERE_LIGHT_INTENSITY } from './constants';
+import { applyRenderPixelRatio } from './render-pixel-ratio';
+import { captureCanvasAtCssSize } from './screenshot';
 import { refreshShadowsAfterContextRestore, ShadowMapUpdatePolicy } from './shadow-update';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 import { WaterWaveMaterial } from './water-wave-material';
@@ -86,8 +88,8 @@ export class CityScene {
     this.gridWidth = gridWidth;
     this.gridHeight = gridHeight;
     this.renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    applyRenderPixelRatio(this.renderer, window.devicePixelRatio);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // Filmic tone mapping + soft sun shadows lift the flat-shaded look without
     // touching the (cheap, instanced) Lambert materials.
     this.renderer.toneMapping = ACESFilmicToneMapping;
@@ -152,6 +154,7 @@ export class CityScene {
     this.scene.add(this.sky);
 
     window.addEventListener('resize', () => {
+      applyRenderPixelRatio(this.renderer, window.devicePixelRatio);
       this.camera.aspect = container.clientWidth / container.clientHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(container.clientWidth, container.clientHeight);
@@ -224,9 +227,9 @@ export class CityScene {
 
   /**
    * Projects a point on the visible terrain (world x, z) to CSS client pixels — the
-   * inverse of GroundPicker. Lets an automated player aim real pointer events
-   * at a sim cell. `onScreen` is false when the point is behind the camera or
-   * outside the viewport.
+   * inverse of GroundPicker. Lets automation aim canvas-space gestures at a sim
+   * cell. `onScreen` is false when the point is behind the camera or outside the
+   * viewport.
    */
   worldToScreen(x: number, z: number): { sx: number; sy: number; onScreen: boolean } {
     this.camera.updateMatrixWorld(); // background tabs throttle rAF → stale matrices
@@ -248,7 +251,7 @@ export class CityScene {
    * keeps the buffer readable after the render. */
   screenshot(quality = 0.7): string {
     this.presentFrame(performance.now());
-    return this.renderer.domElement.toDataURL('image/jpeg', quality);
+    return captureCanvasAtCssSize(this.renderer.domElement, quality);
   }
 
   /**
@@ -322,15 +325,15 @@ export class CityScene {
     this.controls.target.y = targetY;
   }
 
-  /** One presentation pass: run frame callbacks (view sync, vehicle/FX
-   * interpolation), advance any camera flight, sync controls, render. Shared by
-   * the rAF loop and the on-demand `screenshot()` so both produce a live frame. */
+  /** One presentation pass: advance the camera, then run frame callbacks (view
+   * sync, interpolation, camera-facing FX) against that final pose and render.
+   * Shared by rAF and on-demand `screenshot()` so both produce a live frame. */
   private presentFrame(now: number): void {
     for (const material of this.waterWaveMaterials) material.setWaveTime(now / 1000);
-    for (const callback of this.frameCallbacks) callback(now);
     this.updateFlight(now);
     this.controls.update();
     this.conformCameraTargetToTerrain();
+    for (const callback of this.frameCallbacks) callback(now);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -449,5 +452,10 @@ export class CityScene {
 
   getFps(): number {
     return this.fps;
+  }
+
+  /** Current backing-buffer scale relative to CSS pixels (renderer-only quality state). */
+  getRenderPixelRatio(): number {
+    return this.renderer.getPixelRatio();
   }
 }

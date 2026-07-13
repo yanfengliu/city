@@ -29,6 +29,9 @@ describe('CityScene water wave clock', () => {
     const terrain = new Group();
     terrain.add(new Mesh(new BufferGeometry(), material));
     const frameCallback = vi.fn();
+    const updateFlight = vi.fn();
+    const conformCameraTargetToTerrain = vi.fn();
+    Object.assign(cityScene, { updateFlight, conformCameraTargetToTerrain });
 
     cityScene.add(terrain);
     cityScene.onFrame(frameCallback);
@@ -38,5 +41,14 @@ describe('CityScene water wave clock', () => {
     expect(frameCallback).toHaveBeenCalledExactlyOnceWith(3_500);
     expect(controls.update).toHaveBeenCalledOnce();
     expect(render).toHaveBeenCalledOnce();
+    expect(updateFlight.mock.invocationCallOrder[0]).toBeLessThan(
+      frameCallback.mock.invocationCallOrder[0] ?? Infinity,
+    );
+    expect(controls.update.mock.invocationCallOrder[0]).toBeLessThan(
+      frameCallback.mock.invocationCallOrder[0] ?? Infinity,
+    );
+    expect(conformCameraTargetToTerrain.mock.invocationCallOrder[0]).toBeLessThan(
+      frameCallback.mock.invocationCallOrder[0] ?? Infinity,
+    );
   });
 });

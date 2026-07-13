@@ -16,9 +16,9 @@ import { createCityVisualPlaytestHost } from './visual';
  */
 export interface HarnessApi {
   /**
-   * See + control the game exactly as a player does — screenshot, real pointer
-   * events on the canvas, keyboard, and HUD button clicks (vs. `command`, which
-   * bypasses the UI). Use this to playtest the actual player experience.
+   * Observe the map canvas and drive UI handlers with synthetic pointer/key
+   * events and HUD element clicks (vs. `command`, which bypasses the UI).
+   * Full browser playtests cover trusted input, hit-testing, and DOM compositing.
    */
   player: PlayerInput;
   /** Bounded machine-readable game state (alias of render_game_to_text). */

@@ -55,13 +55,13 @@ The unconditional `window.__game` debug object remains available for basic autom
 
 The async methods (`inspectAt` / `selfCheck` / `getBundle`) return a Promise **and** stash their result on `last*`, so an automation eval can trigger then read the stash a beat later (Promises don't survive a `preview_eval` boundary). Each reply is **id-correlated**, so overlapping calls resolve to their own request rather than mis-matching.
 
-### See & control like a player — `__harness.player`
+### Exercise player-facing handlers — `__harness.player`
 
-`command` submits sim commands directly, skipping the UI. To playtest the *actual player experience* — and catch UI bugs (picking, ghost validity, tool state, buttons, shortcuts) that the backdoor masks — drive the game through `__harness.player`, which dispatches **real** pointer / keyboard / click events on the live DOM and returns a screenshot of exactly what the player sees.
+`command` submits sim commands directly, skipping the UI. To exercise picking, ghost validity, tool state, buttons, and shortcuts that this backdoor masks, drive the game through `__harness.player`. It dispatches synthetic pointer/keyboard events to the canvas and invokes HUD element clicks, so it covers the game's UI handlers but not trusted-event behavior, browser hit-testing, DOM-panel occlusion, or native pointer capture. Its screenshot is the CSS-sized WebGL map canvas only; full headless browser screenshots and interactions cover the complete player-visible page.
 
 | Method | Player action |
 |---|---|
-| `screenshot(q?)` | JPEG data URL of the rendered scene — the player's-eye view. Pumps a full presentation frame first (view sync, vehicle interpolation, level-up FX fade, camera flight) so the capture is a **live** frame, then renders. This matters headless: a playtest tab isn't painting, so the rAF loop is stopped — a bare render would freeze time-based visuals (stale vehicle positions, level-up labels that never fade). Capturing IS the frame tick, so animation advances by real wall-clock between successive screenshots, not on its own. |
+| `screenshot(q?)` | CSS-sized JPEG data URL of the WebGL map canvas; DOM HUD/panels are not composited. Pumps a full presentation frame first (view sync, vehicle interpolation, level-up FX fade, camera flight) so the capture is a **live** map frame, then renders. This matters headless: a playtest tab may not paint, so a bare render would freeze time-based visuals. Capturing is the presentation tick, so animation advances by wall-clock time between successive screenshots. |
 | `where(x, y)` | Screen pixels for the centre of sim cell (x, y) — aim clicks at map features. `onScreen` is false if off-view. |
 | `cellAt(sx, sy)` | The sim cell under a pixel (inverse of `where`). |
 | `hud(label)` | Click a HUD button by visible label — "Road", "Zone R", "Coal ⚡", "2×", "Pollution", "💰 Budget", "💾 Save"… |
@@ -76,7 +76,7 @@ The camera must **frame** a cell for `where`/`dragMap`/`tapMap` to reach it — 
 
 `src/harness/visual.ts` is deliberately small glue between the existing city harness and civ-engine's generic visual loop. The observation includes the screenshot data URL, a visible-text summary derived from `state()`, DOM-discovered HUD buttons when running in a browser (with static fallbacks for tests), a `Map/canvas` control for supported click/drag actions, a keyboard control, and state channels: `render_game_to_text` for the agent plus reviewer/trace-only channels for recorded findings and the latest replay diagnostics.
 
-Action mapping preserves the "real player surface" rule: `click` with `target: "hud:<label>"` calls `player.hud(label)`, `click` with `point` calls `player.clickAt`, `drag` calls `player.dragAt`, `key` calls `player.key`, `wait` calls `advance(ms)`, and `stop` returns success. Unsupported generic actions (`hover`, `type`, `wheel`, `select`, `viewport`) are not advertised and still fail closed if supplied directly, so a loop cannot silently use a capability the city has not exposed. The adapter intentionally does not call `command(name,data)`.
+Action mapping preserves the UI-handler boundary: `click` with `target: "hud:<label>"` calls `player.hud(label)`, `click` with `point` calls `player.clickAt`, `drag` calls `player.dragAt`, `key` calls `player.key`, `wait` calls `advance(ms)`, and `stop` returns success. Unsupported generic actions (`hover`, `type`, `wheel`, `select`, `viewport`) are not advertised and still fail closed if supplied directly, so a loop cannot silently use a capability the city has not exposed. The adapter intentionally does not call `command(name,data)`; it also does not claim trusted browser input or full-page compositing.
 
 ## Finding format (`CityImprovementFindingInput`)
 
@@ -132,7 +132,7 @@ run -> record -> find -> verify -> classify -> promote/propose -> review -> reru
 
 ## Autonomous loop (`npm run playtest:llm`)
 
-`scripts/llm-visual-loop.mjs` is the unattended runner: it boots the vite dev server plus headless Chromium, adds `record=1` to its configured or local URL, proxies civ-engine's `runVisualPlaytestLoop` through the in-page `window.__harness.visualHost()` (real pointer/keyboard events; the `command()` backdoor is never touched — pinned by `tests/harness/llm-loop-script.test.ts`), and runs with the engine's hardened options: `promptMode: 'oracleAssisted'`, `agentObservation: 'redacted'` (the engine enforces the hidden-state wall at the agent boundary), `onActionFailure: 'continue'`, and wall-clock/action budgets.
+`scripts/llm-visual-loop.mjs` is the unattended runner: it boots the vite dev server plus headless Chromium, adds `record=1` to its configured or local URL, proxies civ-engine's `runVisualPlaytestLoop` through the in-page `window.__harness.visualHost()` (synthetic canvas/keyboard events and HUD element clicks; the `command()` backdoor is never touched — pinned by `tests/harness/llm-loop-script.test.ts`), and runs with the engine's hardened options: `promptMode: 'oracleAssisted'`, `agentObservation: 'redacted'` (the engine enforces the hidden-state wall at the agent boundary), `onActionFailure: 'continue'`, and wall-clock/action budgets.
 
 The default agent is a deterministic scripted bootstrapper (road, R/C zones, coal plant + line, then watch) so the command runs without API keys. Set `CITY_LLM_VISUAL_LOOP_COMMAND` to plug in an LLM: the command receives `{step, promptParts, controls}` on stdin — `promptParts` come from civ-engine's `buildVisualPlaytestPromptParts`, so the screenshot arrives as a typed image part — and prints a decision JSON on stdout. Tune with `CITY_VISUAL_LOOP_STEPS` and `CITY_VISUAL_LOOP_WALL_CLOCK_MS`; `CITY_PLAYTEST_URL` reuses a running server.
 

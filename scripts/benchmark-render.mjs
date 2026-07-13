@@ -1,27 +1,31 @@
 import { createHash } from 'node:crypto';
-import { createServer } from 'node:http';
-import { readFile, readdir, stat, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { cpus, platform, release } from 'node:os';
-import { dirname, extname, relative, resolve, sep } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { chromium } from '@playwright/test';
+import { cleanupBrowserResources } from './frame-pacing-browser-lifecycle.mjs';
+import { serveDist } from './frame-pacing-http.mjs';
+import {
+  acquireLoopbackLease,
+  HOST_BENCHMARK_LEASE_PORT,
+  LEASE_OWNER_READ_TIMEOUT_MS,
+} from './frame-pacing-lease.mjs';
+import { manifestDirectory } from './frame-pacing-manifest.mjs';
+import {
+  assertStableTree,
+  parseNamedArgs,
+  summarize,
+  withTimeout,
+} from './frame-pacing-support.mjs';
 
 const WARMUP_FRAMES = 1_800;
 const SAMPLE_FRAMES = 600;
+const CLEANUP_TIMEOUT_MS = 10_000;
+const CONNECT_TIMEOUT_MS = 30_000;
+const PHASE_TIMEOUT_MS = 120_000;
 const EXPECTED_FIXTURE_SEED = 12345;
 const EXPECTED_STATE = Object.freeze({ tick: 1203, buildingCount: 453, vehiclesOnScreen: 88 });
-
-function parseArgs(argv) {
-  const parsed = new Map();
-  for (let index = 0; index < argv.length; index++) {
-    const key = argv[index];
-    if (!key.startsWith('--')) throw new Error(`unexpected argument: ${key}`);
-    const value = argv[++index];
-    if (!value || value.startsWith('--')) throw new Error(`missing value for ${key}`);
-    parsed.set(key.slice(2), value);
-  }
-  return parsed;
-}
 
 function required(args, name) {
   const value = args.get(name);
@@ -29,97 +33,10 @@ function required(args, name) {
   return value;
 }
 
-function contentType(filePath) {
-  return {
-    '.css': 'text/css; charset=utf-8',
-    '.html': 'text/html; charset=utf-8',
-    '.js': 'text/javascript; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.png': 'image/png',
-    '.svg': 'image/svg+xml',
-  }[extname(filePath)] ?? 'application/octet-stream';
-}
-
-async function serveDist(directory) {
-  const root = resolve(directory);
-  const server = createServer(async (request, response) => {
-    try {
-      const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
-      const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
-      const filePath = resolve(root, relative);
-      if (filePath !== root && !filePath.startsWith(`${root}${sep}`)) {
-        response.writeHead(403).end('forbidden');
-        return;
-      }
-      const fileStat = await stat(filePath);
-      if (!fileStat.isFile()) throw new Error('not a file');
-      response.writeHead(200, {
-        'cache-control': 'no-store',
-        'content-type': contentType(filePath),
-      });
-      response.end(await readFile(filePath));
-    } catch {
-      response.writeHead(404).end('not found');
-    }
-  });
-  await new Promise((resolveListen, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolveListen);
-  });
-  const address = server.address();
-  if (!address || typeof address === 'string') throw new Error('benchmark server has no TCP port');
-  return {
-    url: `http://127.0.0.1:${address.port}`,
-    close: () => new Promise((resolveClose, reject) => {
-      server.close((error) => error ? reject(error) : resolveClose());
-    }),
-  };
-}
-
-function summarize(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  const at = (percentile) => sorted[Math.floor((sorted.length - 1) * percentile)];
-  return {
-    samples: values.length,
-    mean: values.reduce((sum, value) => sum + value, 0) / values.length,
-    p50: at(0.5),
-    p95: at(0.95),
-    p99: at(0.99),
-    max: sorted.at(-1),
-  };
-}
-
 function distribution(values) {
   const counts = {};
   for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
   return counts;
-}
-
-async function distManifest(directory) {
-  const root = resolve(directory);
-  const files = [];
-  const visit = async (relativeDirectory) => {
-    const entries = await readdir(resolve(root, relativeDirectory), { withFileTypes: true });
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) {
-        await visit(relativePath);
-      } else if (entry.isFile()) {
-        const bytes = await readFile(resolve(root, relativePath));
-        files.push({
-          path: relativePath,
-          bytes: bytes.byteLength,
-          sha256: createHash('sha256').update(bytes).digest('hex'),
-        });
-      }
-    }
-  };
-  await visit('');
-  const treeSha256 = createHash('sha256')
-    .update(files.map((file) => `${file.path}\0${file.bytes}\0${file.sha256}\n`).join(''))
-    .digest('hex');
-  return { treeSha256, files };
 }
 
 async function loadFixture(page, url, save) {
@@ -187,6 +104,19 @@ async function measure(page, label, sequence) {
     const calls = [];
     const triangles = [];
     renderer.setAnimationLoop(null);
+    // The shipping renderer caps high-DPI backing buffers. This historical A/B
+    // measures renderer changes, not unequal pixel counts.
+    renderer.setPixelRatio(1);
+    renderer.setSize(innerWidth, innerHeight, false);
+    if (
+      renderer.domElement.width !== innerWidth
+      || renderer.domElement.height !== innerHeight
+    ) {
+      throw new Error(
+        `benchmark buffer ${renderer.domElement.width}x${renderer.domElement.height} `
+        + `does not match fixed viewport ${innerWidth}x${innerHeight}`,
+      );
+    }
 
     const renderOnce = (capture) => {
       if (capture) {
@@ -250,103 +180,182 @@ function aggregate(runs, label) {
   };
 }
 
-const args = parseArgs(process.argv.slice(2));
-const beforeDir = resolve(required(args, 'before-dir'));
-const afterDir = resolve(args.get('after-dir') ?? 'dist');
-const fixturePath = resolve(args.get('fixture') ?? 'benchmarks/fixtures/performance-city-save.json');
-const outputPath = resolve(args.get('output') ?? 'output/performance/render-benchmark.json');
-const browserChannel = args.get('browser-channel') ?? 'chrome';
-const fixture = await readFile(fixturePath, 'utf8');
-const fixtureSave = JSON.parse(fixture);
-if (fixtureSave?.meta?.seed !== EXPECTED_FIXTURE_SEED) {
-  throw new Error(
-    `fixture seed ${String(fixtureSave?.meta?.seed)} does not match boot terrain seed ${EXPECTED_FIXTURE_SEED}`,
+async function runBenchmark(args, resources) {
+  const beforeDir = resolve(required(args, 'before-dir'));
+  const afterDir = resolve(args.get('after-dir') ?? 'dist');
+  const fixturePath = resolve(
+    args.get('fixture') ?? 'benchmarks/fixtures/performance-city-save.json',
   );
-}
-const [beforeManifest, afterManifest] = await Promise.all([
-  distManifest(beforeDir),
-  distManifest(afterDir),
-]);
-const beforeServer = await serveDist(beforeDir);
-const afterServer = await serveDist(afterDir);
-const browser = await chromium.launch({
-  headless: true,
-  channel: browserChannel,
-  args: [
-    '--disable-background-timer-throttling',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding',
-  ],
-});
-const order = [
-  ['before', beforeServer.url],
-  ['after', afterServer.url],
-  ['after', afterServer.url],
-  ['before', beforeServer.url],
-];
-const runs = [];
+  const outputPath = resolve(args.get('output') ?? 'output/performance/render-benchmark.json');
+  const browserChannel = args.get('browser-channel') ?? 'chrome';
+  const fixture = await readFile(fixturePath, 'utf8');
+  const fixtureSave = JSON.parse(fixture);
+  if (fixtureSave?.meta?.seed !== EXPECTED_FIXTURE_SEED) {
+    throw new Error(
+      `fixture seed ${String(fixtureSave?.meta?.seed)} `
+      + `does not match boot terrain seed ${EXPECTED_FIXTURE_SEED}`,
+    );
+  }
+  const [beforeManifest, afterManifest] = await Promise.all([
+    manifestDirectory(beforeDir),
+    manifestDirectory(afterDir),
+  ]);
+  const beforeServer = resources.beforeServer = await serveDist(beforeDir);
+  const afterServer = resources.afterServer = await serveDist(afterDir);
+  const browserServer = resources.browserServer = await chromium.launchServer({
+    headless: true,
+    channel: browserChannel,
+    timeout: CONNECT_TIMEOUT_MS,
+    args: [
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+    ],
+  });
+  console.log(`render benchmark browser PID ${browserServer.process().pid} (task-owned)`);
+  const browser = resources.browser = await chromium.connect(
+    browserServer.wsEndpoint(),
+    { timeout: CONNECT_TIMEOUT_MS },
+  );
+  const order = [
+    ['before', beforeServer.url],
+    ['after', afterServer.url],
+    ['after', afterServer.url],
+    ['before', beforeServer.url],
+  ];
+  const runs = [];
 
-try {
   for (let index = 0; index < order.length; index++) {
     const [label, url] = order[index];
     console.log(`benchmark phase ${index + 1}/${order.length}: ${label}`);
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-    page.setDefaultTimeout(60_000);
-    await loadFixture(page, url, fixture);
-    const run = await measure(page, label, index + 1);
+    const run = await withTimeout((async () => {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+      try {
+        page.setDefaultTimeout(60_000);
+        await loadFixture(page, url, fixture);
+        return await measure(page, label, index + 1);
+      } finally {
+        await withTimeout(
+          page.close(),
+          CLEANUP_TIMEOUT_MS,
+          `benchmark phase ${index + 1} page cleanup`,
+        );
+      }
+    })(), PHASE_TIMEOUT_MS, `benchmark phase ${index + 1}`);
     runs.push(run);
     console.log(
       `phase ${index + 1} mean=${run.summary.renderMs.mean.toFixed(4)}ms calls=${run.summary.averageCalls}`,
     );
-    await page.close();
   }
-} finally {
-  await browser.close();
-  await Promise.all([beforeServer.close(), afterServer.close()]);
+
+  const [beforeManifestAfter, afterManifestAfter] = await Promise.all([
+    manifestDirectory(beforeDir),
+    manifestDirectory(afterDir),
+  ]);
+  assertStableTree(
+    beforeManifest.treeSha256,
+    beforeManifestAfter.treeSha256,
+    'before bundle changed during GPU render benchmark',
+  );
+  assertStableTree(
+    afterManifest.treeSha256,
+    afterManifestAfter.treeSha256,
+    'after bundle changed during GPU render benchmark',
+  );
+
+  const before = aggregate(runs, 'before');
+  const after = aggregate(runs, 'after');
+  const result = {
+    schemaVersion: 1,
+    capturedAt: new Date().toISOString(),
+    runOrder: order.map(([label]) => label),
+    warmupFrames: WARMUP_FRAMES,
+    sampleFrames: SAMPLE_FRAMES,
+    fixture: {
+      path: relative(process.cwd(), fixturePath).replaceAll('\\', '/'),
+      sha256: createHash('sha256').update(fixture).digest('hex'),
+      expectedState: EXPECTED_STATE,
+      seed: EXPECTED_FIXTURE_SEED,
+    },
+    refs: {
+      before: args.get('before-ref') ?? null,
+      after: args.get('after-ref') ?? null,
+    },
+    binaries: {
+      before: beforeManifest,
+      after: afterManifest,
+    },
+    host: {
+      node: process.version,
+      platform: platform(),
+      release: release(),
+      cpu: cpus()[0]?.model ?? 'unknown',
+      browserChannel,
+    },
+    aggregate: {
+      before,
+      after,
+      meanRenderMsDelta: after.meanRenderMs - before.meanRenderMs,
+      meanRenderMsReductionPct:
+        (before.meanRenderMs - after.meanRenderMs) * 100 / before.meanRenderMs,
+      drawCallReductionPct:
+        (before.averageCalls - after.averageCalls) * 100 / before.averageCalls,
+      triangleReductionPct:
+        (before.averageTriangles - after.averageTriangles) * 100 / before.averageTriangles,
+    },
+    runs,
+  };
+
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  console.log(JSON.stringify(result.aggregate, null, 2));
+  console.log(`raw benchmark: ${outputPath}`);
 }
 
-const before = aggregate(runs, 'before');
-const after = aggregate(runs, 'after');
-const result = {
-  schemaVersion: 1,
-  capturedAt: new Date().toISOString(),
-  runOrder: order.map(([label]) => label),
-  warmupFrames: WARMUP_FRAMES,
-  sampleFrames: SAMPLE_FRAMES,
-  fixture: {
-    path: relative(process.cwd(), fixturePath).replaceAll('\\', '/'),
-    sha256: createHash('sha256').update(fixture).digest('hex'),
-    expectedState: EXPECTED_STATE,
-    seed: EXPECTED_FIXTURE_SEED,
-  },
-  refs: {
-    before: args.get('before-ref') ?? null,
-    after: args.get('after-ref') ?? null,
-  },
-  binaries: {
-    before: beforeManifest,
-    after: afterManifest,
-  },
-  host: {
-    node: process.version,
-    platform: platform(),
-    release: release(),
-    cpu: cpus()[0]?.model ?? 'unknown',
-    browserChannel,
-  },
-  aggregate: {
-    before,
-    after,
-    meanRenderMsDelta: after.meanRenderMs - before.meanRenderMs,
-    meanRenderMsReductionPct: (before.meanRenderMs - after.meanRenderMs) * 100 / before.meanRenderMs,
-    drawCallReductionPct: (before.averageCalls - after.averageCalls) * 100 / before.averageCalls,
-    triangleReductionPct:
-      (before.averageTriangles - after.averageTriangles) * 100 / before.averageTriangles,
-  },
-  runs,
-};
+async function main() {
+  const args = parseNamedArgs(process.argv.slice(2));
+  const owner = {
+    pid: process.pid,
+    capturedAt: new Date().toISOString(),
+    purpose: 'exclusive host GPU render benchmark',
+  };
+  const lease = await acquireLoopbackLease({
+    host: '127.0.0.1',
+    port: HOST_BENCHMARK_LEASE_PORT,
+    owner,
+    ownerReadTimeoutMs: LEASE_OWNER_READ_TIMEOUT_MS,
+  });
+  console.log(`render benchmark lease ${lease.port} owned by PID ${owner.pid}`);
+  const resources = {};
+  let benchmarkError;
+  let cleanupError;
+  let releaseError;
+  try {
+    await runBenchmark(args, resources);
+  } catch (error) {
+    benchmarkError = error;
+  }
+  try {
+    await cleanupBrowserResources({
+      browser: resources.browser,
+      browserServer: resources.browserServer,
+      httpServers: [resources.beforeServer, resources.afterServer].filter(Boolean),
+      cleanupTimeoutMs: CLEANUP_TIMEOUT_MS,
+    });
+  } catch (error) {
+    cleanupError = error;
+  }
+  try {
+    await withTimeout(lease.release(), CLEANUP_TIMEOUT_MS, 'render benchmark lease cleanup');
+  } catch (error) {
+    releaseError = error;
+  }
+  if (benchmarkError || cleanupError || releaseError) {
+    throw new AggregateError(
+      [benchmarkError, cleanupError, releaseError].filter((error) => error !== undefined),
+      'render benchmark or resource cleanup failed',
+    );
+  }
+}
 
-await mkdir(dirname(outputPath), { recursive: true });
-await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
-console.log(JSON.stringify(result.aggregate, null, 2));
-console.log(`raw benchmark: ${outputPath}`);
+await main();

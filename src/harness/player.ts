@@ -3,16 +3,16 @@ import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import type { CityScene } from '../rendering/scene';
 
 /**
- * Drives the game through the SAME path a human uses — real pointer events on
- * the canvas (→ GroundPicker → Tools), real keyboard, and real HUD button
- * clicks — plus a screenshot of exactly what the player sees. Unlike the
- * `command` backdoor (which calls `world.submit` directly and skips the UI),
- * every action here exercises the full stack: picking, ghost validity, tool
- * state, buttons, and shortcuts — so a playtest catches UI bugs, not just sim
- * bugs. Aim clicks with `where()` (a sim cell → screen pixels).
+ * Drives game handlers with synthetic canvas pointer/keyboard events and HUD
+ * element clicks, plus a WebGL map-canvas screenshot. Map gestures exercise
+ * GroundPicker → Tools and avoid the direct `world.submit` command backdoor,
+ * but they do not prove browser hit-testing, trusted-event behavior, DOM-panel
+ * occlusion, or native pointer capture; full browser playtests cover those.
+ * DOM HUD/panels are represented separately by the visual host's controls and
+ * state channels. Aim clicks with `where()` (a sim cell → screen pixels).
  */
 export interface PlayerInput {
-  /** JPEG data URL of the rendered scene — the player's-eye view. */
+  /** CSS-sized JPEG data URL of the WebGL map canvas (DOM HUD is not composited). */
   screenshot(quality?: number): string;
   /** Screen pixels for the centre of sim cell (x, y); `onScreen` false if off-view. */
   where(x: number, y: number): { sx: number; sy: number; onScreen: boolean };
@@ -32,8 +32,7 @@ export interface PlayerInput {
   hud(label: string): boolean;
 }
 
-/** attachInput best-effort-captures the pointer; a synthetic pointerId throws,
- * so neutralize capture for the duration of a dispatched gesture. */
+/** Synthetic pointer IDs cannot use native capture, so neutralize it per gesture. */
 function withoutPointerCapture(el: HTMLElement, run: () => void): void {
   const cap = el.setPointerCapture.bind(el);
   const rel = el.releasePointerCapture.bind(el);

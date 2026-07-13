@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 
 # Playtest artifacts (append-only local history; never committed)
 output/
+
+# Local Playwright CLI snapshots and session metadata
+.playwright-cli/

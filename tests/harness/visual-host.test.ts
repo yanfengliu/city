@@ -121,6 +121,41 @@ describe('city visual playtest host', () => {
     );
   });
 
+  it('reports CSS canvas coordinates and honest capture/input metadata at high DPI', () => {
+    const { api } = stubHarness();
+    const originalDocument = globalThis.document;
+    const canvas = {
+      width: 1_920,
+      height: 1_080,
+      getBoundingClientRect: () => ({ x: 0, y: 0, width: 1_280, height: 720 }),
+    };
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        querySelector: (selector: string) => selector === 'canvas' ? canvas : null,
+        querySelectorAll: () => [],
+      },
+    });
+    try {
+      const observation = cityVisualObservation(api);
+
+      expect(observation.screenshot).toMatchObject({
+        width: 1_280,
+        height: 720,
+        alt: 'City playtest map-canvas screenshot (DOM HUD not composited)',
+      });
+      expect(observation.metadata).toMatchObject({
+        captureScope: 'map-canvas-only',
+        pointInputRouting: 'synthetic-canvas-events',
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'document', {
+        configurable: true,
+        value: originalDocument,
+      });
+    }
+  });
+
   it('advertises only supported canvas action kinds', () => {
     const { api } = stubHarness();
 

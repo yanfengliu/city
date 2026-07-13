@@ -371,7 +371,7 @@ export const WIRE_Y = 0.82;
 export const POLE_SPACING = 6;
 
 // Utility-problem icon (floating ⚡/💧 above a live building missing a utility).
-export const UTILITY_ICON_SCALE = 0.26;
+export const UTILITY_ICON_SCALE = 0.38;
 /** Vertical bob amplitude (units) so the icon reads as an alert, not decor. */
 export const UTILITY_ICON_BOUNCE = 0.08;
 /** Gap above the building's roof top where the icon floats. */

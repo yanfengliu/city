@@ -48,6 +48,7 @@ interface Aggregate {
 const resultText = readFileSync('benchmarks/results/2026-07-12-shadow-cache.json', 'utf8');
 const result = JSON.parse(resultText) as BenchmarkResult;
 const fixture = readFileSync('benchmarks/fixtures/performance-city-save.json', 'utf8');
+const benchmarkSource = readFileSync('scripts/benchmark-render.mjs', 'utf8');
 
 function mean(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -59,6 +60,21 @@ function percentile(values: number[], fraction: number): number {
 }
 
 describe('committed render benchmark evidence', () => {
+  it('pins the renderer to equal DPR-1 buffers before historical A/B sampling', () => {
+    expect(benchmarkSource).toContain('renderer.setPixelRatio(1)');
+    expect(benchmarkSource).toContain('renderer.setSize(innerWidth, innerHeight, false)');
+    expect(benchmarkSource).toContain('does not match fixed viewport');
+    expect(benchmarkSource).toContain('HOST_BENCHMARK_LEASE_PORT');
+    expect(benchmarkSource).toContain('cleanupBrowserResources');
+    expect(benchmarkSource).toContain('chromium.launchServer');
+    expect(benchmarkSource).toContain('browserServer.process().pid');
+    expect(benchmarkSource).toContain('PHASE_TIMEOUT_MS');
+    expect(benchmarkSource).toContain('before bundle changed during GPU render benchmark');
+    expect(benchmarkSource).toContain('after bundle changed during GPU render benchmark');
+    expect(benchmarkSource).toContain('lease.release()');
+    expect(benchmarkSource).toContain('page.close()');
+  });
+
   it('pins the fixture, A-B-B-A protocol, and every raw sample', () => {
     expect(result.schemaVersion).toBe(1);
     expect(result.runOrder).toEqual(['before', 'after', 'after', 'before']);

@@ -9,6 +9,7 @@ export type UtilityIconBadgeKind = 'power' | 'water';
 export interface UtilityIconBadgePart {
   kind: UtilityIconBadgeKind;
   color: number;
+  shape: 'diamond' | 'circle';
 }
 
 export interface UtilityIconBadgeLayout {
@@ -44,8 +45,12 @@ const hexColor = (color: number): string => `#${color.toString(16).padStart(6, '
 
 export function utilityIconBadgeParts(key: string): UtilityIconBadgePart[] {
   const parts: UtilityIconBadgePart[] = [];
-  if (key.includes(powerKey)) parts.push({ kind: 'power', color: UTILITY_ICON_POWER_BADGE_COLOR });
-  if (key.includes(waterKey)) parts.push({ kind: 'water', color: UTILITY_ICON_WATER_BADGE_COLOR });
+  if (key.includes(powerKey)) {
+    parts.push({ kind: 'power', color: UTILITY_ICON_POWER_BADGE_COLOR, shape: 'diamond' });
+  }
+  if (key.includes(waterKey)) {
+    parts.push({ kind: 'water', color: UTILITY_ICON_WATER_BADGE_COLOR, shape: 'circle' });
+  }
   return parts;
 }
 
@@ -95,7 +100,15 @@ function drawWaterDrop(ctx: UtilityIconBadgeCanvasContext, cx: number, cy: numbe
 
 function drawBadge(ctx: UtilityIconBadgeCanvasContext, part: UtilityIconBadgePart, cx: number, cy: number): void {
   ctx.beginPath();
-  ctx.arc(cx, cy, BADGE_RADIUS, 0, Math.PI * 2);
+  if (part.shape === 'diamond') {
+    ctx.moveTo(cx, cy - BADGE_RADIUS);
+    ctx.lineTo(cx + BADGE_RADIUS, cy);
+    ctx.lineTo(cx, cy + BADGE_RADIUS);
+    ctx.lineTo(cx - BADGE_RADIUS, cy);
+    ctx.closePath();
+  } else {
+    ctx.arc(cx, cy, BADGE_RADIUS, 0, Math.PI * 2);
+  }
   ctx.fillStyle = hexColor(part.color);
   ctx.strokeStyle = hexColor(UTILITY_ICON_BADGE_STROKE_COLOR);
   ctx.lineWidth = BADGE_STROKE_WIDTH;

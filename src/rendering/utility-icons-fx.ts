@@ -1,4 +1,15 @@
-import { CanvasTexture, Group, Sprite, SpriteMaterial } from 'three';
+import {
+  CanvasTexture,
+  DynamicDrawUsage,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  SRGBColorSpace,
+  Vector3,
+} from 'three';
+import type { Quaternion } from 'three';
 import {
   BUILDING_LEVEL_HEIGHTS,
   BUILDING_ROOF_HEIGHTS,
@@ -7,7 +18,11 @@ import {
   UTILITY_ICON_Y_GAP,
   type ZoneKind,
 } from './constants';
-import { drawUtilityIconBadges, utilityIconBadgeLayout } from './utility-icon-badge';
+import {
+  drawUtilityIconBadges,
+  utilityIconBadgeLayout,
+  utilityIconBadgeParts,
+} from './utility-icon-badge';
 import { utilityIconKey, type UtilityIconView } from './utility-icon-key';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
@@ -23,12 +38,27 @@ export interface IconBuildingView extends UtilityIconView {
 }
 
 interface IconEntry {
-  sprite: Sprite;
-  material: SpriteMaterial;
   key: string;
+  x: number;
+  z: number;
   baseY: number;
   /** Per-building bob offset so a district doesn't pulse in unison. */
   phase: number;
+}
+
+interface IconBatch {
+  mesh: InstancedMesh<PlaneGeometry, MeshBasicMaterial>;
+  material: MeshBasicMaterial;
+  ids: Set<number>;
+  capacity: number;
+}
+
+const INITIAL_BATCH_CAPACITY = 64;
+
+function warningRenderOrder(key: string): number {
+  const parts = utilityIconBadgeParts(key);
+  if (parts.length > 1) return 5;
+  return parts[0]?.kind === 'water' ? 4 : 3;
 }
 
 /** Draws compact vector badge(s) onto a canvas texture (cached per key). */
@@ -41,7 +71,9 @@ function makeTexture(key: string): CanvasTexture {
   if (ctx) {
     drawUtilityIconBadges(ctx, key);
   }
-  return new CanvasTexture(canvas);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
 }
 
 /**
@@ -49,12 +81,18 @@ function makeTexture(key: string): CanvasTexture {
  * "fix me before I abandon" warning, always on (no overlay needed). Reconciled
  * per building upsert (the flood-fill re-upserts only buildings whose flags
  * changed) and per removal; a gentle bob is applied each frame. Textures are
- * cached and shared per icon key; sprites auto-billboard.
+ * cached per icon key, while all buildings sharing a key render in one
+ * instanced billboard batch (at most three warning draw calls).
  */
 export class UtilityIconsFx {
   readonly group = new Group();
   private readonly entries = new Map<number, IconEntry>();
   private readonly textures = new Map<string, CanvasTexture>();
+  private readonly batches = new Map<string, IconBatch>();
+  private readonly geometry = new PlaneGeometry(1, 1);
+  private readonly scratchMatrix = new Matrix4();
+  private readonly scratchPosition = new Vector3();
+  private readonly scratchScale = new Vector3();
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor() {
@@ -79,8 +117,48 @@ export class UtilityIconsFx {
     return cached;
   }
 
-  private applyScale(sprite: Sprite, key: string): void {
-    sprite.scale.set(UTILITY_ICON_SCALE * utilityIconBadgeLayout(key).spriteWidth, UTILITY_ICON_SCALE, 1);
+  private makeMesh(key: string, material: MeshBasicMaterial, capacity: number): InstancedMesh<PlaneGeometry, MeshBasicMaterial> {
+    const mesh = new InstancedMesh(this.geometry, material, capacity);
+    mesh.name = `utility-icons-${key}`;
+    mesh.count = 0;
+    mesh.frustumCulled = false;
+    // Explicit cross-batch priority avoids creation-order-dependent overlap:
+    // combined warnings win, then water, then power.
+    mesh.renderOrder = warningRenderOrder(key);
+    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    return mesh;
+  }
+
+  private batch(key: string): IconBatch {
+    let batch = this.batches.get(key);
+    if (batch) return batch;
+    const material = new MeshBasicMaterial({
+      map: this.texture(key),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    batch = {
+      mesh: this.makeMesh(key, material, INITIAL_BATCH_CAPACITY),
+      material,
+      ids: new Set(),
+      capacity: INITIAL_BATCH_CAPACITY,
+    };
+    this.batches.set(key, batch);
+    this.group.add(batch.mesh);
+    return batch;
+  }
+
+  private ensureCapacity(key: string, batch: IconBatch): void {
+    if (batch.ids.size <= batch.capacity) return;
+    let capacity = batch.capacity;
+    while (capacity < batch.ids.size) capacity *= 2;
+    const replacement = this.makeMesh(key, batch.material, capacity);
+    this.group.remove(batch.mesh);
+    batch.mesh.dispose();
+    batch.mesh = replacement;
+    batch.capacity = capacity;
+    this.group.add(replacement);
   }
 
   /** Add/update/remove the icon for one building. */
@@ -100,31 +178,24 @@ export class UtilityIconsFx {
       BUILDING_ROOF_HEIGHTS[view.zone] +
       UTILITY_ICON_Y_GAP;
     if (existing) {
+      existing.x = cx;
+      existing.z = cz;
       existing.baseY = baseY;
-      existing.sprite.position.set(cx, baseY, cz);
       if (existing.key !== key) {
-        existing.material.map = this.texture(key);
-        existing.material.needsUpdate = true;
+        this.batches.get(existing.key)?.ids.delete(view.id);
         existing.key = key;
-        this.applyScale(existing.sprite, key);
+        this.batch(key).ids.add(view.id);
       }
       return;
     }
-    const material = new SpriteMaterial({ map: this.texture(key), transparent: true, depthTest: false });
-    const sprite = new Sprite(material);
-    this.applyScale(sprite, key);
-    sprite.position.set(cx, baseY, cz);
-    // depthTest off would draw over everything; keep a high renderOrder but let
-    // it still sit behind the HUD (HUD is DOM). renderOrder groups it late.
-    sprite.renderOrder = 3;
-    this.group.add(sprite);
     this.entries.set(view.id, {
-      sprite,
-      material,
       key,
+      x: cx,
+      z: cz,
       baseY,
       phase: ((view.id % 12) / 12) * Math.PI * 2,
     });
+    this.batch(key).ids.add(view.id);
   }
 
   /** Drop a building's icon (on removal). Tolerates unknown ids. */
@@ -134,15 +205,35 @@ export class UtilityIconsFx {
   }
 
   private disposeEntry(id: number, entry: IconEntry): void {
-    this.group.remove(entry.sprite);
-    entry.material.dispose();
+    this.batches.get(entry.key)?.ids.delete(id);
     this.entries.delete(id);
   }
 
-  /** Gentle vertical bob; call once per rendered frame. */
-  updateFrame(nowMs: number): void {
-    for (const entry of this.entries.values()) {
-      entry.sprite.position.y = entry.baseY + Math.sin(nowMs / 300 + entry.phase) * UTILITY_ICON_BOUNCE;
+  /** Gentle vertical bob + camera-facing instance transforms; call once per frame. */
+  updateFrame(nowMs: number, cameraQuaternion: Quaternion): void {
+    for (const [key, batch] of this.batches) {
+      this.ensureCapacity(key, batch);
+      let slot = 0;
+      const width = utilityIconBadgeLayout(key).spriteWidth;
+      for (const id of batch.ids) {
+        const entry = this.entries.get(id);
+        if (!entry || entry.key !== key) continue;
+        this.scratchPosition.set(
+          entry.x,
+          entry.baseY + Math.sin(nowMs / 300 + entry.phase) * UTILITY_ICON_BOUNCE,
+          entry.z,
+        );
+        this.scratchScale.set(UTILITY_ICON_SCALE * width, UTILITY_ICON_SCALE, 1);
+        this.scratchMatrix.compose(
+          this.scratchPosition,
+          cameraQuaternion,
+          this.scratchScale,
+        );
+        batch.mesh.setMatrixAt(slot, this.scratchMatrix);
+        slot++;
+      }
+      batch.mesh.count = slot;
+      if (slot > 0) batch.mesh.instanceMatrix.needsUpdate = true;
     }
   }
 }

@@ -46,7 +46,7 @@ Accept: save → reload reproduces the city (hash of serialize output stable); a
 
 ## Phase 7 — Verification and hardening
 
-Full-suite pass; determinism gate (recorded-session replay + SessionReplayer.selfCheck) in CI (shipped: .github/workflows/ci.yml); perf check at acceptance scale (≥1,000 population city; 20 TPS, ≥30 fps); adversarial review sweep over the whole codebase; fix findings; final automated playthrough (agent builds a city from scratch via browser) recorded in PROGRESS.md; README updated.
+Full-suite pass; determinism gate (recorded-session replay + SessionReplayer.selfCheck) in CI (shipped: .github/workflows/ci.yml); simulation acceptance check at ≥1,000 population plus the SHA-pinned render fixture (936 people, 453 buildings, 88 vehicles at its paused start; active cases grow through 1,000) at nominal 20 TPS and 60 Hz presentation using the game-design pacing tolerances; adversarial review sweep over the whole codebase; fix findings; final automated playthrough (agent builds a city from scratch via browser) recorded in PROGRESS.md; README updated.
 
 Accept: the game-design doc's "Definition of fully functioning" checklist passes end to end.
 

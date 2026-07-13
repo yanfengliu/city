@@ -247,7 +247,7 @@ export class Game {
       this.flushDirtyViews();
       this.vehiclesView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
-      this.utilityIconsFx.updateFrame(now);
+      this.utilityIconsFx.updateFrame(now, this.scene.camera.quaternion);
       // Day/night cycle: the sun orbits with game time (phase-offset so boot is
       // daytime), and the buildings' warm window-glow ramps up as it darkens so
       // a night city stays lit and readable.
