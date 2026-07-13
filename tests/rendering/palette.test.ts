@@ -10,12 +10,16 @@ import {
   PLANT_COLOR,
   POLE_COLOR,
   PUMP_COLOR,
+  ROAD_COLOR,
   SHORE_DETAIL_COLOR,
   STRUCTURE_WALL_COLORS,
   TREE_CANOPY_COLOR,
   TREE_CANOPY_HIGHLIGHT_COLOR,
   TREE_TRUNK_COLOR,
   WATER_COLOR,
+  WATER_DEEP_COLOR,
+  WATER_MID_COLOR,
+  WATER_SHALLOW_COLOR,
 } from '../../src/rendering/constants';
 
 const luminance = (hex: number): number => {
@@ -54,6 +58,17 @@ describe('friendly game palette', () => {
     expect(saturation(POLE_COLOR)).toBeGreaterThanOrEqual(0.35);
     expect(luminance(PUMP_COLOR)).toBeGreaterThanOrEqual(0.25);
     expect(saturation(PUMP_COLOR)).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('keeps depth-readable water friendly from aqua banks through deep blue', () => {
+    expect(luminance(WATER_SHALLOW_COLOR)).toBeGreaterThan(luminance(WATER_MID_COLOR));
+    expect(luminance(WATER_MID_COLOR)).toBeGreaterThan(luminance(WATER_DEEP_COLOR));
+    expect(luminance(WATER_DEEP_COLOR)).toBeGreaterThan(luminance(ROAD_COLOR));
+    for (const color of [WATER_SHALLOW_COLOR, WATER_MID_COLOR, WATER_DEEP_COLOR]) {
+      expect(saturation(color)).toBeGreaterThanOrEqual(0.35);
+    }
+    expect(colorDistance(WATER_SHALLOW_COLOR, SHORE_DETAIL_COLOR)).toBeGreaterThan(0.4);
+    expect(colorDistance(WATER_DEEP_COLOR, ROAD_COLOR)).toBeGreaterThan(0.25);
   });
 
   it('uses a bright blue daytime sky and a readable dusk instead of slate', () => {

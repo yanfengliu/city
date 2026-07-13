@@ -19,11 +19,11 @@ import {
   SHORE_DETAIL_INSET,
   SHORE_DETAIL_LIGHTNESS_JITTER,
   SHORE_DETAIL_Y,
-  WATER_COLOR,
   WATER_SURFACE_Y,
 } from './constants';
 import { buildSurfacePatch, type SurfacePatch } from './surface-geometry';
 import { TerrainSurface, type TerrainSurfaceView } from './terrain-surface';
+import { buildWaterCornerDepths, waterDepthColor } from './water-depth';
 
 /** Plain-data view of the generated terrain (mirrors protocol TerrainPayload). */
 export interface TerrainMeshData {
@@ -44,12 +44,19 @@ class MeshBuilder {
   readonly colors: number[] = [];
   readonly indices: number[] = [];
 
-  quad(corners: [Corner, Corner, Corner, Corner], normal: Corner, color?: Color): void {
+  quad(
+    corners: [Corner, Corner, Corner, Corner],
+    normal: Corner,
+    color?: Color,
+    cornerColors?: readonly [Color, Color, Color, Color],
+  ): void {
     const base = this.positions.length / 3;
-    for (const corner of corners) {
+    for (let index = 0; index < corners.length; index++) {
+      const corner = corners[index] as Corner;
       this.positions.push(corner[0], corner[1], corner[2]);
       this.normals.push(normal[0], normal[1], normal[2]);
-      if (color) this.colors.push(color.r, color.g, color.b);
+      const vertexColor = cornerColors?.[index] ?? color;
+      if (vertexColor) this.colors.push(vertexColor.r, vertexColor.g, vertexColor.b);
     }
     this.indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
   }
@@ -82,7 +89,8 @@ class MeshBuilder {
  * Builds the static terrain as three merged meshes under one group: land +
  * vertical shore skirts, sandy shoreline top strips, and the recessed water
  * surface. Land follows the shared elevation field with subtle per-cell
- * lightness jitter; water stays at WATER_SURFACE_Y; vertical shore skirts close
+ * lightness jitter. Water stays at WATER_SURFACE_Y while its vertex colors
+ * smoothly communicate the seeded seabed depth; vertical shore skirts close
  * the gap where land meets water or the map edge; sandy top strips soften real
  * land-water transitions without touching the sim terrain mask.
  */
@@ -94,12 +102,20 @@ export function buildTerrainMesh(
   const land = new MeshBuilder();
   const shoreDetails = new MeshBuilder();
   const waterMesh = new MeshBuilder();
+  const waterDepths = buildWaterCornerDepths(terrain);
+  const waterDepthStride = width + 1;
 
   const landColor = new Color(LAND_COLOR);
   const shoreColor = new Color(SHORE_COLOR);
   const shoreDetailColor = new Color(SHORE_DETAIL_COLOR);
   const cellColor = new Color();
   const detailColor = new Color();
+  const waterColors: [Color, Color, Color, Color] = [
+    new Color(),
+    new Color(),
+    new Color(),
+    new Color(),
+  ];
 
   const isWaterAt = (x: number, z: number): boolean =>
     x < 0 || z < 0 || x >= width || z >= height || water[z * width + x] === 1;
@@ -127,12 +143,16 @@ export function buildTerrainMesh(
       const index = z * width + x;
       if (water[index] === 1) {
         const y = WATER_SURFACE_Y;
+        waterDepthColor(waterDepths[z * waterDepthStride + x] ?? 0, waterColors[0]);
+        waterDepthColor(waterDepths[z * waterDepthStride + x + 1] ?? 0, waterColors[1]);
+        waterDepthColor(waterDepths[(z + 1) * waterDepthStride + x] ?? 0, waterColors[2]);
+        waterDepthColor(waterDepths[(z + 1) * waterDepthStride + x + 1] ?? 0, waterColors[3]);
         waterMesh.quad([
           [x, y, z],
           [x + 1, y, z],
           [x, y, z + 1],
           [x + 1, y, z + 1],
-        ], [0, 1, 0]);
+        ], [0, 1, 0], undefined, waterColors);
         continue;
       }
 
@@ -224,8 +244,8 @@ export function buildTerrainMesh(
   group.add(shoreDetailMesh);
 
   const water3d = new Mesh(
-    waterMesh.build(false),
-    new MeshStandardMaterial({ color: WATER_COLOR, roughness: 0.28, metalness: 0.0 }),
+    waterMesh.build(true),
+    new MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.0 }),
   );
   water3d.name = 'terrain-water';
   water3d.receiveShadow = true;

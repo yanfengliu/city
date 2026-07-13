@@ -26,7 +26,16 @@ export const LAND_COLOR = 0xa3bf72;
 export const LAND_LIGHTNESS_JITTER = 0.075;
 /** Gentle height tint so uplands remain legible at strategy zoom. */
 export const LAND_ELEVATION_LIGHTNESS_RANGE = 0.045;
-export const WATER_COLOR = 0x49a6d7;
+/** Water color is semantic bathymetry: pale cyan at the bank, clear blue, then deep blue. */
+export const WATER_SHALLOW_COLOR = 0x69c8c5;
+export const WATER_MID_COLOR = 0x49a6d7;
+export const WATER_DEEP_COLOR = 0x3d8dc5;
+/** Backward-compatible representative water swatch used by broad palette contracts. */
+export const WATER_COLOR = WATER_MID_COLOR;
+/** Elevation drop below sea level that reaches the deepest presentation color. */
+export const WATER_DEEP_ELEVATION_DELTA = 0.18;
+/** Position of the middle palette stop in normalized presentation depth. */
+export const WATER_MID_DEPTH = 1 / 3;
 export const SHORE_COLOR = 0xd1bc80;
 export const SHORE_DETAIL_COLOR = 0xe4d39b;
 export const SHORE_DETAIL_LIGHTNESS_JITTER = 0.065;

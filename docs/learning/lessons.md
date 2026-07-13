@@ -233,3 +233,13 @@ The engine 2.0.0 fleet validation ran this repo's suite once and recorded "green
 | Fix commit | (this commit) |
 | Test added | `tests/performance/render-benchmark.test.ts` pins the generated fixture's SHA-256, seed 12345, and exact post-load tick/building/vehicle state; the benchmark driver rejects any other fixture seed before launching Chromium. |
 | Behavior delta | The committed render profile now compares identical seed-aligned terrain, water, trees, simulation state, viewport, and binaries. Rule: for save-driven visual benchmarks, state counts are not enough—pin every world-construction input that survives outside the loaded snapshot. |
+
+## Visual bathymetry must read raw elevation before the land-surface projection
+
+| Field | Value |
+|---|---|
+| Surfaced by | Code-path review for depth-colored water: the shared `TerrainSurface` deliberately maps every below-sea sample to the coast datum because roads, bridges, picking, and overlays need a flat water contract. |
+| Reviewer findings | Reading `TerrainSurface.cellHeight()` would make every water cell depth zero; keeping a blue material base while enabling vertex colors would also multiply the ramp and darken it twice. The raw ready payload already contains the correct seeded elevation and sea level. |
+| Fix commit | (this commit) |
+| Test added | `tests/rendering/water-depth.test.ts` pins raw depth normalization, coast-aware corner smoothing, and the exact friendly ramp; `tests/rendering/terrain-mesh.test.ts` pins flat y, deterministic color buffers, mask authority, vertex-color material configuration, and one water mesh. |
+| Behavior delta | `buildTerrainMesh` derives bathymetry directly from `seaLevel - elevation`, writes it as vertex color into the existing white/default-base water material, and leaves every geometry/gameplay surface flat. Rule: when a shared presentation projection intentionally discards source information for one contract, semantic rendering that needs that information must consume the raw immutable payload—not reverse-engineer the projection. |

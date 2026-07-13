@@ -24,6 +24,18 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-13 — Depth-colored water
+
+User request: water should have different depths and therefore different colors.
+
+Kept the authoritative binary water mask, flat y=-0.12 surface, bridge/pump rules, picking, protocol, saves, and simulation untouched. The renderer now treats the existing seeded elevation below sea level as bathymetry: `seaLevel - elevation` reaches the deep endpoint at a fixed 0.18 drop, shared water corners average their incident depths for smooth transitions, and any land-touching corner stays at the shallow endpoint for a bright readable bank. The friendly three-stop ramp is shallow aqua `#69C8C5`, existing clear blue `#49A6D7`, and deep blue `#3D8DC5`; the deep endpoint remains substantially lighter than roads.
+
+The implementation remains one immutable `terrain-water` mesh and one draw call. Enabling vertex colors adds 132,144 bytes on the shipping seed's 11,012 water vertices and no frame-loop work. Pure depth tests pin normalization, clamping, coast smoothing, and the exact palette; mesh tests pin flat geometry, one vertex-color material, deterministic byte-identical rebuilds, meaningful variation, authoritative mask behavior, and retained shadow reception; the broader palette contract pins descending luminance, saturation, sand separation, and road separation.
+
+Headless Playwright inspected the live shipping seed at 1280×720: the GPU buffer contained 432 distinct rounded colors spanning linear luminance 0.4834 → 0.2407, remained at one y value, retained `receiveShadow`, and kept the full empty-map scene at 15 draw calls. `output/playwright/water-depth/daylight.png` shows the map-wide depth pattern; `close-daylight.png` shows aqua banks grading into deep lake centers; and `close-dusk.png` shows long tree shadows crossing still-readable water. `water-overlay.png` confirms bathymetry remains visible while Water mode and its legend are active; the empty scenario had no pumps, pipes, reach, or supplied buildings, so it is not evidence about infrastructure-color separation. The real Save → Load controls reproduced the exact pre-load color-buffer hash `227025617`, left one terrain group, and reported zero browser errors. `diagnostics.json` retains those live-only values and the evidence scope. These local evidence files are ignored, not committed artifacts.
+
+Verification: `npm test` passed 228/228 across 54 files; `npm run typecheck`, `npm run lint`, and `npm run build` all passed. The production worker remains 111,167/120,000 bytes and the pre-existing >500 kB main-chunk warning remains non-blocking. Headless browser checks verified the shipping-seed color/luminance range, flat geometry, one terrain group, retained shadows, Water-overlay visibility, exact Save → Load regeneration, and zero browser errors. Three independent review lenses found no substantive simulation-boundary, determinism, save, rendering, performance, visual-identity, test, or documentation issues after strengthening the contracts for the literal palette, neutral material base, single water mesh, and asymmetric x/z corner mapping.
+
 ### 2026-07-12 — Measured render and localhost-play latency optimization
 
 User request: optimize performance with measurable latency numbers.
