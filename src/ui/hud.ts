@@ -3,6 +3,7 @@ import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
 import {
   HUD_COMPACT_PANEL_CHROME_CSS,
   HUD_DIVIDER_COLOR,
+  HUD_MILESTONE_BANNER_CSS,
   HUD_MUTED_TEXT,
   HUD_NEGATIVE_TEXT,
   HUD_PANEL_CHROME_CSS,
@@ -258,9 +259,7 @@ export class Hud<TTool extends string> {
     this.milestoneEl = document.createElement('div');
     this.milestoneEl.style.cssText =
       'position:absolute;top:84px;left:50%;transform:translateX(-50%) translateY(-10px);' +
-      'padding:10px 24px;border-radius:11px;color:#fff2cf;font-size:17px;font-weight:bold;' +
-      'background:linear-gradient(180deg,rgba(42,64,44,.95),rgba(24,40,28,.95));' +
-      'border:1px solid rgba(255,214,110,.75);box-shadow:0 5px 20px rgba(0,0,0,.5);' +
+      `padding:10px 24px;border-radius:11px;font-size:17px;font-weight:bold;${HUD_MILESTONE_BANNER_CSS}` +
       'z-index:12;opacity:0;transition:opacity .45s ease,transform .45s ease;' +
       'pointer-events:none;white-space:nowrap';
     container.appendChild(this.milestoneEl);

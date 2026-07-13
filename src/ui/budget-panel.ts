@@ -6,6 +6,7 @@ import {
   HUD_NEGATIVE_TEXT,
   HUD_PANEL_CHROME_CSS,
   HUD_POSITIVE_TEXT,
+  HUD_TEXT,
   hudIconButtonCss,
 } from './hud-style';
 
@@ -85,7 +86,9 @@ export class BudgetPanel {
       labelRow.style.cssText = 'display:flex;justify-content:space-between;font-size:12px';
       const name = document.createElement('span');
       name.textContent = row.label;
-      name.style.color = row.color;
+      // Zone identity is already explicit in the label and slider accent; keep
+      // the small text at normal-text contrast on the light panel surface.
+      name.style.color = HUD_TEXT;
       const value = document.createElement('span');
       labelRow.appendChild(name);
       labelRow.appendChild(value);

@@ -2,40 +2,40 @@ function css(parts: string[]): string {
   return `${parts.join(';')};`;
 }
 
-export const HUD_TEXT = '#eef8ff';
-export const HUD_MUTED_TEXT = '#b7c9cf';
-export const HUD_ACCENT_TEXT = '#6ed7ff';
-export const HUD_POSITIVE_TEXT = '#83d86d';
-export const HUD_NEGATIVE_TEXT = '#ff8f5f';
-export const HUD_DIVIDER_COLOR = '#557987';
-export const HUD_ROW_BORDER = 'rgba(110,215,255,.14)';
+export const HUD_TEXT = '#18353f';
+export const HUD_MUTED_TEXT = '#425e68';
+export const HUD_ACCENT_TEXT = '#00526c';
+export const HUD_POSITIVE_TEXT = '#145c2c';
+export const HUD_NEGATIVE_TEXT = '#8f3526';
+export const HUD_DIVIDER_COLOR = '#7fb6c1';
+export const HUD_ROW_BORDER = 'rgba(31,132,155,.2)';
 
 export const HUD_PANEL_CHROME_CSS = css([
   `color:${HUD_TEXT}`,
-  'background:linear-gradient(180deg,rgba(25,35,38,.93),rgba(9,14,18,.9))',
-  'border:1px solid rgba(110,215,255,.34)',
+  'background:linear-gradient(180deg,rgba(235,247,248,.95),rgba(207,230,233,.92))',
+  'border:1px solid rgba(31,132,155,.42)',
   'border-radius:6px',
-  'box-shadow:inset 0 1px 0 rgba(225,249,255,.14),0 8px 22px rgba(0,0,0,.34)',
+  'box-shadow:inset 0 1px 0 rgba(255,255,255,.72),0 8px 22px rgba(35,72,80,.22)',
 ]);
 
 export const HUD_COMPACT_PANEL_CHROME_CSS = css([
   `color:${HUD_TEXT}`,
-  'background:linear-gradient(180deg,rgba(23,33,36,.84),rgba(9,14,18,.82))',
-  'border:1px solid rgba(110,215,255,.24)',
+  'background:linear-gradient(180deg,rgba(238,248,247,.94),rgba(213,232,234,.92))',
+  'border:1px solid rgba(31,132,155,.3)',
   'border-radius:5px',
-  'box-shadow:inset 0 1px 0 rgba(225,249,255,.1),0 4px 14px rgba(0,0,0,.3)',
+  'box-shadow:inset 0 1px 0 rgba(255,255,255,.62),0 4px 14px rgba(35,72,80,.18)',
 ]);
 
 export const HUD_HEADER_STRIP_CSS = css([
-  'background:linear-gradient(180deg,rgba(40,120,150,.28),rgba(18,40,48,.18))',
+  'background:linear-gradient(180deg,rgba(90,188,204,.25),rgba(171,220,225,.18))',
   `border-bottom:1px solid ${HUD_ROW_BORDER}`,
 ]);
 
 export function hudButtonCss(active = false): string {
   const background = active
-    ? 'linear-gradient(180deg,#18bde8,#087db2)'
-    : 'linear-gradient(180deg,#253239,#12191e)';
-  const border = active ? '1px solid rgba(174,239,255,.86)' : '1px solid rgba(98,148,164,.64)';
+    ? 'linear-gradient(180deg,#63d3e4,#2eb2ca)'
+    : 'linear-gradient(180deg,#e1f1f1,#b9dce0)';
+  const border = active ? '1px solid rgba(21,126,151,.78)' : '1px solid rgba(66,133,147,.5)';
   return css([
     `background:${background}`,
     `color:${HUD_TEXT}`,
@@ -45,8 +45,8 @@ export function hudButtonCss(active = false): string {
     'cursor:pointer',
     'font-size:13px',
     'line-height:1.25',
-    'box-shadow:inset 0 1px 0 rgba(225,249,255,.16),0 1px 2px rgba(0,0,0,.4)',
-    'text-shadow:0 1px 0 rgba(0,0,0,.65)',
+    'box-shadow:inset 0 1px 0 rgba(255,255,255,.68),0 1px 2px rgba(35,72,80,.22)',
+    'text-shadow:0 1px 0 rgba(255,255,255,.42)',
   ]);
 }
 
@@ -59,7 +59,7 @@ export function hudIconButtonCss(): string {
     'font-size:16px',
     'line-height:1',
     'padding:0 2px',
-    'text-shadow:0 1px 0 rgba(0,0,0,.6)',
+    'text-shadow:0 1px 0 rgba(255,255,255,.5)',
   ]);
 }
 
@@ -74,8 +74,8 @@ export function hudKeyBadgeCss(): string {
     'min-width:9px',
     'text-align:center',
     `color:${HUD_ACCENT_TEXT}`,
-    'background:rgba(5,24,34,.58)',
-    'border:1px solid rgba(110,215,255,.42)',
+    'background:rgba(255,255,255,.46)',
+    'border:1px solid rgba(31,132,155,.38)',
     'border-radius:3px',
   ]);
 }
@@ -94,12 +94,19 @@ export function hudWarningBadgeCss(): string {
 
 export function hudToastCss(): string {
   return css([
-    'color:#fff8ec',
-    'background:linear-gradient(180deg,rgba(121,46,33,.96),rgba(77,24,22,.94))',
-    'border:1px solid rgba(255,143,95,.46)',
+    'color:#7c2f22',
+    'background:linear-gradient(180deg,rgba(255,240,232,.97),rgba(255,217,199,.95))',
+    'border:1px solid rgba(190,87,55,.5)',
     'padding:6px 14px',
     'border-radius:5px',
     'font-size:13px',
-    'box-shadow:0 2px 8px rgba(0,0,0,.45)',
+    'box-shadow:0 2px 8px rgba(70,48,40,.24)',
   ]);
 }
+
+export const HUD_MILESTONE_BANNER_CSS = css([
+  'color:#244534',
+  'background:linear-gradient(180deg,rgba(255,250,214,.97),rgba(224,244,207,.96))',
+  'border:1px solid rgba(99,156,80,.72)',
+  'box-shadow:0 5px 20px rgba(50,80,60,.22)',
+]);

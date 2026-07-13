@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Color, InstancedMesh, Matrix4 } from 'three';
+import type { MeshLambertMaterial } from 'three';
 import {
-  BUILDING_DETAIL_COLOR,
   BUILDING_FACADE_BASE_Y,
-  BUILDING_FACADE_COLORS,
   BUILDING_FACADE_DEPTH,
-  BUILDING_ROOF_COLORS,
   BUILDING_START_CAPACITY,
   BUILDING_WALL_COLORS,
   type ZoneKind,
@@ -30,6 +28,35 @@ const colorAt = (target: InstancedMesh, slot: number): number[] => {
   const color = new Color();
   target.getColorAt(slot, color);
   return color.toArray();
+};
+
+const effectiveColorAt = (target: InstancedMesh, slot: number): Color => {
+  const [r, g, b] = colorAt(target, slot);
+  const material = target.material as MeshLambertMaterial;
+  return new Color(r, g, b).multiply(material.color);
+};
+
+const relativeLuminance = (color: Color): number =>
+  0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+
+const toOklab = (color: Color): [number, number, number] => {
+  const l = 0.4122214708 * color.r + 0.5363325363 * color.g + 0.0514459929 * color.b;
+  const m = 0.2119034982 * color.r + 0.6806995451 * color.g + 0.1073969566 * color.b;
+  const s = 0.0883024619 * color.r + 0.2817188376 * color.g + 0.6299787005 * color.b;
+  const lRoot = Math.cbrt(l);
+  const mRoot = Math.cbrt(m);
+  const sRoot = Math.cbrt(s);
+  return [
+    0.2104542553 * lRoot + 0.793617785 * mRoot - 0.0040720468 * sRoot,
+    1.9779984951 * lRoot - 2.428592205 * mRoot + 0.4505937099 * sRoot,
+    0.0259040371 * lRoot + 0.7827717662 * mRoot - 0.808675766 * sRoot,
+  ];
+};
+
+const perceptualDistance = (a: Color, b: Color): number => {
+  const aLab = toOklab(a);
+  const bLab = toOklab(b);
+  return Math.hypot(aLab[0] - bLab[0], aLab[1] - bLab[1], aLab[2] - bLab[2]);
 };
 
 const expectCloseArray = (actual: readonly number[], expected: readonly number[]): void => {
@@ -108,33 +135,95 @@ describe('BuildingsView', () => {
     expectCloseArray(colorAt(facade, 0), movedColor);
   });
 
-  it('uses a cool modern RCI palette instead of warm settlement materials', () => {
-    const residentialWall = new Color(BUILDING_WALL_COLORS.R);
-    const commercialWall = new Color(BUILDING_WALL_COLORS.C);
-    const industrialWall = new Color(BUILDING_WALL_COLORS.I);
-    const residentialRoof = new Color(BUILDING_ROOF_COLORS.R);
-    const detailColor = new Color(BUILDING_DETAIL_COLOR);
-    const commercialFacade = new Color(BUILDING_FACADE_COLORS.C);
+  it('uses a friendly mid-light palette while keeping zones visibly separated', () => {
+    const wallColors = zoneKinds.map((zone) => new Color(BUILDING_WALL_COLORS[zone]));
 
-    expect(residentialWall.b).toBeGreaterThan(0.5);
-    expect(residentialWall.r - residentialWall.b).toBeLessThan(0.12);
-    expect(commercialWall.b).toBeGreaterThan(commercialWall.r);
-    expect(industrialWall.b).toBeGreaterThanOrEqual(0.5);
-    expect(residentialRoof.b).toBeGreaterThan(residentialRoof.r);
-    expect(detailColor.b).toBeGreaterThan(detailColor.r);
-    expect(commercialFacade.b).toBeGreaterThan(commercialFacade.r);
+    for (const color of wallColors) {
+      expect(relativeLuminance(color)).toBeGreaterThanOrEqual(0.35);
+      expect(relativeLuminance(color)).toBeLessThanOrEqual(0.6);
+    }
+    expect(wallColors[0].g).toBeGreaterThan(Math.max(wallColors[0].r, wallColors[0].b));
+    expect(wallColors[1].b).toBeGreaterThan(Math.max(wallColors[1].r, wallColors[1].g));
+    expect(wallColors[2].r).toBeGreaterThan(Math.max(wallColors[2].g, wallColors[2].b));
+    const rendered = zoneKinds.map((zone) => {
+      const view = new BuildingsView();
+      view.upsert({ id: 11, zone, x: 1, y: 1, w: 1, h: 1, level: 3, abandoned: false });
+      return {
+        wall: effectiveColorAt(mesh(view, `${zone}-walls`), 0),
+        roof: effectiveColorAt(mesh(view, `${zone}-roofs`), 0),
+        detail: effectiveColorAt(mesh(view, `${zone}-roof-details`), 0),
+        facade: effectiveColorAt(mesh(view, `${zone}-facades`), 0),
+      };
+    });
+    for (const colors of rendered) {
+      expect(relativeLuminance(colors.wall)).toBeGreaterThan(0.3);
+      expect(relativeLuminance(colors.wall)).toBeLessThan(0.78);
+    }
+    for (let i = 0; i < rendered.length; i++) {
+      for (let j = i + 1; j < rendered.length; j++) {
+        expect(perceptualDistance(rendered[i].wall, rendered[j].wall)).toBeGreaterThanOrEqual(0.09);
+        expect(perceptualDistance(rendered[i].roof, rendered[j].roof)).toBeGreaterThanOrEqual(0.08);
+        expect(perceptualDistance(rendered[i].detail, rendered[j].detail)).toBeGreaterThanOrEqual(0.08);
+        expect(perceptualDistance(rendered[i].facade, rendered[j].facade)).toBeGreaterThanOrEqual(0.1);
+      }
+    }
+  });
 
+  it('uses distinct rooftop and facade proportions for each zone', () => {
+    const scaleAt = (target: InstancedMesh): [number, number, number] => {
+      const matrix = new Matrix4();
+      target.getMatrixAt(0, matrix);
+      return [matrix.elements[0], matrix.elements[5], matrix.elements[10]];
+    };
+    const shapes = zoneKinds.map((zone) => {
+      const view = new BuildingsView();
+      view.upsert({ id: 11, zone, x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+      return {
+        detail: scaleAt(mesh(view, `${zone}-roof-details`)),
+        facade: scaleAt(mesh(view, `${zone}-facades`)),
+      };
+    });
+
+    expect(shapes[2].detail[0]).toBeGreaterThan(shapes[1].detail[0]);
+    expect(shapes[1].detail[0]).toBeGreaterThan(shapes[0].detail[0]);
+    expect(shapes[1].detail[1]).toBeGreaterThan(shapes[0].detail[1]);
+    expect(shapes[0].detail[1]).toBeGreaterThan(shapes[2].detail[1]);
+    expect(shapes[1].facade[0]).toBeGreaterThan(shapes[2].facade[0]);
+    expect(shapes[2].facade[0]).toBeGreaterThan(shapes[0].facade[0]);
+    expect(shapes[1].facade[1]).toBeGreaterThan(shapes[2].facade[1]);
+    expect(shapes[2].facade[1]).toBeGreaterThan(shapes[0].facade[1]);
+  });
+
+  it('keeps building bodies non-emissive and hides abandoned facade glow', () => {
     const view = new BuildingsView();
-    view.upsert({ id: 11, zone: 'R', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
-    view.upsert({ id: 12, zone: 'C', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: false });
-    view.upsert({ id: 13, zone: 'I', x: 5, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+    view.upsert({ id: 1, zone: 'R', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+    view.upsert({ id: 2, zone: 'I', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+    const liveFacade = matrixAt(mesh(view, 'I-facades'), 0);
+    expect(liveFacade[0]).toBeGreaterThan(0);
+    view.upsert({ id: 2, zone: 'I', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: true });
+    view.setNightGlow(1);
 
-    const liveResidential = colorAt(mesh(view, 'R-walls'), 0);
-    const liveCommercial = colorAt(mesh(view, 'C-walls'), 0);
-    const liveIndustrial = colorAt(mesh(view, 'I-walls'), 0);
+    const bodyMaterial = mesh(view, 'R-walls').material as MeshLambertMaterial;
+    const facadeMaterial = mesh(view, 'R-facades').material as MeshLambertMaterial;
+    expect(bodyMaterial.emissive.getHex()).toBe(0x000000);
+    view.setNightGlow(0.7);
+    expect(facadeMaterial.emissiveIntensity).toBe(0);
+    view.setNightGlow(0.8);
+    expect(facadeMaterial.emissiveIntensity).toBeGreaterThan(0);
+    view.setNightGlow(1);
+    expect(facadeMaterial.emissiveIntensity).toBeGreaterThan(0);
 
-    expect(liveResidential[2]).toBeGreaterThan(0.46);
-    expect(liveCommercial[2]).toBeGreaterThan(liveCommercial[0]);
-    expect(liveIndustrial[2]).toBeGreaterThan(0.45);
+    const abandonedFacade = new Matrix4();
+    mesh(view, 'I-facades').getMatrixAt(0, abandonedFacade);
+    expect(abandonedFacade.elements[0]).toBe(0);
+    expect(abandonedFacade.elements[5]).toBe(0);
+    expect(abandonedFacade.elements[10]).toBe(0);
+
+    view.upsert({ id: 2, zone: 'I', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: false });
+    const recoveredFacade = new Matrix4();
+    mesh(view, 'I-facades').getMatrixAt(0, recoveredFacade);
+    expect(recoveredFacade.elements[0]).toBeGreaterThan(0);
+    expect(recoveredFacade.elements[5]).toBeGreaterThan(0);
+    expect(recoveredFacade.elements[10]).toBeGreaterThan(0);
   });
 });

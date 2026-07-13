@@ -13,16 +13,18 @@ import type { BufferGeometry } from 'three';
 import {
   BUILDING_ABANDONED_ROOF_COLOR,
   BUILDING_ABANDONED_WALL_COLOR,
-  BUILDING_DETAIL_COLOR,
-  BUILDING_DETAIL_HEIGHT,
-  BUILDING_DETAIL_WIDTH,
+  BUILDING_ABANDONED_DETAIL_COLOR,
+  BUILDING_DETAIL_COLORS,
+  BUILDING_DETAIL_HEIGHTS,
+  BUILDING_DETAIL_WIDTHS,
   BUILDING_FACADE_BASE_Y,
   BUILDING_FACADE_COLORS,
   BUILDING_FACADE_DEPTH,
   BUILDING_FACADE_FRONT_OFFSET,
   BUILDING_FACADE_GLOW_MAX,
-  BUILDING_FACADE_HEIGHT,
-  BUILDING_FACADE_WIDTH,
+  BUILDING_FACADE_GLOW_START,
+  BUILDING_FACADE_HEIGHTS,
+  BUILDING_FACADE_WIDTHS,
   BUILDING_FACADE_X_JITTER,
   BUILDING_FOOTPRINT_JITTER,
   BUILDING_FOOTPRINT_MARGIN,
@@ -31,7 +33,6 @@ import {
   BUILDING_LEVEL_ROOF_LIGHTEN,
   BUILDING_LEVEL_WALL_LIGHTEN,
   BUILDING_NIGHT_GLOW_COLOR,
-  BUILDING_NIGHT_GLOW_MAX,
   BUILDING_TINT_HUE_JITTER,
   BUILDING_TINT_LIGHT_JITTER,
   BUILDING_ROOF_COLORS,
@@ -85,11 +86,7 @@ export class BuildingsView {
   private readonly pyramidRoof: BufferGeometry;
   private readonly detailBox: BufferGeometry;
   private readonly facadeBox: BufferGeometry;
-  private readonly material = new MeshLambertMaterial({
-    color: 0xffffff,
-    emissive: BUILDING_NIGHT_GLOW_COLOR,
-    emissiveIntensity: 0,
-  });
+  private readonly material = new MeshLambertMaterial({ color: 0xffffff });
   private readonly facadeMaterial = new MeshLambertMaterial({
     color: 0xffffff,
     emissive: BUILDING_NIGHT_GLOW_COLOR,
@@ -116,12 +113,14 @@ export class BuildingsView {
     return this.slots.size;
   }
 
-  /** Ramps the shared warm emissive with darkness (night ∈ [0,1]) so the city
-   * lights up at night instead of vanishing. Cheap — one material uniform. */
+  /** Keeps bodies honest to their zone palette and fades window glow in after dusk. */
   setNightGlow(night: number): void {
     const clamped = Math.max(0, Math.min(1, night));
-    this.material.emissiveIntensity = clamped * BUILDING_NIGHT_GLOW_MAX;
-    this.facadeMaterial.emissiveIntensity = clamped * BUILDING_FACADE_GLOW_MAX;
+    const afterDusk = Math.max(
+      0,
+      (clamped - BUILDING_FACADE_GLOW_START) / (1 - BUILDING_FACADE_GLOW_START),
+    );
+    this.facadeMaterial.emissiveIntensity = afterDusk * BUILDING_FACADE_GLOW_MAX;
   }
 
   upsert(view: BuildingRenderView): void {
@@ -257,15 +256,15 @@ export class BuildingsView {
     archetype.roofs.setMatrixAt(slot, MATRIX);
     const detailX = cx + (cellHash01(view.id + 0x6666) - 0.5) * sx * 0.35;
     const detailZ = cz + (cellHash01(view.id + 0x7777) - 0.5) * sz * 0.35;
-    const detailWidth = Math.min(BUILDING_DETAIL_WIDTH, Math.min(sx, sz) * 0.35);
-    MATRIX.makeScale(detailWidth, BUILDING_DETAIL_HEIGHT, detailWidth).setPosition(
+    const detailWidth = Math.min(BUILDING_DETAIL_WIDTHS[view.zone], Math.min(sx, sz) * 0.65);
+    MATRIX.makeScale(detailWidth, BUILDING_DETAIL_HEIGHTS[view.zone], detailWidth).setPosition(
       detailX,
       height + roofHeight * 0.82,
       detailZ,
     );
     archetype.details.setMatrixAt(slot, MATRIX);
-    const facadeWidth = Math.min(BUILDING_FACADE_WIDTH, sx * 0.35);
-    const facadeHeight = Math.min(BUILDING_FACADE_HEIGHT, height * 0.45);
+    const facadeWidth = Math.min(BUILDING_FACADE_WIDTHS[view.zone], sx * 0.72);
+    const facadeHeight = Math.min(BUILDING_FACADE_HEIGHTS[view.zone], height * 0.65);
     const facadeX = cx + (cellHash01(view.id + 0x8888) - 0.5) * sx * BUILDING_FACADE_X_JITTER;
     const facadeZ = cz + sz / 2 + BUILDING_FACADE_DEPTH / 2 + BUILDING_FACADE_FRONT_OFFSET;
     MATRIX.makeScale(facadeWidth, facadeHeight, BUILDING_FACADE_DEPTH).setPosition(
@@ -282,8 +281,15 @@ export class BuildingsView {
       const decayJit = (cellHash01(view.id + 0x5555) - 0.5) * BUILDING_TINT_LIGHT_JITTER * 1.5;
       archetype.walls.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_WALL_COLOR).offsetHSL(0, 0, decayJit));
       archetype.roofs.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
-      archetype.details.setColorAt(slot, COLOR.setHex(BUILDING_DETAIL_COLOR).offsetHSL(0, 0, decayJit * 0.5));
+      archetype.details.setColorAt(
+        slot,
+        COLOR.setHex(BUILDING_ABANDONED_DETAIL_COLOR).offsetHSL(0, 0, decayJit * 0.5),
+      );
       archetype.facades.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
+      // Facade emissive is shared per material, so abandoned windows must have
+      // no geometry rather than merely a dark instance tint.
+      MATRIX.makeScale(0, 0, 0).setPosition(cx, 0, cz);
+      archetype.facades.setMatrixAt(slot, MATRIX);
     } else {
       // Subtle per-building tint (walls and roof shift together) on top of the
       // per-level lightening, so a district varies without losing its zone hue.
@@ -295,7 +301,10 @@ export class BuildingsView {
       COLOR.setHex(BUILDING_ROOF_COLORS[view.zone]);
       COLOR.offsetHSL(hueJit, 0, BUILDING_LEVEL_ROOF_LIGHTEN * levelIndex + lightJit);
       archetype.roofs.setColorAt(slot, COLOR);
-      archetype.details.setColorAt(slot, COLOR.setHex(BUILDING_DETAIL_COLOR).offsetHSL(hueJit, 0, lightJit * 0.5));
+      archetype.details.setColorAt(
+        slot,
+        COLOR.setHex(BUILDING_DETAIL_COLORS[view.zone]).offsetHSL(hueJit, 0, lightJit * 0.5),
+      );
       archetype.facades.setColorAt(
         slot,
         COLOR.setHex(BUILDING_FACADE_COLORS[view.zone]).offsetHSL(hueJit, 0, lightJit),

@@ -24,6 +24,20 @@ v1 COMPLETE. The game-design "Definition of fully functioning" checklist passes 
 
 ## Log
 
+### 2026-07-12 — Friendlier, brighter game palette
+
+User request: make the game color palette friendlier and not so dark. This supersedes the uncommitted darker-building direction while retaining its useful zone-specific silhouettes.
+
+Implemented one cohesive renderer/UI palette without touching simulation, protocol, saves, or mechanics. The landscape now uses brighter model-table grass, clear blue water, warm sand, lighter trees and bridges, and a brighter day/dusk atmosphere. RCI building wall luminance rises from the rejected dark R/C/I `0.283/0.188/0.231` to `0.518/0.387/0.440`: pastel-sage residential, clear-blue commercial, and warm-amber industrial, with friendlier service/utility colors and lighter abandoned neutrals. Zone-specific pitched roofs, rooftop cores, HVAC/loading details, and facade proportions remain intact.
+
+The HUD, advisor, budget, inspect, overlay legend, camera hint, buttons, shortcut badges, error toasts, and milestone banner now share pale frosted-aqua/cream chrome with dark text instead of near-black panels. Active tools stay cyan and dark asphalt remains as functional contrast. Building bodies remain non-emissive; only live facade/window panels glow after dusk, while abandoned facades collapse so derelicts never glow.
+
+TDD: RED failed six player-visible contracts across `buildings-mesh.test.ts`, the new `palette.test.ts`, and `hud-style.test.ts`: the rejected dark building/terrain/service luminance, missing bright atmosphere contract, and near-black HUD values. GREEN pins landscape and atmosphere luminance floors, service-wall readability, friendly RCI mid-light bounds plus OKLab zone separation, light frosted controls, and the warm milestone surface alongside the existing silhouette/night-glow contracts.
+
+Headless visual verification loaded the same deterministic mixed-city save for before/after evidence (the simulation frames are not pixel-identical). `output/playwright/palette-pass/baseline-dark.png` records the rejected dark direction; `final-friendly.png` records the paused final city with 999 people, 42 vehicles, and clearly distinct live R/C/I districts; `final-friendly-budget.png` verifies the light budget panel; and `final-friendly-night.png` verifies readable blue dusk plus facade-only window glow. Review caught that the custom sky shader initially bypassed Three.js tone mapping/output color-space transforms; after restoring those shader chunks, the dusk endpoints were retuned so midnight remains visibly cooler and dimmer than day without hiding the city. The final page reported 0 console errors and only Three.js's pre-existing `PCFSoftShadowMap` deprecation warning.
+
+Closeout verification: `npm test` passed 180/180 across 42 files; `npm run typecheck`, `npm run lint`, and `npm run build` all passed, with only the pre-existing >500 kB chunk warning. Three independent adversarial lenses converged with no substantive findings after fixes: rendering/color management and facade lifecycle; tests/docs/accessibility (including actual translucent-surface contrast); and headless visual evidence health/readability.
+
 ### 2026-07-10 — Special stamps replace growables; utility corridors reach farther
 
 User requests: placing service buildings or power plants should automatically bulldoze generic residential/commercial/industrial buildings and take their place; water pipes and power lines should not consume building space and should cover a larger area than their immediate vicinity.
