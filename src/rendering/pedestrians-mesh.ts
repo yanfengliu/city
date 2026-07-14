@@ -8,6 +8,7 @@ import {
   Matrix4,
   MeshLambertMaterial,
   OctahedronGeometry,
+  Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { PedestrianPurpose, PedestrianView } from '../protocol/messages';
@@ -17,13 +18,15 @@ import {
   PEDESTRIAN_CURB_OFFSET,
   PEDESTRIAN_HEAD,
   PEDESTRIAN_LEG,
-  PEDESTRIAN_PURPOSE_COLORS,
-  PEDESTRIAN_SKIN_COLOR,
-  PEDESTRIAN_Y,
   VEHICLE_LERP_DEFAULT_MS,
   VEHICLE_LERP_MAX_MS,
   VEHICLE_LERP_MIN_MS,
 } from './constants';
+import {
+  PEDESTRIAN_Y,
+  pedestrianStyle,
+  type PedestrianStyle,
+} from './pedestrian-style';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 import {
   retargetVehicleMotion,
@@ -34,22 +37,25 @@ import {
 interface PedestrianState {
   generation: number;
   purpose: PedestrianPurpose;
+  style: PedestrianStyle;
   motion: VehicleMotionSegment;
 }
 
 const MATRIX = new Matrix4();
+const SCALE = new Vector3();
 const MOTION_POSE = { x: 0, z: 0, yaw: 0 };
 const COLOR = new Color();
 
 /**
- * Visible purposeful trips as fixed-capacity low-poly people. Bodies and heads
- * share one instance transform buffer, so per-frame interpolation writes each
- * pedestrian pose once. Purpose is encoded on body color; heads stay a fixed
- * skin tone. Moving pedestrians intentionally neither cast nor receive shadows.
+ * Visible purposeful trips as fixed-capacity low-poly people. Tops, bottoms,
+ * and heads share one instance transform buffer, so per-frame interpolation
+ * writes each pose once. Deterministic identity styling keeps purpose-readable
+ * top palettes while varying clothes, skin tone, height, and build.
  */
 export class PedestriansView {
   readonly group = new Group();
-  readonly bodyMesh: InstancedMesh;
+  readonly topMesh: InstancedMesh;
+  readonly bottomMesh: InstancedMesh;
   readonly headMesh: InstancedMesh;
   private states = new Map<number, PedestrianState>();
   private lastMessageAt: number | null = null;
@@ -60,7 +66,7 @@ export class PedestriansView {
     private readonly gridWidth: number,
     private readonly now: () => number = () => performance.now(),
   ) {
-    const torso = new BoxGeometry(
+    const topGeometry = new BoxGeometry(
       PEDESTRIAN_BODY.width,
       PEDESTRIAN_BODY.height,
       PEDESTRIAN_BODY.depth,
@@ -75,34 +81,45 @@ export class PedestriansView {
       PEDESTRIAN_LEG.height,
       PEDESTRIAN_LEG.depth,
     ).translate(PEDESTRIAN_LEG.x, PEDESTRIAN_LEG.y, -PEDESTRIAN_LEG.stride);
-    const bodyGeometry = mergeGeometries([torso, leftLeg, rightLeg]);
-    torso.dispose();
+    const bottomGeometry = mergeGeometries([leftLeg, rightLeg]);
     leftLeg.dispose();
     rightLeg.dispose();
 
-    const headGeometry = new OctahedronGeometry(PEDESTRIAN_HEAD.radius, 0)
+    const head = new OctahedronGeometry(PEDESTRIAN_HEAD.radius, 0)
       .translate(0, PEDESTRIAN_HEAD.y, 0);
-    this.bodyMesh = new InstancedMesh(
-      bodyGeometry,
+    const nose = new OctahedronGeometry(0.022, 0)
+      .scale(0.7, 0.7, 1)
+      .translate(0, PEDESTRIAN_HEAD.y, PEDESTRIAN_HEAD.radius + 0.012);
+    const headGeometry = mergeGeometries([head, nose]);
+    head.dispose();
+    nose.dispose();
+
+    this.topMesh = new InstancedMesh(
+      topGeometry,
+      new MeshLambertMaterial({ color: 0xffffff }),
+      PEDESTRIAN_CAPACITY,
+    );
+    this.bottomMesh = new InstancedMesh(
+      bottomGeometry,
       new MeshLambertMaterial({ color: 0xffffff }),
       PEDESTRIAN_CAPACITY,
     );
     this.headMesh = new InstancedMesh(
       headGeometry,
-      new MeshLambertMaterial({ color: PEDESTRIAN_SKIN_COLOR }),
+      new MeshLambertMaterial({ color: 0xffffff }),
       PEDESTRIAN_CAPACITY,
     );
-    this.bodyMesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.headMesh.instanceMatrix = this.bodyMesh.instanceMatrix;
-    this.bodyMesh.instanceColor = new InstancedBufferAttribute(
-      new Float32Array(PEDESTRIAN_CAPACITY * 3),
-      3,
-    );
-    this.bodyMesh.instanceColor.setUsage(DynamicDrawUsage);
-    this.configureMesh(this.bodyMesh, 'pedestrian-bodies');
+    this.topMesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    this.bottomMesh.instanceMatrix = this.topMesh.instanceMatrix;
+    this.headMesh.instanceMatrix = this.topMesh.instanceMatrix;
+    this.addColorBuffer(this.topMesh);
+    this.addColorBuffer(this.bottomMesh);
+    this.addColorBuffer(this.headMesh);
+    this.configureMesh(this.topMesh, 'pedestrian-tops');
+    this.configureMesh(this.bottomMesh, 'pedestrian-bottoms');
     this.configureMesh(this.headMesh, 'pedestrian-heads');
     this.group.name = 'pedestrians';
-    this.group.add(this.bodyMesh, this.headMesh);
+    this.group.add(this.topMesh, this.bottomMesh, this.headMesh);
   }
 
   get count(): number {
@@ -118,7 +135,8 @@ export class PedestriansView {
   setPedestrians(list: readonly PedestrianView[]): void {
     if (list.length === 0) {
       this.states.clear();
-      this.bodyMesh.count = 0;
+      this.topMesh.count = 0;
+      this.bottomMesh.count = 0;
       this.headMesh.count = 0;
       this.lastMessageAt = null;
       this.messageIntervalMs = VEHICLE_LERP_DEFAULT_MS;
@@ -146,13 +164,15 @@ export class PedestriansView {
       next.set(pedestrian.id, {
         generation: pedestrian.generation,
         purpose: pedestrian.purpose,
+        style: pedestrianStyle(pedestrian.id, pedestrian.generation, pedestrian.purpose),
         motion: retargetVehicleMotion(continuing?.motion, previousAlpha, target),
       });
     }
     this.states = next;
-    this.bodyMesh.count = next.size;
+    this.topMesh.count = next.size;
+    this.bottomMesh.count = next.size;
     this.headMesh.count = next.size;
-    this.applyColors();
+    this.applyStyles();
     this.updateFrame(now);
   }
 
@@ -163,14 +183,24 @@ export class PedestriansView {
     let slot = 0;
     for (const state of this.states.values()) {
       const { x, z, yaw } = sampleVehicleMotionInto(state.motion, alpha, MOTION_POSE);
-      MATRIX.makeRotationY(yaw).setPosition(
+      MATRIX.makeRotationY(yaw).scale(
+        SCALE.set(state.style.widthScale, state.style.heightScale, state.style.widthScale),
+      ).setPosition(
         x,
         this.surface.heightAt(x, z) + PEDESTRIAN_Y,
         z,
       );
-      this.bodyMesh.setMatrixAt(slot++, MATRIX);
+      this.topMesh.setMatrixAt(slot++, MATRIX);
     }
-    this.bodyMesh.instanceMatrix.needsUpdate = true;
+    this.topMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private addColorBuffer(mesh: InstancedMesh): void {
+    mesh.instanceColor = new InstancedBufferAttribute(
+      new Float32Array(PEDESTRIAN_CAPACITY * 3),
+      3,
+    );
+    mesh.instanceColor.setUsage(DynamicDrawUsage);
   }
 
   private configureMesh(mesh: InstancedMesh, name: string): void {
@@ -204,14 +234,16 @@ export class PedestriansView {
     };
   }
 
-  private applyColors(): void {
+  private applyStyles(): void {
     let slot = 0;
     for (const state of this.states.values()) {
-      this.bodyMesh.setColorAt(
-        slot++,
-        COLOR.setHex(PEDESTRIAN_PURPOSE_COLORS[state.purpose]),
-      );
+      this.topMesh.setColorAt(slot, COLOR.setHex(state.style.topColor));
+      this.bottomMesh.setColorAt(slot, COLOR.setHex(state.style.bottomColor));
+      this.headMesh.setColorAt(slot, COLOR.setHex(state.style.skinColor));
+      slot++;
     }
-    this.bodyMesh.instanceColor!.needsUpdate = true;
+    this.topMesh.instanceColor!.needsUpdate = true;
+    this.bottomMesh.instanceColor!.needsUpdate = true;
+    this.headMesh.instanceColor!.needsUpdate = true;
   }
 }

@@ -19,6 +19,14 @@ import {
   ROAD_SURFACE_Y,
 } from './constants';
 import { buildSurfacePatch } from './surface-geometry';
+import {
+  SIDEWALK_COLOR,
+} from './road-streetscape-style';
+import {
+  addSidewalks,
+  addTrafficSignals,
+  type RoadNeighbors,
+} from './road-streetscape';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Accumulates merged quads/boxes into one BufferGeometry. */
@@ -123,6 +131,21 @@ class GeometryBuilder {
     this.face([x0, y0, z0], [dx, 0, 0], [0, dy, 0], [0, 0, -1]); // -z
   }
 
+  coloredBox(
+    x0: number,
+    y0: number,
+    z0: number,
+    x1: number,
+    y1: number,
+    z1: number,
+    color: Color,
+  ): void {
+    const before = this.positions.length / 3;
+    this.box(x0, y0, z0, x1, y1, z1);
+    const added = this.positions.length / 3 - before;
+    for (let i = 0; i < added; i++) this.colors.push(color.r, color.g, color.b);
+  }
+
   build(): BufferGeometry {
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(this.positions), 3));
@@ -146,7 +169,7 @@ function roadDetailColor(index: number): Color {
 
 /**
  * Road cells as merged asphalt-surface quads with a subtle worn detail strip
- * plus crisp lane markings for strategy-zoom road readability,
+ * plus crisp lane markings, sidewalks, and junction signal fixtures,
  * plus a concrete bridge mesh for road cells over water (causeway deck at road
  * height, railings on edges without a road neighbor, pylons down into the
  * water). Fully rebuilt from each `roads` message — cheap at current scale
@@ -157,6 +180,8 @@ export class RoadsView {
   private readonly roadMesh: Mesh;
   private readonly roadDetailMesh: Mesh;
   private readonly roadLaneMesh: Mesh;
+  private readonly sidewalkMesh: Mesh;
+  private readonly trafficSignalMesh: Mesh;
   private readonly bridgeMesh: Mesh;
   private readonly gridWidth: number;
   /** Highway cells rendered by HighwayView — skipped here to avoid double-draw. */
@@ -169,6 +194,12 @@ export class RoadsView {
   cellCount = 0;
   /** How many of those cells are bridges (road over water). */
   bridgeCellCount = 0;
+  /** Number of terrain-draped sidewalk patches in the current road projection. */
+  sidewalkPatchCount = 0;
+  /** Land-road cells with at least three connected approaches. */
+  signalizedIntersectionCount = 0;
+  /** One traffic-light assembly per connected approach at a signalized junction. */
+  trafficSignalAssemblyCount = 0;
 
   constructor(gridWidth: number, highwayCells: ReadonlySet<number> = new Set()) {
     this.gridWidth = gridWidth;
@@ -185,6 +216,16 @@ export class RoadsView {
       new MeshLambertMaterial({ color: ROAD_LANE_MARKING_COLOR }),
     );
     this.roadLaneMesh.name = 'road-lane-markings';
+    this.sidewalkMesh = new Mesh(
+      new BufferGeometry(),
+      new MeshLambertMaterial({ color: SIDEWALK_COLOR }),
+    );
+    this.sidewalkMesh.name = 'road-sidewalks';
+    this.trafficSignalMesh = new Mesh(
+      new BufferGeometry(),
+      new MeshLambertMaterial({ color: 0xffffff, vertexColors: true }),
+    );
+    this.trafficSignalMesh.name = 'road-traffic-signals';
     this.bridgeMesh = new Mesh(
       new BufferGeometry(),
       new MeshLambertMaterial({ color: BRIDGE_COLOR }),
@@ -193,15 +234,27 @@ export class RoadsView {
     this.roadMesh.visible = false;
     this.roadDetailMesh.visible = false;
     this.roadLaneMesh.visible = false;
+    this.sidewalkMesh.visible = false;
+    this.trafficSignalMesh.visible = false;
     this.bridgeMesh.visible = false;
     this.roadMesh.receiveShadow = true;
     this.roadDetailMesh.receiveShadow = true;
     this.roadLaneMesh.receiveShadow = true;
+    this.sidewalkMesh.receiveShadow = true;
+    this.trafficSignalMesh.castShadow = false;
+    this.trafficSignalMesh.receiveShadow = false;
     this.bridgeMesh.castShadow = true;
     this.bridgeMesh.receiveShadow = true;
     this.group = new Group();
     this.group.name = 'roads';
-    this.group.add(this.roadMesh, this.roadDetailMesh, this.roadLaneMesh, this.bridgeMesh);
+    this.group.add(
+      this.roadMesh,
+      this.roadDetailMesh,
+      this.roadLaneMesh,
+      this.sidewalkMesh,
+      this.trafficSignalMesh,
+      this.bridgeMesh,
+    );
   }
 
   /** Terrain water mask from boot; re-renders roads that arrived earlier. */
@@ -224,6 +277,11 @@ export class RoadsView {
     const roads = new GeometryBuilder();
     const roadDetails = new GeometryBuilder();
     const roadLanes = new GeometryBuilder();
+    const sidewalks = new GeometryBuilder();
+    const trafficSignals = new GeometryBuilder();
+    this.sidewalkPatchCount = 0;
+    this.signalizedIntersectionCount = 0;
+    this.trafficSignalAssemblyCount = 0;
     let landRoadCount = 0;
     for (const index of cells) {
       // Highway cells are drawn distinctly by HighwayView.
@@ -234,6 +292,7 @@ export class RoadsView {
       }
       const x = index % this.gridWidth;
       const z = Math.floor(index / this.gridWidth);
+      const neighbors = this.neighbors(roadCellSet, index, x, z);
       roads.surfaceQuad(x, z, x + 1, z + 1, ROAD_SURFACE_Y, this.surface);
       roadDetails.coloredSurfacePatch(
         x + ROAD_DETAIL_SIDE_INSET,
@@ -244,30 +303,56 @@ export class RoadsView {
         this.surface,
         roadDetailColor(index),
       );
-      this.addLaneMarking(roadLanes, roadCellSet, index, x, z);
+      this.addLaneMarking(roadLanes, neighbors, x, z);
+      this.sidewalkPatchCount += addSidewalks(sidewalks, this.surface, neighbors, x, z);
+      const signalAssemblies = addTrafficSignals(
+        trafficSignals,
+        this.surface,
+        neighbors,
+        index,
+        x,
+        z,
+      );
+      if (signalAssemblies > 0) this.signalizedIntersectionCount++;
+      this.trafficSignalAssemblyCount += signalAssemblies;
       landRoadCount++;
     }
     this.bridgeCellCount = bridges.length;
     this.swapGeometry(this.roadMesh, roads.build(), landRoadCount > 0);
     this.swapGeometry(this.roadDetailMesh, roadDetails.build(), landRoadCount > 0);
     this.swapGeometry(this.roadLaneMesh, roadLanes.build(), landRoadCount > 0);
+    this.swapGeometry(this.sidewalkMesh, sidewalks.build(), this.sidewalkPatchCount > 0);
+    this.swapGeometry(
+      this.trafficSignalMesh,
+      trafficSignals.build(),
+      this.trafficSignalAssemblyCount > 0,
+    );
     this.swapGeometry(this.bridgeMesh, this.buildBridges(bridges, roadCellSet), bridges.length > 0);
   }
 
-  private addLaneMarking(
-    b: GeometryBuilder,
+  private neighbors(
     roadCells: ReadonlySet<number>,
     index: number,
     x: number,
     z: number,
-  ): void {
+  ): RoadNeighbors {
     const w = this.gridWidth;
-    const hasW = x > 0 && roadCells.has(index - 1);
-    const hasE = x < w - 1 && roadCells.has(index + 1);
-    const hasN = z > 0 && roadCells.has(index - w);
-    const hasS = z < w - 1 && roadCells.has(index + w);
-    const horizontal = hasW || hasE;
-    const vertical = hasN || hasS || !horizontal;
+    return {
+      w: x > 0 && roadCells.has(index - 1),
+      e: x < w - 1 && roadCells.has(index + 1),
+      n: z > 0 && roadCells.has(index - w),
+      s: z < w - 1 && roadCells.has(index + w),
+    };
+  }
+
+  private addLaneMarking(
+    b: GeometryBuilder,
+    neighbors: RoadNeighbors,
+    x: number,
+    z: number,
+  ): void {
+    const horizontal = neighbors.w || neighbors.e;
+    const vertical = neighbors.n || neighbors.s || !horizontal;
     const halfWidth = ROAD_LANE_MARKING_WIDTH / 2;
     const halfLength = ROAD_LANE_MARKING_LENGTH / 2;
     const cx = x + 0.5;
