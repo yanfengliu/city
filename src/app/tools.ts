@@ -52,7 +52,7 @@ export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: str
     { id: 'wind', label: 'Wind ⚡', key: 'k', title: `Wind turbine ($300, 1x1): clean but small (40 units). Same ${UTILITY_BRIDGE_RADIUS}-cell connection rule` },
     { id: 'powerLine', label: 'Line', key: 'l', title: `Power line ($4/cell): takes no space and may cross roads/buildings. Anything within ${UTILITY_BRIDGE_RADIUS} cells connects` },
     { id: 'pump', label: 'Pump 💧', key: 'u', title: 'Water pump ($500): place on land RIGHT NEXT to water. Supplies 300 units through Pipes' },
-    { id: 'pipe', label: 'Pipe', key: 'j', title: `Water pipe ($3/cell): takes no space and runs underground. Anything within ${UTILITY_BRIDGE_RADIUS} cells of a pump-connected pipe gets water` },
+    { id: 'pipe', label: 'Pipe', key: 'j', title: `Water pipe ($3/new cell): runs underground across land, roads, buildings, and lakes. Anything within ${UTILITY_BRIDGE_RADIUS} cells of a pump-connected pipe gets water` },
   ],
 ];
 
@@ -197,6 +197,7 @@ export class Tools {
     if (cell) {
       this.refreshGhost(cell);
     } else if (!this.dragAnchor) {
+      if (this.retainedPipePreview?.submitted === false) this.retainedPipePreview = null;
       this.host.clearGhost();
     }
   }
@@ -228,6 +229,7 @@ export class Tools {
   cancelDrag(): void {
     if (!this.dragAnchor) return;
     this.dragAnchor = null;
+    this.retainedPipePreview = null;
     this.host.clearGhost();
   }
 

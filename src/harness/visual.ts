@@ -244,10 +244,11 @@ function visibleTextFromState(state: Record<string, unknown>): string[] {
       `pipe preview ${validity}: ${String(preview.selectedCellCount)} selected, ${String(preview.newCellCount)} new, ${String(preview.waterCellCount)} under water, ${phase}${reason}`,
     );
   }
-  const rejection = state.lastCommandRejection;
-  if (isRecord(rejection)) {
+  const commandSubmission = state.lastCommandSubmission;
+  if (isRecord(commandSubmission)) {
+    const status = commandSubmission.accepted === true ? 'queued' : 'rejected';
     out.push(
-      `last command rejected ${String(rejection.name)} at tick ${String(rejection.tick)}: ${String(rejection.message)}`,
+      `last command ${status} ${String(commandSubmission.name)} at tick ${String(commandSubmission.tick)}: ${String(commandSubmission.message)}`,
     );
   }
   const advisories = state.advisories;
@@ -265,7 +266,7 @@ function summarizeState(state: Record<string, unknown>): string {
   const summary = visible.slice(0, 8);
   for (const line of visible) {
     if (
-      (line.startsWith('pipe preview ') || line.startsWith('last command rejected ')) &&
+      (line.startsWith('pipe preview ') || line.startsWith('last command ')) &&
       !summary.includes(line)
     ) {
       summary.push(line);

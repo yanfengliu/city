@@ -21,7 +21,7 @@ export type GameSpeed = 0 | 1 | 2 | 4;
 export type CommandName = keyof CityCommands;
 
 export type CommandMessage = {
-  [K in CommandName]: { type: 'command'; name: K; data: CityCommands[K] };
+  [K in CommandName]: { type: 'command'; id?: number; name: K; data: CityCommands[K] };
 }[CommandName];
 
 export interface SaveMeta {
@@ -208,7 +208,15 @@ export type WorkerToClient =
       defaultValue: number;
       cells: Array<[index: number, value: number]>;
     }
-  | { type: 'commandRejected'; name: CommandName; message: string; tick: number }
+  | {
+      /** Validation-time queue admission; installed state remains authoritative. */
+      type: 'commandSubmissionResult';
+      id: number;
+      name: CommandName;
+      accepted: boolean;
+      message: string;
+      tick: number;
+    }
   /** Save response: the serialized world + metadata for persistence. */
   | { type: 'snapshot'; snapshot: unknown; meta: SaveMeta }
   /** Harness: a finding was recorded, anchored to `tick`. */

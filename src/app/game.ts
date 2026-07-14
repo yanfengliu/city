@@ -73,6 +73,7 @@ import type {
   ZoneType,
 } from '../sim/types';
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
+import { CommandFeedback } from './command-feedback';
 
 const HUD_REFRESH_MS = 250;
 /**
@@ -193,7 +194,7 @@ export class Game {
   private congestionBuckets: ReadonlyMap<number, number> = new Map();
   private employed = 0;
   private disconnectedTrips = 0;
-  private lastCommandRejection: { name: CommandName; message: string; tick: number } | null = null;
+  private readonly commandFeedback = new CommandFeedback();
   private ready = false;
   private readonly recordPlaytest: boolean;
 
@@ -334,7 +335,10 @@ export class Game {
   }
 
   private send(message: ClientToWorker): void {
-    if (message.type === 'command') this.lastCommandRejection = null;
+    if (message.type === 'command') {
+      this.worker.postMessage({ ...message, id: this.commandFeedback.dispatch() });
+      return;
+    }
     this.worker.postMessage(message);
   }
 
@@ -458,9 +462,9 @@ export class Game {
         this.power = message.stats.power;
         this.water = message.stats.water;
         break;
-      case 'commandRejected':
-        this.lastCommandRejection = message;
-        this.hud.showToast(`Command rejected: ${message.message}`);
+      case 'commandSubmissionResult':
+        if (!this.commandFeedback.receive(message)) break;
+        if (!message.accepted) this.hud.showToast(`Command rejected: ${message.message}`);
         break;
       case 'annotated':
         this.harnessFindings.push(recordedFindingFromCityFinding(message.finding, message.tick));
@@ -919,7 +923,7 @@ export class Game {
       pipeCellCount: this.pipeCells.size,
       waterPipeCellCount: [...this.pipeCells].filter((index) => this.terrain?.water[index] === 1).length,
       pipePreview: this.tools.pipePreview,
-      lastCommandRejection: this.lastCommandRejection,
+      lastCommandSubmission: this.commandFeedback.submission,
       levelUpsCelebrated: this.levelUpFx.celebrated,
       utilityIconsShown: this.utilityIconsFx.count,
       zonedCellCount: this.zonedCells.size,

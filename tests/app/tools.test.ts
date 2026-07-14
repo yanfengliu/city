@@ -162,4 +162,28 @@ describe('utility line ghosts', () => {
       rejectionReason: 'All selected cells already have pipes',
     });
   });
+
+  it('clears an active semantic pipe preview when the drag is cancelled', () => {
+    const tools = new Tools(host());
+    tools.setTool('pipe');
+    tools.pointerDown({ x: 1, y: 1 });
+    tools.pointerMove({ x: 3, y: 1 });
+    expect(tools.pipePreview).toMatchObject({ active: true, submitted: false });
+
+    tools.cancelDrag();
+
+    expect(tools.dragging).toBe(false);
+    expect(tools.pipePreview).toBeNull();
+  });
+
+  it('clears an idle pipe hover preview when the pointer leaves the map', () => {
+    const tools = new Tools(host());
+    tools.setTool('pipe');
+    tools.pointerMove({ x: 2, y: 2 });
+    expect(tools.pipePreview).toMatchObject({ active: false, submitted: false });
+
+    tools.pointerMove(null);
+
+    expect(tools.pipePreview).toBeNull();
+  });
 });

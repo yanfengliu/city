@@ -426,9 +426,10 @@ addEventListener('message', (event) => {
       break;
     case 'command': {
       const result = world.submitWithResult(message.name, message.data as never);
-      if (!result.accepted) {
-        post({ type: 'commandRejected', name: message.name, message: result.message, tick: world.tick });
-      }
+      post({
+        type: 'commandSubmissionResult', id: message.id ?? 0, name: message.name,
+        accepted: result.accepted, message: result.message, tick: world.tick,
+      });
       break;
     }
     case 'requestSnapshot':

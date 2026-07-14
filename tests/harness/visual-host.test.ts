@@ -157,7 +157,7 @@ describe('city visual playtest host', () => {
     }
   });
 
-  it('surfaces retained pipe previews, installed lake cells, and command rejections', () => {
+  it('surfaces retained pipe previews, installed lake cells, and queue submissions', () => {
     const { api } = stubHarness({
       pipeCellCount: 18,
       waterPipeCellCount: 6,
@@ -172,9 +172,11 @@ describe('city visual playtest host', () => {
         valid: true,
         rejectionReason: null,
       },
-      lastCommandRejection: {
+      lastCommandSubmission: {
+        id: 4,
         name: 'placePipe',
-        message: 'Validation failed',
+        accepted: true,
+        message: 'Queued command',
         tick: 3,
       },
     });
@@ -186,13 +188,28 @@ describe('city visual playtest host', () => {
         'pipe cells 18',
         'pipe cells under water 6',
         'pipe preview valid: 18 selected, 18 new, 6 under water, submitted',
-        'last command rejected placePipe at tick 3: Validation failed',
+        'last command queued placePipe at tick 3: Queued command',
       ]),
     );
     expect(observation.state?.[0]).toMatchObject({
       summary: expect.stringContaining('pipe preview valid'),
       value: expect.objectContaining({ pipeCellCount: 18, waterPipeCellCount: 6 }),
     });
+
+    const rejected = cityVisualObservation(
+      stubHarness({
+        lastCommandSubmission: {
+          id: 5,
+          name: 'placePipe',
+          accepted: false,
+          message: 'Validation failed',
+          tick: 4,
+        },
+      }).api,
+    );
+    expect(rejected.visibleText).toContain(
+      'last command rejected placePipe at tick 4: Validation failed',
+    );
   });
 
   it('advertises only supported canvas action kinds', () => {
