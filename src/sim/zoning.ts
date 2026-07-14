@@ -41,6 +41,7 @@ export function zoneEligible(sim: CitySim, x: number, y: number): boolean {
     sim.terrain.water[i] === 0 &&
     !sim.roadCells.has(i) &&
     !sim.occupiedCells.has(i) &&
+    !sim.zoneCells.has(i) &&
     nearRoad(sim, x, y)
   );
 }
@@ -89,15 +90,10 @@ export function registerZoneCommands(sim: CitySim): void {
     for (const cell of rectCells(data)) {
       if (!zoneEligible(sim, cell.x, cell.y)) continue;
       const i = cellIndex(cell.x, cell.y);
-      const existing = sim.zoneEntities.get(i);
-      if (existing !== undefined) {
-        w.setComponent(existing, 'zoneCell', { zone: data.zone });
-      } else {
-        const entity = w.createEntity();
-        w.setPosition(entity, { x: cell.x, y: cell.y });
-        w.addComponent(entity, 'zoneCell', { zone: data.zone });
-        sim.zoneEntities.set(i, entity);
-      }
+      const entity = w.createEntity();
+      w.setPosition(entity, { x: cell.x, y: cell.y });
+      w.addComponent(entity, 'zoneCell', { zone: data.zone });
+      sim.zoneEntities.set(i, entity);
     }
     refreshZones(sim);
     w.emit('zonesChanged', {});

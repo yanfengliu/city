@@ -34,12 +34,12 @@ export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: str
   [
     { id: 'road', label: 'Road', key: 'q', title: 'Drag to draw a road ($10/cell; $40 over water as a bridge). Buildings grow along roads; traffic drives on them' },
     { id: 'bulldoze', label: 'Bulldoze', key: 'b', title: 'Drag a rectangle to demolish roads, buildings, services, and utilities (25% road refund)' },
-    { id: 'dezone', label: 'Dezone', key: 'x', title: 'Drag a rectangle to erase zoning (does not touch grown buildings)' },
+    { id: 'dezone', label: 'Dezone', key: 'x', title: 'Drag a rectangle to erase zoning before painting a different zone (does not touch grown buildings)' },
   ],
   [
-    { id: 'zoneR', label: 'Zone R', key: 'r', title: 'Residential: homes grow here when demand is green. Zone within 2 cells of a road' },
-    { id: 'zoneC', label: 'Zone C', key: 'c', title: 'Commercial: shops with jobs. Zone within 2 cells of a road' },
-    { id: 'zoneI', label: 'Zone I', key: 'i', title: 'Industrial: jobs, but pollutes its surroundings. Keep away from homes' },
+    { id: 'zoneR', label: 'Zone R', key: 'r', title: 'Residential: homes grow here when demand is green. Paint within 2 cells of a road; Dezone existing cells first' },
+    { id: 'zoneC', label: 'Zone C', key: 'c', title: 'Commercial: shops with jobs. Paint within 2 cells of a road; Dezone existing cells first' },
+    { id: 'zoneI', label: 'Zone I', key: 'i', title: 'Industrial: jobs, but pollutes. Paint near roads and away from homes; Dezone existing cells first' },
   ],
   [
     { id: 'fire', label: 'Fire', key: 'f', title: 'Fire station ($400): raises land value within 24 cells' },
@@ -267,7 +267,7 @@ export class Tools {
     if (this.activeTool === 'dezone') {
       this.host.showGhost(
         cells,
-        cells.map((cell) => this.host.hasZone(cellIndex(cell.x, cell.y, this.host.gridWidth))),
+        cells.map((cell) => this.isDezoneable(cell)),
       );
       return;
     }
@@ -342,18 +342,14 @@ export class Tools {
    * (buildings, services, plants, pumps) blocks. Power line and pipe: thin
    * overlays that run over everything on land — only water blocks. Bulldoze:
    * needs ≥1 demolishable cell (road, building, structure, plant/pump, line,
-   * or pipe). Dezone: needs ≥1 zoned cell. Zone: needs ≥1 zoneable cell (land,
-   * non-road, within ZONE_MAX_ROAD_DISTANCE of a road).
+   * or pipe). Dezone: needs ≥1 zoned cell. Zone: needs ≥1 unzoned, zoneable
+   * cell (land, non-road, within ZONE_MAX_ROAD_DISTANCE of a road).
    */
   private isSelectionValid(cells: Cell[]): boolean {
     const index = (cell: Cell): number => cellIndex(cell.x, cell.y, this.host.gridWidth);
-    const occupiedByNonLine = (cell: Cell): boolean =>
-      this.host.hasBuilding(index(cell)) ||
-      this.host.hasStructure(index(cell)) ||
-      this.host.hasUtilityFootprint(index(cell));
     switch (this.activeTool) {
       case 'road':
-        return !cells.some(occupiedByNonLine);
+        return !cells.some((cell) => this.hasOccupyingEntity(cell));
       case 'powerLine':
         // A line is a thin overhead overlay (like a pipe): it runs over
         // everything on land and only water blocks it.
@@ -372,7 +368,7 @@ export class Tools {
             this.host.hasPipe(index(cell)),
         );
       case 'dezone':
-        return cells.some((cell) => this.host.hasZone(index(cell)));
+        return cells.some((cell) => this.isDezoneable(cell));
       case 'zoneR':
       case 'zoneC':
       case 'zoneI':
@@ -382,9 +378,24 @@ export class Tools {
     }
   }
 
+  private hasOccupyingEntity(cell: Cell): boolean {
+    const index = cellIndex(cell.x, cell.y, this.host.gridWidth);
+    return (
+      this.host.hasBuilding(index) ||
+      this.host.hasStructure(index) ||
+      this.host.hasUtilityFootprint(index)
+    );
+  }
+
+  private isDezoneable(cell: Cell): boolean {
+    const index = cellIndex(cell.x, cell.y, this.host.gridWidth);
+    return this.host.hasZone(index) && !this.hasOccupyingEntity(cell);
+  }
+
   private isZoneable(cell: Cell): boolean {
     if (this.host.isWater(cell.x, cell.y)) return false;
-    if (this.host.hasRoad(cellIndex(cell.x, cell.y, this.host.gridWidth))) return false;
+    const index = cellIndex(cell.x, cell.y, this.host.gridWidth);
+    if (this.host.hasRoad(index) || this.host.hasZone(index)) return false;
     return this.isNearRoad(cell);
   }
 

@@ -52,3 +52,47 @@ describe('special-building placement ghosts', () => {
     expect(utilityBlocked.footprintProblem([{ x: 2, y: 2 }])).toMatch(/bulldoze first/i);
   });
 });
+
+describe('zone painting ghosts', () => {
+  it('marks existing zones blocked while leaving empty nearby cells paintable', () => {
+    const showGhost = vi.fn();
+    const zoned = 2 + 2 * 8;
+    const road = 2 + 3 * 8;
+    const tools = new Tools(
+      host({
+        hasZone: (index) => index === zoned,
+        hasRoad: (index) => index === road,
+        showGhost,
+      }),
+    );
+    tools.setTool('zoneC');
+
+    tools.pointerDown({ x: 2, y: 2 });
+    tools.pointerMove({ x: 3, y: 2 });
+
+    expect(showGhost).toHaveBeenLastCalledWith(
+      [
+        { x: 2, y: 2 },
+        { x: 3, y: 2 },
+      ],
+      [false, true],
+      'C',
+    );
+  });
+
+  it('marks zoning under a grown building blocked for the dezone tool', () => {
+    const showGhost = vi.fn();
+    const tools = new Tools(
+      host({
+        hasZone: () => true,
+        hasBuilding: () => true,
+        showGhost,
+      }),
+    );
+    tools.setTool('dezone');
+
+    tools.pointerMove({ x: 2, y: 2 });
+
+    expect(showGhost).toHaveBeenLastCalledWith([{ x: 2, y: 2 }], [false]);
+  });
+});
