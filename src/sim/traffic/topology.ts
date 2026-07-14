@@ -1,5 +1,6 @@
 import { despawnVehicle } from './vehicles';
 import { refreshEdgeCounts } from './congestion';
+import { cancelPedestrian } from './pedestrians';
 import type { CitySim } from '../city';
 import type { CityWorld } from '../types';
 import type { RoadEdge, RoadGraph } from '../road/road-graph';
@@ -60,6 +61,15 @@ export function remapVehiclesAfterTopologyChange(
           c.waitUntil = w.tick + 128;
         });
       }
+    }
+  }
+  for (const id of [...w.query('pedestrianPath', 'pedestrian')].sort((a, b) => a - b)) {
+    const path = w.getComponent(id, 'pedestrianPath');
+    const motion = w.getComponent(id, 'pedestrian');
+    if (!path || !motion) continue;
+    const remaining = path.cells.slice(motion.segmentIndex);
+    if (remaining.some((cell) => !sim.roadCells.has(cell))) {
+      cancelPedestrian(w, id, path, true);
     }
   }
   refreshEdgeCounts(sim);

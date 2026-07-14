@@ -340,6 +340,22 @@ export const VEHICLE_LERP_DEFAULT_MS = 50;
 export const VEHICLE_LERP_MIN_MS = 15;
 export const VEHICLE_LERP_MAX_MS = 250;
 
+// Pedestrians (two instanced batches sharing one transform buffer).
+export const PEDESTRIAN_CAPACITY = 256;
+export const PEDESTRIAN_CURB_OFFSET = 0.3;
+export const PEDESTRIAN_Y = ROAD_SURFACE_Y + 0.01;
+export const PEDESTRIAN_BODY = { width: 0.12, height: 0.2, depth: 0.07, y: 0.26 } as const;
+export const PEDESTRIAN_LEG = {
+  width: 0.035, height: 0.16, depth: 0.04, x: 0.032, y: 0.08, stride: 0.025,
+} as const;
+export const PEDESTRIAN_HEAD = { radius: 0.065, y: 0.43 } as const;
+export const PEDESTRIAN_SKIN_COLOR = 0xd6a071;
+export const PEDESTRIAN_PURPOSE_COLORS = {
+  'commercial-work': 0x3478a8,
+  'industrial-work': 0xd8892b,
+  shopping: 0xb4548c,
+} as const;
+
 // Traffic overlay (road cells tinted by their edge's congestion bucket).
 export const TRAFFIC_OVERLAY_Y = 0.028;
 export const TRAFFIC_BUCKET_COLORS: readonly [number, number, number, number] = [

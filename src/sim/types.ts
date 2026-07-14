@@ -101,9 +101,13 @@ export interface TaxRates {
 export interface BudgetReport {
   income: number;
   expenses: number;
+  /** Commercial-tax portion earned from completed shopping visits. */
+  retailIncome: number;
 }
 
-export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome';
+export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome' | 'toShop' | 'atShop';
+
+export type PedestrianPurpose = 'commercial-work' | 'industrial-work' | 'shopping';
 
 export interface CitizenComponent {
   home: number;
@@ -111,6 +115,29 @@ export interface CitizenComponent {
   phase: TripPhase;
   /** Tick before which this citizen won't start the next trip leg. */
   waitUntil: number;
+  /** Defaults to work for snapshots created before pedestrian activities. */
+  nextActivity?: 'work' | 'shop';
+  /** Commercial destination retained through the at-shop wait and return leg. */
+  shop?: number | null;
+  /** Guards the shop assignment against entity-id reuse. */
+  shopGen?: number | null;
+}
+
+/** Immutable walking route; stored separately so tick diffs do not copy the path array. */
+export interface PedestrianPathComponent {
+  citizen: number;
+  citizenGen: number;
+  cells: number[];
+  destination: number;
+  destinationGen: number;
+  purpose: PedestrianPurpose;
+  outbound: boolean;
+}
+
+/** Small per-tick walking state for the segment between pathIndex and pathIndex + 1. */
+export interface PedestrianComponent {
+  segmentIndex: number;
+  t: number;
 }
 
 export interface VehicleLeg {
@@ -123,6 +150,10 @@ export interface VehicleComponent {
   citizen: number;
   /** Owner's entity generation at spawn — guards against id recycling. */
   citizenGen: number;
+  /** Work/home entity targeted by this leg; optional only for legacy snapshots. */
+  destination?: number;
+  /** Destination generation at spawn; paired with destination when present. */
+  destinationGen?: number;
   legs: VehicleLeg[];
   legIndex: number;
   /** Progress along the current edge in [0, 1). */
@@ -166,6 +197,9 @@ export type CityComponents = {
   pipe: Record<string, never>;
   /** Water pump (1x1) marker — occupies its cell; capacity source for the water network. */
   waterPump: Record<string, never>;
+  /** Appended for save/replay registration compatibility. */
+  pedestrianPath: PedestrianPathComponent;
+  pedestrian: PedestrianComponent;
 };
 
 export type CityCommands = {
@@ -201,7 +235,7 @@ export type CityEvents = {
   /** Any plant/turbine/line/pump/pipe was placed or bulldozed. */
   utilitiesChanged: Record<string, never>;
   /** One budget interval settled (income and expenses already applied). */
-  budget: { income: number; expenses: number };
+  budget: BudgetReport;
 };
 
 export type CityState = {
@@ -216,6 +250,10 @@ export type CityState = {
   mirrorEntity: number;
   /** Per-zone tax rates (integer percent, default DEFAULT_TAX_RATE). */
   taxRates: TaxRates;
+  /** Shopping visits awaiting the next budget settlement. */
+  pendingRetailVisits: number;
+  /** Lifetime completed shopping arrivals, exposed to playtest surfaces. */
+  completedShoppingTrips: number;
 };
 
 export type CityWorld = World<CityEvents, CityCommands, CityComponents, CityState>;

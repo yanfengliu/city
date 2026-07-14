@@ -19,6 +19,8 @@ interface RecorderRun {
     tick: number;
     buildingCount: number;
     vehicles: number;
+    pedestrians: number;
+    completedShoppingTrips: number;
     populationPeople: number;
   };
 }
@@ -129,15 +131,17 @@ describe('committed recorder benchmark evidence', () => {
     expect(new Set(result.runs.map((run) => JSON.stringify(run.final))).size).toBe(1);
     expect(result.runs[0]?.final).toEqual({
       tick: 3002,
-      buildingCount: 596,
-      vehicles: 74,
-      populationPeople: 1629,
+      buildingCount: 618,
+      vehicles: 59,
+      pedestrians: 102,
+      completedShoppingTrips: 604,
+      populationPeople: 1557,
     });
     expect(result.runs.filter((run) => run.label === 'lean').every(
       (run) => run.bundleJsonBytes === 0,
     )).toBe(true);
     expect(result.runs.filter((run) => run.label === 'recorded').every(
-      (run) => run.bundleJsonBytes > 73_000_000,
+      (run) => run.bundleJsonBytes > 70_000_000,
     )).toBe(true);
   });
 });

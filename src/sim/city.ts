@@ -23,6 +23,7 @@ import { budgetSystem, registerEconomyCommands, taxDemandPenaltyOf, taxPenaltyOf
 import { employmentSystem, unassignWorkers } from './employment';
 import { tripSystem } from './traffic/trips';
 import { vehicleSystem } from './traffic/vehicles';
+import { pedestrianSystem } from './traffic/pedestrians';
 import {
   congestionSystem,
   readCongestionMirror,
@@ -131,6 +132,7 @@ export interface CitySim {
   /** Bumps on topology change or congestion requantization; keys path caching. */
   pathVersion: number;
   pathCache: Map<string, { version: number; nodes: number[] | null }>;
+  pedestrianPathCache: Map<string, { version: number; cells: number[] | null }>;
   adjacencyCache: { version: number; map: Map<number, AdjacencyList> } | null;
 }
 
@@ -208,6 +210,8 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.registerComponent('powerLine');
   world.registerComponent('pipe');
   world.registerComponent('waterPump');
+  world.registerComponent('pedestrianPath');
+  world.registerComponent('pedestrian');
 
   // -- world state --
   world.setState('treasury', STARTING_TREASURY);
@@ -216,6 +220,8 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.setState('disconnectedTrips', 0);
   world.setState('tripCursor', 0);
   world.setState('taxRates', { r: DEFAULT_TAX_RATE, c: DEFAULT_TAX_RATE, i: DEFAULT_TAX_RATE });
+  world.setState('pendingRetailVisits', 0);
+  world.setState('completedShoppingTrips', 0);
 
   // Singleton mirror entity (see CityComponents.congestionMirror).
   const fields = createCityFields(terrain);
@@ -245,6 +251,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
     edgeBuckets: new Map(),
     pathVersion: 0,
     pathCache: new Map(),
+    pedestrianPathCache: new Map(),
     adjacencyCache: null,
   };
   // Phase 4: real field-driven desirability inputs replace the neutral seam.
@@ -271,7 +278,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
 
   // Abandoned workplaces shed their workers (listener avoids an import cycle
   // between buildings.ts and employment.ts; runs synchronously at emit).
-  world.on('buildingAbandoned', ({ entity }) => unassignWorkers(world, entity));
+  world.on('buildingAbandoned', ({ entity }) => unassignWorkers(sim, world, entity));
 
   // -- systems --
   world.registerSystem({
@@ -366,6 +373,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
     interval: BUDGET_INTERVAL_TICKS,
     intervalOffset: BUDGET_INTERVAL_OFFSET,
   });
+  world.registerSystem({ name: 'pedestrians', phase: 'update', execute: pedestrianSystem(sim) });
 
   world.endSetup();
   return sim;

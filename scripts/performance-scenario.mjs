@@ -37,6 +37,9 @@ export function cityCounts(sim) {
     tick: sim.world.tick,
     buildingCount: [...sim.world.query('building')].length,
     vehicles: [...sim.world.query('vehicle')].length,
+    pedestrians: [...sim.world.query('pedestrian')].length,
+    completedShoppingTrips:
+      /** @type {number | undefined} */ (sim.world.getState('completedShoppingTrips')) ?? 0,
     populationPeople: [...sim.world.query('citizen')].length * 3,
   };
 }

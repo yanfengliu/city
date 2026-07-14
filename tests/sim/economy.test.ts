@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { createCitySim, getTreasury } from '../../src/sim/city';
 import { BUDGET_INTERVAL_TICKS } from '../../src/sim/constants/map';
-import { MAX_TAX_RATE } from '../../src/sim/constants/economy';
+import { MAX_TAX_RATE, RETAIL_SPEND_PER_VISIT } from '../../src/sim/constants/economy';
 import { buildDistrict, findLandBlock } from './helpers';
 import type { CitySim } from '../../src/sim/city';
-import type { DemandState } from '../../src/sim/types';
+import type { BudgetReport, CityState, DemandState } from '../../src/sim/types';
+
+type RetailCounterState = Pick<
+  CityState,
+  'pendingRetailVisits' | 'completedShoppingTrips'
+>;
 
 function grownTown(seed: number, taxRate?: number): CitySim {
   const sim = createCitySim({ seed });
@@ -17,6 +22,30 @@ function grownTown(seed: number, taxRate?: number): CitySim {
     }
   }
   return sim;
+}
+
+function nextBudgetReport(sim: CitySim): BudgetReport {
+  let captured: BudgetReport | undefined;
+  const listener = (report: BudgetReport): void => {
+    captured = report;
+  };
+  sim.world.on('budget', listener);
+  try {
+    for (let i = 0; i <= BUDGET_INTERVAL_TICKS; i++) {
+      sim.world.step();
+      if (captured !== undefined) return captured;
+    }
+    throw new Error('budget interval elapsed without a budget report');
+  } finally {
+    sim.world.off('budget', listener);
+  }
+}
+
+function retailCounters(sim: CitySim): RetailCounterState {
+  return {
+    pendingRetailVisits: sim.world.getState('pendingRetailVisits') as number,
+    completedShoppingTrips: sim.world.getState('completedShoppingTrips') as number,
+  };
 }
 
 describe('budget', () => {
@@ -56,5 +85,72 @@ describe('budget', () => {
     expect(sim.world.submit('setTaxRate', { zone: 'R', rate: 21 })).toBe(false);
     expect(sim.world.submit('setTaxRate', { zone: 'R', rate: -1 })).toBe(false);
     expect(sim.world.submit('setTaxRate', { zone: 'R', rate: 15 })).toBe(true);
+  });
+});
+
+describe('retail budget', () => {
+  it('initializes pending and completed shopping counters at zero', () => {
+    const sim = createCitySim({ seed: 7 });
+
+    expect(retailCounters(sim)).toEqual({
+      pendingRetailVisits: 0,
+      completedShoppingTrips: 0,
+    });
+  });
+
+  it('settles pending visits once as separately reported commercial-tax income', () => {
+    const sim = createCitySim({ seed: 7 });
+    const visits = 7;
+    const commercialTaxRate = 13;
+    expect(sim.world.submit('setTaxRate', { zone: 'C', rate: commercialTaxRate })).toBe(true);
+    sim.world.runMaintenance(() => {
+      sim.world.setState('pendingRetailVisits', visits);
+      sim.world.setState('completedShoppingTrips', visits);
+    });
+    const before = getTreasury(sim.world);
+    const expectedRetailIncome =
+      visits * RETAIL_SPEND_PER_VISIT * (commercialTaxRate / 100);
+
+    const first = nextBudgetReport(sim);
+
+    expect(first.retailIncome).toBeCloseTo(expectedRetailIncome, 10);
+    expect(first.income).toBeCloseTo(expectedRetailIncome, 10);
+    expect(getTreasury(sim.world) - before).toBeCloseTo(expectedRetailIncome, 10);
+    expect(retailCounters(sim)).toEqual({
+      pendingRetailVisits: 0,
+      completedShoppingTrips: visits,
+    });
+
+    const beforeSecondSettlement = getTreasury(sim.world);
+    const second = nextBudgetReport(sim);
+
+    expect(second.retailIncome).toBe(0);
+    expect(second.income).toBe(0);
+    expect(getTreasury(sim.world)).toBe(beforeSecondSettlement);
+    expect(retailCounters(sim)).toEqual({
+      pendingRetailVisits: 0,
+      completedShoppingTrips: visits,
+    });
+  });
+
+  it('consumes pending visits without retail income when commercial tax is zero', () => {
+    const sim = createCitySim({ seed: 7 });
+    const visits = 5;
+    expect(sim.world.submit('setTaxRate', { zone: 'C', rate: 0 })).toBe(true);
+    sim.world.runMaintenance(() => {
+      sim.world.setState('pendingRetailVisits', visits);
+      sim.world.setState('completedShoppingTrips', visits);
+    });
+    const before = getTreasury(sim.world);
+
+    const report = nextBudgetReport(sim);
+
+    expect(report.retailIncome).toBe(0);
+    expect(report.income).toBe(0);
+    expect(getTreasury(sim.world)).toBe(before);
+    expect(retailCounters(sim)).toEqual({
+      pendingRetailVisits: 0,
+      completedShoppingTrips: visits,
+    });
   });
 });

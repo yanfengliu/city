@@ -2,6 +2,7 @@ import {
   BRIDGE_UPKEEP_PER_CELL,
   MAX_TAX_RATE,
   MIN_TAX_RATE,
+  RETAIL_SPEND_PER_VISIT,
   ROAD_UPKEEP_PER_CELL,
   TAX_BASE,
   TAX_DEMAND_PENALTY_PER_POINT,
@@ -73,7 +74,11 @@ export function registerEconomyCommands(sim: CitySim): void {
  */
 export function budgetSystem(sim: CitySim): (w: CityWorld) => void {
   return (w) => {
-    let income = 0;
+    const pendingRetailVisits =
+      (w.getState('pendingRetailVisits') as number | undefined) ?? 0;
+    const retailIncome =
+      pendingRetailVisits * RETAIL_SPEND_PER_VISIT * (taxRateOf(w, 'C') / 100);
+    let income = retailIncome;
     // Sorted iteration: float accumulation order is part of determinism.
     for (const id of [...w.query('building')].sort((a, b) => a - b)) {
       const building = w.getComponent(id, 'building');
@@ -107,7 +112,8 @@ export function budgetSystem(sim: CitySim): (w: CityWorld) => void {
       ROAD_UPKEEP_PER_CELL * (sim.roadCells.size - bridgeCells) +
       BRIDGE_UPKEEP_PER_CELL * bridgeCells;
 
+    w.setState('pendingRetailVisits', 0);
     w.setState('treasury', treasury(w) + income - expenses);
-    w.emit('budget', { income, expenses });
+    w.emit('budget', { income, expenses, retailIncome });
   };
 }

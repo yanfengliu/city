@@ -37,12 +37,8 @@ function adjacency(sim: CitySim): Map<number, AdjacencyEntry[]> {
   return map;
 }
 
-/**
- * The road-graph node a building connects to: first road cell 4-adjacent to
- * its footprint (deterministic scan order), resolved to a graph node via the
- * cell's containing edge. Null when the building has no road access.
- */
-export function buildingAccessNode(sim: CitySim, building: number): number | null {
+/** First road cell 4-adjacent to a building footprint, in deterministic scan order. */
+export function buildingAccessCell(sim: CitySim, building: number): number | null {
   const data = sim.world.getComponent(building, 'building');
   const position = sim.world.getComponent(building, 'position');
   if (!data || !position) return null;
@@ -57,13 +53,22 @@ export function buildingAccessNode(sim: CitySim, building: number): number | nul
     ]) {
       if (!inBounds(nx, ny, GRID_WIDTH, GRID_HEIGHT)) continue;
       const road = cellIndex(nx, ny);
-      if (!sim.roadCells.has(road)) continue;
-      if (sim.roadGraph.nodes.has(road)) return road;
-      const edgeId = sim.roadGraph.cellToEdge.get(road);
-      if (edgeId !== undefined) return sim.roadGraph.edges[edgeId].a;
+      if (sim.roadCells.has(road)) return road;
     }
   }
   return null;
+}
+
+/**
+ * Vehicle graph node for a building's exact access cell. Interior edge cells
+ * resolve to an endpoint; pedestrians deliberately keep the exact cell.
+ */
+export function buildingAccessNode(sim: CitySim, building: number): number | null {
+  const road = buildingAccessCell(sim, building);
+  if (road === null) return null;
+  if (sim.roadGraph.nodes.has(road)) return road;
+  const edgeId = sim.roadGraph.cellToEdge.get(road);
+  return edgeId === undefined ? null : sim.roadGraph.edges[edgeId].a;
 }
 
 function manhattan(a: number, b: number): number {
@@ -101,6 +106,53 @@ export function findNodePath(sim: CitySim, from: number, to: number): number[] |
   const nodes = result ? result.path : null;
   sim.pathCache.set(key, { version: sim.pathVersion, nodes });
   return nodes;
+}
+
+const CELL_DIRECTIONS = [
+  [0, -1],
+  [-1, 0],
+  [1, 0],
+  [0, 1],
+] as const;
+
+/** Exact road-cell path between two buildings, cached only by topology version. */
+export function findRoadCellPath(
+  sim: CitySim,
+  fromBuilding: number,
+  toBuilding: number,
+): number[] | null {
+  const from = buildingAccessCell(sim, fromBuilding);
+  const to = buildingAccessCell(sim, toBuilding);
+  if (from === null || to === null) return null;
+  if (from === to) return [from];
+  const key = `${from}:${to}`;
+  const cached = sim.pedestrianPathCache.get(key);
+  if (cached?.version === sim.topologyVersion) return cached.cells;
+
+  const result = findPath<number>({
+    start: from,
+    goal: to,
+    neighbors: (cell) => {
+      const x = cell % GRID_WIDTH;
+      const y = Math.floor(cell / GRID_WIDTH);
+      const out: number[] = [];
+      for (const [dx, dy] of CELL_DIRECTIONS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!inBounds(nx, ny, GRID_WIDTH, GRID_HEIGHT)) continue;
+        const next = cellIndex(nx, ny);
+        if (sim.roadCells.has(next)) out.push(next);
+      }
+      return out;
+    },
+    cost: () => 1,
+    heuristic: (cell, goal) => manhattan(cell, goal),
+    hash: (cell) => cell,
+    maxIterations: PATH_MAX_ITERATIONS,
+  });
+  const cells = result ? result.path : null;
+  sim.pedestrianPathCache.set(key, { version: sim.topologyVersion, cells });
+  return cells;
 }
 
 /** Converts a node path into edge legs (cheapest edge per hop, with direction). */

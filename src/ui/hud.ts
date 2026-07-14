@@ -87,6 +87,7 @@ export interface HudState<TTool extends string> {
   activeOverlay: OverlayName;
   /** Live vehicle count from the sim's frame stats. */
   vehicles: number;
+  pedestrians: number;
   /** Cumulative trips that found no route — shows a warning badge when > 0. */
   disconnectedTrips: number;
   /** Installed capacity vs total building load per utility (the HUD meters). */
@@ -192,7 +193,7 @@ export class Hud<TTool extends string> {
     this.root.appendChild(this.populationEl);
 
     this.vehiclesEl = document.createElement('span');
-    this.vehiclesEl.title = 'Vehicles on the road';
+    this.vehiclesEl.title = 'Vehicles and pedestrians on the street';
     this.root.appendChild(this.vehiclesEl);
 
     this.powerEl = document.createElement('span');
@@ -423,7 +424,7 @@ export class Hud<TTool extends string> {
   update(state: HudState<TTool>): void {
     this.treasuryEl.textContent = formatTreasury(state.treasury);
     this.populationEl.textContent = `👤 ${state.populationPeople.toLocaleString('en-US')} · ${state.cityTitle}`;
-    this.vehiclesEl.textContent = `🚗 ${state.vehicles.toLocaleString('en-US')}`;
+    this.vehiclesEl.textContent = `🚗 ${state.vehicles.toLocaleString('en-US')} · 🚶 ${state.pedestrians.toLocaleString('en-US')}`;
     this.renderUtilityMeter(this.powerEl, '⚡', 'Power', state.power);
     this.renderUtilityMeter(this.waterEl, '💧', 'Water', state.water);
     const warnings: string[] = [];

@@ -47,7 +47,7 @@ export function bulldozeGrowableBuildings(
     const building = w.getComponent(id, 'building');
     const position = w.getComponent(id, 'position');
     evictCitizens(w, id);
-    unassignWorkers(w, id);
+    unassignWorkers(sim, w, id);
     if (building && position) {
       for (const cell of footprintCells(position.x, position.y, building.w, building.h)) {
         if (sim.occupiedCells.get(cell) === id) sim.occupiedCells.delete(cell);

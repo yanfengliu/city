@@ -88,6 +88,7 @@ export function refreshRoads(sim: CitySim, w?: CityWorld): void {
   sim.topologyVersion += 1;
   sim.pathVersion += 1;
   sim.pathCache.clear();
+  sim.pedestrianPathCache.clear();
   sim.adjacencyCache = null;
   if (w) {
     remapVehiclesAfterTopologyChange(sim, w, oldKeys);

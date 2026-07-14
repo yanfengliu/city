@@ -21,6 +21,8 @@ export interface SimSummary {
   citizens: number;
   employed: number;
   vehicles: number;
+  pedestrians: number;
+  completedShoppingTrips: number;
   roadCells: number;
   structures: number;
   disconnectedTrips: number;
@@ -61,6 +63,9 @@ export function simSummary(world: CityWorld): SimSummary {
     citizens,
     employed,
     vehicles: [...world.query('vehicle')].length,
+    pedestrians: [...world.query('pedestrian')].length,
+    completedShoppingTrips:
+      (world.getState('completedShoppingTrips') as number | undefined) ?? 0,
     roadCells: [...world.query('roadCell')].length,
     structures: [...world.query('structure')].length,
     disconnectedTrips: (world.getState('disconnectedTrips') as number | undefined) ?? 0,
@@ -75,7 +80,7 @@ export function summaryLine(s: SimSummary): string {
   return (
     `t${s.tick} pop${s.population} $${Math.round(s.treasury)} ` +
     `bld${b.total}(R${b.byZone.R}/C${b.byZone.C}/I${b.byZone.I} L${b.byLevel.join('/')} ab${b.abandoned}) ` +
-    `emp${s.employed}/${s.citizens} veh${s.vehicles} road${s.roadCells} svc${s.structures} ` +
+    `emp${s.employed}/${s.citizens} veh${s.vehicles} walk${s.pedestrians} shop${s.completedShoppingTrips} road${s.roadCells} svc${s.structures} ` +
     `dem[r${r2(d.r)} c${r2(d.c)} i${r2(d.i)}] disc${s.disconnectedTrips}`
   );
 }

@@ -11,12 +11,12 @@ import { utilityTotals } from '../sim/utilities';
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 import { cellIndex } from '../sim/grid';
 import { projectRenderComponentRemovals } from './diff-projection';
+import { MovingAgentMessageSync } from './pedestrian-projection';
 import type {
   BuildingView,
   ClientToWorker,
   GameSpeed,
   StructureView,
-  VehicleView,
   WorkerToClient,
 } from '../protocol/messages';
 import type {
@@ -86,6 +86,7 @@ function swapWorld(snapshot: Parameters<typeof world.applySnapshot>[0], seed: nu
   // not the previous city's until the next 8-tick recompute.
   cachedEmployed = -1;
   cachedUtilityTotals = { power: { supply: 0, demand: 0 }, water: { supply: 0, demand: 0 } };
+  lastBudget = { income: 0, expenses: 0, retailIncome: 0 };
   attachWorldListeners();
   startRecorder();
   postBootSync();
@@ -98,9 +99,9 @@ let speed: GameSpeed = 1;
 let sentTopologyVersion = -1;
 let zonesDirty = true;
 let trafficDirty = false;
-let hadVehicles = false;
 let networksDirty = true;
-let lastBudget: BudgetReport = { income: 0, expenses: 0 };
+let lastBudget: BudgetReport = { income: 0, expenses: 0, retailIncome: 0 };
+const movingAgentMessages = new MovingAgentMessageSync();
 const subscribedFields = new Set<FieldName>();
 const dirtyFields = new Set<FieldName>();
 const knownStructures = new Set<number>();
@@ -283,7 +284,7 @@ function postBootSync(): void {
   sentTopologyVersion = -1;
   zonesDirty = true;
   networksDirty = true;
-  hadVehicles = false;
+  movingAgentMessages.resetAndSync(world, sim.topologyVersion, post);
   postRoadsIfChanged();
   postZonesIfChanged();
   postNetworksIfChanged();
@@ -332,19 +333,8 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
     post({ type: 'structures', upserts: structureUpserts, removed: structuresRemoved });
   }
 
-  const vehicles: VehicleView[] = [];
-  for (const id of world.query('vehicle')) {
-    const data = world.getComponent(id, 'vehicle');
-    if (!data || data.legIndex >= data.legs.length) continue;
-    const leg = data.legs[data.legIndex];
-    vehicles.push({
-      id,
-      generation: world.getEntityGeneration(id),
-      edge: leg.edge,
-      t: data.t,
-      reverse: leg.reverse,
-    });
-  }
+  const movingAgents = movingAgentMessages.sync(world, sim.topologyVersion, post);
+  const { vehicles, pedestrians } = movingAgents;
   // O(population)/O(buildings) scans — refresh on a small cadence, not every tick.
   if (world.tick % EMPLOYED_STAT_INTERVAL === 0 || cachedEmployed < 0) {
     cachedEmployed = 0;
@@ -355,11 +345,6 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
     cachedUtilityTotals = utilityTotals(world);
   }
   const employed = cachedEmployed;
-  if (vehicles.length > 0 || hadVehicles) {
-    post({ type: 'vehicles', topologyVersion: sim.topologyVersion, list: vehicles });
-  }
-  hadVehicles = vehicles.length > 0;
-
   if (trafficDirty) {
     trafficDirty = false;
     post({
@@ -384,7 +369,10 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
       treasury: getTreasury(world),
       demand: (world.getState('demand') as DemandState | undefined) ?? { r: 0, c: 0, i: 0 },
       vehicles: vehicles.length,
+      pedestrians: pedestrians.length,
       employed,
+      completedShoppingTrips:
+        (world.getState('completedShoppingTrips') as number | undefined) ?? 0,
       disconnectedTrips: (world.getState('disconnectedTrips') as number | undefined) ?? 0,
       taxRates: (world.getState('taxRates') as TaxRates | undefined) ?? {
         r: DEFAULT_TAX_RATE,

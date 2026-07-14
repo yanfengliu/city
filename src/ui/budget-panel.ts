@@ -30,6 +30,7 @@ function money(value: number): string {
 export class BudgetPanel {
   private readonly root: HTMLDivElement;
   private readonly incomeEl: HTMLSpanElement;
+  private readonly retailEl: HTMLSpanElement;
   private readonly expensesEl: HTMLSpanElement;
   private readonly netEl: HTMLSpanElement;
   private readonly sliders = new Map<keyof TaxRates, HTMLInputElement>();
@@ -69,6 +70,7 @@ export class BudgetPanel {
       return value;
     };
     this.incomeEl = mkLine('Income / interval');
+    this.retailEl = mkLine('Retail tax');
     this.expensesEl = mkLine('Expenses / interval');
     this.netEl = mkLine('Net');
     this.root.appendChild(report);
@@ -131,6 +133,8 @@ export class BudgetPanel {
     if (!this.visible) return;
     this.incomeEl.textContent = money(budget.income);
     this.incomeEl.style.color = HUD_POSITIVE_TEXT;
+    this.retailEl.textContent = money(budget.retailIncome);
+    this.retailEl.style.color = HUD_POSITIVE_TEXT;
     this.expensesEl.textContent = money(budget.expenses);
     this.expensesEl.style.color = HUD_NEGATIVE_TEXT;
     const net = budget.income - budget.expenses;

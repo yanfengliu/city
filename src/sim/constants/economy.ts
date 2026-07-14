@@ -14,6 +14,8 @@ export const ROAD_BULLDOZE_REFUND = 0.25;
 export const BUDGET_INTERVAL_OFFSET = 1023;
 /** Income per building = taxRate/100 x TAX_BASE x level x footprint cells. */
 export const TAX_BASE: Record<ZoneType, number> = { R: 20, C: 30, I: 30 };
+/** Pre-tax household spend credited on one completed commercial visit. */
+export const RETAIL_SPEND_PER_VISIT = 25;
 /** Road upkeep per land cell per budget interval (the authoritative value). */
 export const ROAD_UPKEEP_PER_CELL = 0.1;
 /** Bridge upkeep per water road cell per budget interval. */

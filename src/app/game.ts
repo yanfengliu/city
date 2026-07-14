@@ -16,6 +16,7 @@ import { buildTerrainMesh } from '../rendering/terrain-mesh';
 import { TerrainSurface } from '../rendering/terrain-surface';
 import { TreesView } from '../rendering/trees';
 import { VehiclesView } from '../rendering/vehicles-mesh';
+import { PedestriansView } from '../rendering/pedestrians-mesh';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { BudgetPanel } from '../ui/budget-panel';
@@ -48,6 +49,7 @@ import type {
   ClientToWorker,
   CommandName,
   GameSpeed,
+  PedestrianPurpose,
   StructureView,
   TerrainPayload,
   WorkerToClient,
@@ -115,6 +117,7 @@ export class Game {
   private readonly zonesView: ZonesView;
   private readonly buildingsView: BuildingsView;
   private readonly vehiclesView: VehiclesView;
+  private readonly pedestriansView: PedestriansView;
   private readonly structuresView: StructuresView;
   private readonly fieldOverlay: FieldOverlayView;
   private readonly trafficOverlay: TrafficOverlayView;
@@ -160,11 +163,19 @@ export class Game {
   private speed: GameSpeed = 1;
   private treasury = 0;
   private taxRates: TaxRates = { r: DEFAULT_TAX_RATE, c: DEFAULT_TAX_RATE, i: DEFAULT_TAX_RATE };
-  private lastBudget: BudgetReport = { income: 0, expenses: 0 };
+  private lastBudget: BudgetReport = { income: 0, expenses: 0, retailIncome: 0 };
   private power = { supply: 0, demand: 0 };
   private water = { supply: 0, demand: 0 };
   private vehicles = 0;
   private vehiclesOnScreen = 0;
+  private pedestrians = 0;
+  private pedestriansOnScreen = 0;
+  private completedShoppingTrips = 0;
+  private pedestrianPurposes: Record<PedestrianPurpose, number> = {
+    'commercial-work': 0,
+    'industrial-work': 0,
+    shopping: 0,
+  };
   /** Last celebrated city rank (index into CITY_TITLES); -1 until first refresh. */
   private lastRank = -1;
   // Playtest harness (docs/harness.md): findings recorded this session, plus the
@@ -220,6 +231,7 @@ export class Game {
     this.zonesView = new ZonesView(GRID_WIDTH);
     this.buildingsView = new BuildingsView();
     this.vehiclesView = new VehiclesView(GRID_WIDTH);
+    this.pedestriansView = new PedestriansView(GRID_WIDTH);
     this.structuresView = new StructuresView();
     this.fieldOverlay = new FieldOverlayView(GRID_WIDTH, GRID_HEIGHT);
     this.trafficOverlay = new TrafficOverlayView(GRID_WIDTH);
@@ -232,6 +244,7 @@ export class Game {
       this.zonesView.group,
       this.buildingsView.group,
       this.vehiclesView.mesh,
+      this.pedestriansView.group,
       this.structuresView.group,
       this.fieldOverlay.mesh,
       this.trafficOverlay.mesh,
@@ -246,6 +259,7 @@ export class Game {
     this.scene.onFrame((now) => {
       this.flushDirtyViews();
       this.vehiclesView.updateFrame(now);
+      this.pedestriansView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
       this.utilityIconsFx.updateFrame(now, this.scene.camera.quaternion);
       // Day/night cycle: the sun orbits with game time (phase-offset so boot is
@@ -338,6 +352,7 @@ export class Game {
         this.zonesView.setTerrainSurface(surface);
         this.buildingsView.setTerrainSurface(surface);
         this.vehiclesView.setTerrainSurface(surface);
+        this.pedestriansView.setTerrainSurface(surface);
         this.structuresView.setTerrainSurface(surface);
         this.fieldOverlay.setTerrainSurface(surface);
         this.trafficOverlay.setTerrainSurface(surface);
@@ -407,6 +422,12 @@ export class Game {
         this.vehiclesOnScreen = message.list.length;
         this.vehiclesView.setVehicles(message.topologyVersion, message.list);
         break;
+      case 'pedestrians':
+        this.pedestriansView.setPedestrians(message.list);
+        this.pedestriansOnScreen = this.pedestriansView.count;
+        this.pedestrianPurposes = { 'commercial-work': 0, 'industrial-work': 0, shopping: 0 };
+        for (const pedestrian of message.list) this.pedestrianPurposes[pedestrian.purpose]++;
+        break;
       case 'traffic': {
         const buckets = new Map(message.edges.map((edge) => [edge.id, edge.bucket]));
         this.congestionBuckets = buckets;
@@ -425,7 +446,9 @@ export class Game {
         this.citizens = message.stats.citizens;
         this.demand = message.stats.demand;
         this.vehicles = message.stats.vehicles;
+        this.pedestrians = message.stats.pedestrians;
         this.employed = message.stats.employed;
+        this.completedShoppingTrips = message.stats.completedShoppingTrips;
         if (message.stats.disconnectedTrips > this.disconnectedTrips) {
           this.lastDisconnectAt = performance.now();
         }
@@ -683,6 +706,7 @@ export class Game {
       activeTool: this.tools.activeTool,
       activeOverlay: this.activeOverlay,
       vehicles: this.vehicles,
+      pedestrians: this.pedestrians,
       disconnectedTrips: this.disconnectedTrips,
       power: this.power,
       water: this.water,
@@ -873,7 +897,11 @@ export class Game {
       advisories: this.advisor.current(),
       treasury: this.treasury,
       taxRates: this.taxRates,
-      lastBudget: { income: round2(this.lastBudget.income), expenses: round2(this.lastBudget.expenses) },
+      lastBudget: {
+        income: round2(this.lastBudget.income),
+        expenses: round2(this.lastBudget.expenses),
+        retailIncome: round2(this.lastBudget.retailIncome),
+      },
       budgetPanelOpen: this.budgetPanel.visible,
       power: this.power,
       water: this.water,
@@ -891,6 +919,10 @@ export class Game {
       buildingCount: this.buildings.size,
       structureCount: this.structures.size,
       vehiclesOnScreen: this.vehiclesOnScreen,
+      pedestrians: this.pedestrians,
+      pedestriansOnScreen: this.pedestriansOnScreen,
+      pedestrianPurposes: this.pedestrianPurposes,
+      completedShoppingTrips: this.completedShoppingTrips,
       employed: this.employed,
       disconnectedTrips: this.disconnectedTrips,
       congestion: this.congestionTextState(),

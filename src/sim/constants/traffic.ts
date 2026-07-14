@@ -1,4 +1,6 @@
 export const MAX_VEHICLES = 600;
+/** Bounded visible household-member walkers; independent of vehicle capacity. */
+export const MAX_PEDESTRIANS = 256;
 
 export const TRIP_INTERVAL = 8;
 export const TRIP_INTERVAL_OFFSET = 2;
@@ -11,6 +13,10 @@ export const EMPLOYMENT_ASSIGNMENTS_PER_RUN = 32;
 
 /** Cells per tick on an empty road (≈50 km/h at 8 m cells, 20 TPS). */
 export const VEHICLE_BASE_SPEED = 0.35;
+/** Gameplay-compressed walking speed in road cells per tick. */
+export const PEDESTRIAN_BASE_SPEED = 0.08;
+/** Work routes at or below this many road cells walk instead of spawning a car. */
+export const PEDESTRIAN_WORK_MAX_CELLS = 24;
 /** Speed multiplier lost per congestion bucket, floored at MIN_SPEED_FACTOR. */
 export const CONGESTION_SLOWDOWN_PER_BUCKET = 0.25;
 export const MIN_SPEED_FACTOR = 0.25;
@@ -28,5 +34,8 @@ export const WORK_WAIT_BASE = 64;
 export const WORK_WAIT_VARIANCE = 64;
 export const HOME_COOLDOWN_BASE = 256;
 export const HOME_COOLDOWN_VARIANCE = 256;
+export const SHOP_WAIT_BASE = 48;
+export const SHOP_WAIT_VARIANCE = 32;
+export const TRIP_RETRY_TICKS = 128;
 
 export const PATH_MAX_ITERATIONS = 20000;

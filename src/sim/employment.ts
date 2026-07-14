@@ -1,22 +1,33 @@
 import { EMPLOYMENT_ASSIGNMENTS_PER_RUN } from './constants/traffic';
 import { buildingCapacity } from './buildings';
 import { buildingAccessNode } from './traffic/pathing';
+import { despawnVehicle } from './traffic/vehicles';
 import type { CitySim } from './city';
 import type { CityWorld } from './types';
 
 /**
  * Clears the work assignment of every citizen employed at the given building
  * (used when a workplace is bulldozed or abandons). Citizens mid-commute snap
- * back to 'home' phase; their vehicle despawns via the liveness check in the
- * vehicle system.
+ * back to 'home' phase; every owned moving agent retires synchronously so the
+ * citizen cannot be reassigned while an old commute remains active.
  */
-export function unassignWorkers(w: CityWorld, building: number): void {
+export function unassignWorkers(sim: CitySim, w: CityWorld, building: number): void {
   for (const id of [...w.query('citizen')].sort((a, b) => a - b)) {
     const citizen = w.getComponent(id, 'citizen');
     if (!citizen || citizen.work !== building) continue;
+    for (const walker of [...w.query('pedestrianPath')]) {
+      if (w.getComponent(walker, 'pedestrianPath')?.citizen === id) w.destroyEntity(walker);
+    }
+    for (const vehicle of [...w.query('vehicle')].sort((a, b) => a - b)) {
+      const data = w.getComponent(vehicle, 'vehicle');
+      if (data?.citizen === id) despawnVehicle(sim, w, vehicle, data);
+    }
     w.patchComponent(id, 'citizen', (c) => {
       c.work = null;
       c.phase = 'home';
+      c.nextActivity = 'work';
+      c.shop = null;
+      c.shopGen = null;
     });
   }
   const data = w.getComponent(building, 'building');

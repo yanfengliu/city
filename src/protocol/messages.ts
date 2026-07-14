@@ -3,11 +3,13 @@ import type {
   CityCommands,
   DemandState,
   FieldName,
+  PedestrianPurpose,
   PowerPlantKind,
   ServiceType,
   TaxRates,
   ZoneType,
 } from '../sim/types';
+export type { PedestrianPurpose } from '../sim/types';
 import type { CityImprovementFindingInput, RecordedFinding } from '../harness/findings';
 import type { SelfCheckSummary } from '../harness/inspect';
 import type { SimSummary } from '../sim/summary';
@@ -75,7 +77,9 @@ export interface FrameStats {
   treasury: number;
   demand: DemandState;
   vehicles: number;
+  pedestrians: number;
   employed: number;
+  completedShoppingTrips: number;
   disconnectedTrips: number;
   taxRates: TaxRates;
   /** Latest budget interval's totals; {income: 0, expenses: 0} before the first. */
@@ -127,6 +131,17 @@ export interface StructureView {
   service: ServiceType;
 }
 
+/** One walker's current road-cell segment; long routes remain worker-local. */
+export interface PedestrianView {
+  id: number;
+  generation: number;
+  fromCell: number;
+  toCell: number;
+  t: number;
+  purpose: PedestrianPurpose;
+  outbound: boolean;
+}
+
 /** One levelled utility footprint within the flattened `plantCells` set. */
 export interface PowerPlantFootprintView {
   kind: PowerPlantKind;
@@ -166,6 +181,7 @@ export type WorkerToClient =
   | { type: 'zones'; cells: Array<{ i: number; zone: ZoneType }> }
   | { type: 'buildings'; upserts: BuildingView[]; removed: number[] }
   | { type: 'vehicles'; topologyVersion: number; list: VehicleView[] }
+  | { type: 'pedestrians'; list: PedestrianView[] }
   | { type: 'traffic'; edges: Array<{ id: number; bucket: number }> }
   | { type: 'structures'; upserts: StructureView[]; removed: number[] }
   /**

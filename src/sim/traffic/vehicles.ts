@@ -9,7 +9,7 @@ import {
   WORK_WAIT_VARIANCE,
 } from '../constants/traffic';
 import type { CitySim } from '../city';
-import type { CityWorld, VehicleComponent } from '../types';
+import type { CitizenComponent, CityWorld, VehicleComponent } from '../types';
 
 function releaseEdge(sim: CitySim, edge: number): void {
   const count = sim.edgeCounts.get(edge) ?? 0;
@@ -23,22 +23,48 @@ export function despawnVehicle(sim: CitySim, w: CityWorld, id: number, data: Veh
   w.destroyEntity(id);
 }
 
+function validOutboundDestination(
+  w: CityWorld,
+  citizen: CitizenComponent,
+  data: VehicleComponent,
+): boolean {
+  const work = citizen.work;
+  if (work === null || !w.isAlive(work)) return false;
+  const building = w.getComponent(work, 'building');
+  if (!building || building.abandoned || building.zone === 'R') return false;
+
+  // Legacy saves cannot prove which assignment an in-flight vehicle targeted,
+  // so missing or partially populated identity metadata fails closed.
+  if (data.destination === undefined || data.destinationGen === undefined) return false;
+  return (
+    work === data.destination &&
+    w.getEntityGeneration(data.destination) === data.destinationGen
+  );
+}
+
 function arrive(sim: CitySim, w: CityWorld, id: number, data: VehicleComponent): void {
   releaseEdge(sim, data.legs[data.legs.length - 1].edge);
   w.destroyEntity(id);
   const citizen = w.getComponent(data.citizen, 'citizen');
   if (!citizen) return;
-  // A workplace lost mid-commute (bulldozed/abandoned) sends the commuter
-  // home instead of stranding them in 'atWork' with no job to return from.
-  if (data.toWork && citizen.work !== null) {
+  if (data.toWork && validOutboundDestination(w, citizen, data)) {
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'atWork';
       c.waitUntil = w.tick + WORK_WAIT_BASE + Math.floor(w.random() * WORK_WAIT_VARIANCE);
+    });
+  } else if (data.toWork) {
+    // A stale/recycled destination never becomes a valid work arrival. Keep a
+    // newer assignment intact, but return the citizen to the work stage.
+    w.patchComponent(data.citizen, 'citizen', (c) => {
+      c.phase = 'home';
+      c.waitUntil = w.tick + HOME_COOLDOWN_BASE + Math.floor(w.random() * HOME_COOLDOWN_VARIANCE);
+      c.nextActivity = 'work';
     });
   } else {
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'home';
       c.waitUntil = w.tick + HOME_COOLDOWN_BASE + Math.floor(w.random() * HOME_COOLDOWN_VARIANCE);
+      c.nextActivity = 'shop';
     });
   }
 }
