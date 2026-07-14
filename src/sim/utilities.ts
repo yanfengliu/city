@@ -112,8 +112,8 @@ export function registerUtilityCommands(sim: CitySim): void {
     if (!endpointsInBounds(data)) return false;
     const newCells = pathIndices(data).filter((i) => !sim.powerLineCells.has(i));
     if (newCells.length === 0) return false;
-    // A line is a thin overhead overlay — like a pipe, only water rejects. It
-    // runs over roads, buildings, and anything else on land without taking it.
+    // A line is a thin overhead overlay. Unlike an underground pipe, water
+    // rejects it; roads, buildings, and anything else on land do not.
     for (const i of newCells) {
       if (sim.terrain.water[i] === 1) return false;
     }

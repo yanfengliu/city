@@ -193,7 +193,7 @@ export type CityComponents = {
   powerPlant: { kind: PowerPlantKind };
   /** Power line cell marker — overhead overlay that never occupies. */
   powerLine: Record<string, never>;
-  /** Pipe cell marker — underground, does NOT occupy (may sit under anything on land). */
+  /** Pipe cell marker — underground, does NOT occupy (may cross land, water, or structures). */
   pipe: Record<string, never>;
   /** Water pump (1x1) marker — occupies its cell; capacity source for the water network. */
   waterPump: Record<string, never>;

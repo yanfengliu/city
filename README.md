@@ -13,7 +13,7 @@ npm run dev
 
 Open the printed URL (default `http://localhost:5199`). The first screen is the game.
 
-Core loop: draw **Roads** → paint **Zone R/C/I** near them → place a **Coal/Wind** plant and drag **Line**s to your districts → place a **Pump** next to water and drag **Pipe**s (they run under anything) → watch demand bars, population, and traffic. **Fire/Police/Clinic/School** raise land value (school unlocks level 3). Overlays show pollution, noise, land value, and live traffic congestion. 💾 Save / 📂 Load / ✨ New in the toolbar; pause and 1×/2×/4× speeds.
+Core loop: draw **Roads** → paint **Zone R/C/I** near them → place a **Coal/Wind** plant and drag **Line**s to your districts → place a **Pump** next to water and drag **Pipe**s (they run underground beneath land, structures, and lakes) → watch demand bars, population, and traffic. **Fire/Police/Clinic/School** raise land value (school unlocks level 3). Overlays show pollution, noise, land value, and live traffic congestion. 💾 Save / 📂 Load / ✨ New in the toolbar; pause and 1×/2×/4× speeds.
 
 ## How it works
 

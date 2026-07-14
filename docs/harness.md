@@ -43,7 +43,7 @@ The unconditional `window.__game` debug object remains available for basic autom
 
 | Method | Purpose |
 |---|---|
-| `state()` | Bounded JSON game state (alias of `render_game_to_text()`). |
+| `state()` | Bounded JSON game state (alias of `render_game_to_text()`). Includes installed `pipeCellCount`/`waterPipeCellCount`, the retained semantic `pipePreview`, and correlated `lastCommandSubmission`, so automation can distinguish a queued or rejected request from the installed lake-crossing pipe state observed after a tick. |
 | `advance(ms)` | Step the sim forward (alias of `advanceTime`); the sim otherwise runs at the HUD speed. |
 | `command(name, data)` | Submit a sim command by name (the same path the tools use). |
 | `annotate(finding)` | Record a `CityImprovementFindingInput` as a shared recursive-loop marker at the current worker tick. Defaults are conservative: `verificationStatus: "unverified"`, `nextAction: "proposalOnly"`, `disposition: "candidate"`. |
@@ -66,11 +66,11 @@ The async methods (`inspectAt` / `selfCheck` / `getBundle`) return a Promise **a
 | `cellAt(sx, sy)` | The sim cell under a pixel (inverse of `where`). |
 | `hud(label)` | Click a HUD button by visible label — "Road", "Zone R", "Coal ⚡", "2×", "Pollution", "💰 Budget", "💾 Save"… |
 | `key(k)` | Press a key — a tool shortcut, `w`/`a`/`s`/`d` camera pan, `Escape`. |
-| `dragMap(from, to)` | Left-drag across the map (roads, zones, lines, pipes, bulldoze, dezone). Select the tool with `hud`/`key` first. |
+| `dragMap(from, to)` | Left-drag across the map (roads, zones, lines, pipes, bulldoze, dezone). Select the tool with `hud`/`key` first. A completed pipe drag retains selected/new/water cell counts and validity in `state().pipePreview` after its visual ghost clears. |
 | `tapMap(cell)` | Left-click one cell — place a service/plant/pump, or inspect with Select. |
 | `clickAt(sx,sy)` / `dragAt(sx1,sy1,sx2,sy2,button?)` | Raw-pixel gestures. |
 
-The camera must **frame** a cell for `where`/`dragMap`/`tapMap` to reach it — you can't click what's off-screen, same as a human — so position the camera (and set an explicit viewport; a 0-size canvas makes projection NaN) before acting. Map gestures round-trip through the real `GroundPicker` (pixel → cell), so the screen↔world mapping is exact. Sim commands are async — read `state()` a beat after acting, not in the same tick.
+The camera must **frame** a cell for `where`/`dragMap`/`tapMap` to reach it — you can't click what's off-screen, same as a human — so position the camera (and set an explicit viewport; a 0-size canvas makes projection NaN) before acting. Map gestures round-trip through the real `GroundPicker` (pixel → cell), so the screen↔world mapping is exact. Sim commands are async — read `state()` a beat after acting, not in the same tick. A visual-host drag result means the player-surface gesture was dispatched; `lastCommandSubmission` then says whether validation queued or rejected it, while the next post-tick observation's installed counts are the authoritative execution evidence. Monotonic request ids prevent an older same-name rejection from being attached to a newer queued drag. Leaving the map clears an unsubmitted hover preview; completed submissions remain retained for the next observation.
 
 ### civ-engine visual playtest adapter
 

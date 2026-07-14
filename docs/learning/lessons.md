@@ -2,6 +2,16 @@
 
 Non-obvious failure modes worth preserving. Each entry starts with its evidence anchors.
 
+## A cleared drag ghost is not harness evidence of what the player attempted
+
+| Field | Value |
+|---|---|
+| Surfaced by | Live lake-crossing water setup: the Pipe tool drew an invalid preview and the worker rejected the drag, but the canvas-only harness reported only that pointer events were dispatched. |
+| Reviewer findings | Three grounded inspection agents independently confirmed the duplicated water rejection and the missing post-drag observation channels. |
+| Fix commit | eeff688 |
+| Test added | `tests/app/tools.test.ts` > "retains an observable valid pipe preview across water and submits the drag" plus cancellation/pointer-leave cleanup; `tests/harness/visual-host.test.ts` > "surfaces retained pipe previews, installed lake cells, and queue submissions"; `tests/sim/utilities.test.ts` > lake placement/conduction/save-load contracts. |
+| Behavior delta | `Tools.pointerUp()` clears the visual ghost synchronously, while the worker queues the command asynchronously. Before, the next automation observation could see neither preview semantics, installed pipe count, nor submission outcome, so "drag dispatched" was indistinguishable from success. Retain a bounded semantic action record before clearing presentation state, expose post-tick installed counts as authoritative execution evidence, and return a correlated queued/rejected submission result for every command; monotonic ids prevent an older rejection from attaching to a newer same-name drag. Cancellation must clear an active semantic preview and leaving the map must clear an unsubmitted hover preview as well as the mesh. When a client preview mirrors a sim validator, test both layers against the same edge case; here both had independently encoded the obsolete "water blocks pipes" rule. |
+
 ## world.query() returns a single-use Generator
 
 | Field | Value |

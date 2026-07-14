@@ -77,7 +77,7 @@ describe('power network', () => {
     const pumpAt = findConnectablePumpSpot(sim, { x: base.x + 8, y: spineY });
     expect(sim.world.submit('placeWaterPump', { x: pumpAt.x, y: pumpAt.y })).toBe(true);
     sim.world.step();
-    // Pipe from the pump to the district spine (pipes go under anything on land).
+    // Pipe from the pump to the district spine (pipes cross terrain and run under structures).
     expect(
       sim.world.submit('placePipe', { ax: pumpAt.x, ay: pumpAt.y, bx: base.x + 8, by: spineY }),
     ).toBe(true);

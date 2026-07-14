@@ -24,6 +24,24 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-14 — Water pipes cross lakes and the harness proves the drag outcome
+
+User report: water pipes could not cross water grid cells, which was why the attempted lake drag failed; the same failure needed to be observable in the playtest harness.
+
+Root cause existed in both authority layers: the `placePipe` sim validator rejected every water cell, and the Pipe ghost mirrored that obsolete land-only rule. Pipes now accept any in-bounds path with at least one new cell and charge the existing uniform $3 per new cell across land or water; power lines remain water-blocked. The handler, terrain-agnostic conduction flood-fill, bulldozer, serializer, and `rebuildDerived` already handled arbitrary pipe positions, so the fix required no component, save-version, or derived-state change. Contract coverage now proves exact cross-lake cost, actual pump-to-building conduction across the lake, water-cell save/load convergence, and recorded-session replay.
+
+The player surface now retains a bounded semantic `pipePreview` after pointer-up with selected/new/water cell counts, validity, submission state, and a duplicate-only explanation. `render_game_to_text()` also exposes installed pipe and water-pipe counts plus the latest correlated queued/rejected worker submission (with request id and worker tick). Queue admission is not mislabeled as completed placement: the next post-tick installed counts are authoritative. A newer dispatch invalidates its predecessor and stale ids are ignored, so rapid same-name drags cannot misattribute an earlier rejection. Cancellation clears an active preview, leaving the map clears an unsubmitted hover preview, and completed submissions remain available for the next observation. The visual host includes those fields in visible text and its agent state channel, and its drag result explicitly says to inspect the next observation rather than claiming event dispatch was acceptance. Focused RED evidence was four failures across sim, tool, and harness tests; all turned green in commit `eeff688`, with ordering, cancellation, and pointer-leave regressions added during adversarial review.
+
+Headless Chrome verified the final player path at `?record=1`: selecting Pipe and Water, then dragging once across the central lake, changed treasury from $19,999 to $19,951 — exactly 16 new cells × $3 — and the overlay showed one continuous pale-blue run across the water with no rejection toast. The regenerated current-source recorded–lean–lean–recorded profile ended identically in all four modes at tick 3002 with 618 buildings, 59 vehicles, 102 pedestrians, 604 shopping trips, and 1,557 displayed population; the measured shared-host lean wall-time reduction was 54.80%. Final review verification: 318/318 tests across 73 files, typecheck, zero-warning lint, and production build all passed; the worker is 119,813/120,000 bytes.
+
+### 2026-07-14 — Sidewalks, traffic-light fixtures, and pedestrian variety
+
+User request: streets should have sidewalks and traffic lights; people should visibly walk in both directions and wear substantially varied clothing.
+
+Shipped in commit `73351af` without changing sim, protocol, persistence, or traffic mechanics. Every land street receives terrain-following pale curbside sidewalks aligned with the existing direction-dependent pedestrian lanes. Land T and four-way junctions receive compact paired signal assemblies with complementary red/green faces in one deterministic batch. They are intentionally static presentation fixtures: this increment does not claim vehicle stop-line behavior or a timed signal cycle because the traffic model still has no lane, headway, or intersection-occupancy state.
+
+Pedestrians now use three synchronized fixed-capacity instanced batches for tops, lower garments, and heads. A stable id/generation hash selects from purpose-family top palettes, eight lower-garment colors, six skin tones, and modest body proportions; a small front cue makes facing legible. Simultaneous reverse views remain on opposite curb lanes and are pinned by a two-way rendering contract. Headless Chrome verified a live powered/watered 24-resident district at a land T intersection with four purposeful walkers, visible sidewalks and signal fixtures, and no browser errors; the only diagnostic was the known Three.js `PCFSoftShadowMap` deprecation warning. Before commit, all four gates passed with 310/310 tests across 72 files and a 119,833/120,000-byte worker.
+
 ### 2026-07-14 — Purposeful pedestrians and retail economy
 
 User request: people should visibly walk with a purpose between their residential homes, commercial or industrial jobs, and commercial shopping destinations; those trips should participate in a real city economy.
