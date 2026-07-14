@@ -11,23 +11,17 @@ import {
 } from 'three';
 import type { BufferGeometry } from 'three';
 import {
+  BUILDING_ABANDONED_FRONTAGE_COLOR,
   BUILDING_ABANDONED_ROOF_COLOR,
   BUILDING_ABANDONED_WALL_COLOR,
   BUILDING_ABANDONED_DETAIL_COLOR,
   BUILDING_DETAIL_COLORS,
   BUILDING_DETAIL_HEIGHTS,
   BUILDING_DETAIL_WIDTHS,
-  BUILDING_FACADE_BASE_Y,
-  BUILDING_FACADE_COLORS,
-  BUILDING_FACADE_DEPTH,
-  BUILDING_FACADE_FRONT_OFFSET,
-  BUILDING_FACADE_GLOW_MAX,
-  BUILDING_FACADE_GLOW_START,
-  BUILDING_FACADE_HEIGHTS,
-  BUILDING_FACADE_WIDTHS,
-  BUILDING_FACADE_X_JITTER,
   BUILDING_FOOTPRINT_JITTER,
   BUILDING_FOOTPRINT_MARGIN,
+  BUILDING_FRONTAGE_COLORS,
+  BUILDING_FRONTAGE_HEIGHT_MAX,
   BUILDING_HEIGHT_JITTER,
   BUILDING_LEVEL_HEIGHTS,
   BUILDING_LEVEL_ROOF_LIGHTEN,
@@ -40,9 +34,16 @@ import {
   BUILDING_ROOF_OVERHANG,
   BUILDING_START_CAPACITY,
   BUILDING_WALL_COLORS,
+  BUILDING_WINDOW_COLORS,
+  BUILDING_WINDOW_GLOW_MAX,
+  BUILDING_WINDOW_GLOW_START,
   cellHash01,
   type ZoneKind,
 } from './constants';
+import {
+  createBuildingFrontageGeometry,
+  createBuildingWindowGeometry,
+} from './building-archetype-geometry';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data building view (structurally mirrors the protocol BuildingView). */
@@ -63,7 +64,8 @@ interface Archetype {
   walls: InstancedMesh;
   roofs: InstancedMesh;
   details: InstancedMesh;
-  facades: InstancedMesh;
+  windows: InstancedMesh;
+  frontages: InstancedMesh;
   /** Building id per instance slot (parallel to the instance buffers). */
   ids: number[];
   capacity: number;
@@ -71,11 +73,18 @@ interface Archetype {
 
 const MATRIX = new Matrix4();
 const COLOR = new Color();
+const archetypeMeshes = (archetype: Archetype): readonly InstancedMesh[] => [
+  archetype.walls,
+  archetype.roofs,
+  archetype.details,
+  archetype.windows,
+  archetype.frontages,
+];
 
 /**
- * Grown RCI buildings as instanced walls + roofs + roof details, one archetype
- * per zone (separate InstancedMeshes sharing a slot layout so the roof/detail
- * layers keep constant thickness and their own colors). Incremental
+ * Grown RCI buildings as five instanced layers per zone: body, roof, rooftop
+ * detail, literal windows, and a semantic frontage assembly. Every layer shares
+ * one slot layout, so detail remains fixed-batch regardless of city size. Incremental
  * upserts/removals with an id -> slot map and swap-remove; capacity doubles
  * when full. Abandoned buildings grey out via instance color.
  */
@@ -88,9 +97,8 @@ export class BuildingsView {
   private readonly unitBox: BufferGeometry;
   private readonly pyramidRoof: BufferGeometry;
   private readonly detailBox: BufferGeometry;
-  private readonly facadeBox: BufferGeometry;
   private readonly material = new MeshLambertMaterial({ color: 0xffffff });
-  private readonly facadeMaterial = new MeshLambertMaterial({
+  private readonly windowMaterial = new MeshLambertMaterial({
     color: 0xffffff,
     emissive: BUILDING_NIGHT_GLOW_COLOR,
     emissiveIntensity: 0,
@@ -104,7 +112,6 @@ export class BuildingsView {
     // 4-sided cone rotated 45° = square pyramid whose base matches the unit box.
     this.pyramidRoof = new ConeGeometry(Math.SQRT1_2, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0);
     this.detailBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-    this.facadeBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     this.archetypes = {
       R: this.makeArchetype('R'),
       C: this.makeArchetype('C'),
@@ -116,14 +123,14 @@ export class BuildingsView {
     return this.slots.size;
   }
 
-  /** Keeps bodies honest to their zone palette and fades window glow in after dusk. */
+  /** Fades live window glow in after dusk; bodies and frontages stay non-emissive. */
   setNightGlow(night: number): void {
     const clamped = Math.max(0, Math.min(1, night));
     const afterDusk = Math.max(
       0,
-      (clamped - BUILDING_FACADE_GLOW_START) / (1 - BUILDING_FACADE_GLOW_START),
+      (clamped - BUILDING_WINDOW_GLOW_START) / (1 - BUILDING_WINDOW_GLOW_START),
     );
-    this.facadeMaterial.emissiveIntensity = afterDusk * BUILDING_FACADE_GLOW_MAX;
+    this.windowMaterial.emissiveIntensity = afterDusk * BUILDING_WINDOW_GLOW_MAX;
   }
 
   setTerrainSurface(surface: TerrainSurfaceView): void {
@@ -148,10 +155,7 @@ export class BuildingsView {
     const slot = archetype.ids.length;
     archetype.ids.push(view.id);
     this.slots.set(view.id, { zone: view.zone, slot });
-    archetype.walls.count = archetype.ids.length;
-    archetype.roofs.count = archetype.ids.length;
-    archetype.details.count = archetype.ids.length;
-    archetype.facades.count = archetype.ids.length;
+    this.syncCount(archetype);
     this.writeInstance(archetype, slot, view);
   }
 
@@ -165,7 +169,7 @@ export class BuildingsView {
     const last = archetype.ids.length - 1;
     if (entry.slot !== last) {
       const movedId = archetype.ids[last];
-      for (const mesh of [archetype.walls, archetype.roofs, archetype.details, archetype.facades]) {
+      for (const mesh of archetypeMeshes(archetype)) {
         mesh.getMatrixAt(last, MATRIX);
         mesh.setMatrixAt(entry.slot, MATRIX);
         mesh.getColorAt(last, COLOR);
@@ -177,10 +181,7 @@ export class BuildingsView {
       this.slots.set(movedId, { zone: entry.zone, slot: entry.slot });
     }
     archetype.ids.pop();
-    archetype.walls.count = archetype.ids.length;
-    archetype.roofs.count = archetype.ids.length;
-    archetype.details.count = archetype.ids.length;
-    archetype.facades.count = archetype.ids.length;
+    this.syncCount(archetype);
   }
 
   private makeArchetype(zone: ZoneKind): Archetype {
@@ -190,10 +191,18 @@ export class BuildingsView {
       walls: this.makeMesh(this.unitBox, BUILDING_START_CAPACITY, `${zone}-walls`),
       roofs: this.makeMesh(roofGeometry, BUILDING_START_CAPACITY, `${zone}-roofs`),
       details: this.makeMesh(this.detailBox, BUILDING_START_CAPACITY, `${zone}-roof-details`),
-      facades: this.makeMesh(this.facadeBox, BUILDING_START_CAPACITY, `${zone}-facades`, {
-        material: this.facadeMaterial,
+      windows: this.makeMesh(createBuildingWindowGeometry(zone), BUILDING_START_CAPACITY, `${zone}-windows`, {
+        material: this.windowMaterial,
         shadows: false,
       }),
+      frontages: this.makeMesh(
+        createBuildingFrontageGeometry(zone),
+        BUILDING_START_CAPACITY,
+        `${zone}-frontages`,
+        {
+          shadows: false,
+        },
+      ),
       ids: [],
       capacity: BUILDING_START_CAPACITY,
     };
@@ -226,10 +235,15 @@ export class BuildingsView {
     archetype.walls = this.replaceMesh(archetype.walls, archetype.capacity);
     archetype.roofs = this.replaceMesh(archetype.roofs, archetype.capacity);
     archetype.details = this.replaceMesh(archetype.details, archetype.capacity);
-    archetype.facades = this.replaceMesh(archetype.facades, archetype.capacity, {
-      material: this.facadeMaterial,
+    archetype.windows = this.replaceMesh(archetype.windows, archetype.capacity, {
+      material: this.windowMaterial,
       shadows: false,
     });
+    archetype.frontages = this.replaceMesh(archetype.frontages, archetype.capacity, { shadows: false });
+  }
+
+  private syncCount(archetype: Archetype): void {
+    for (const mesh of archetypeMeshes(archetype)) mesh.count = archetype.ids.length;
   }
 
   private replaceMesh(
@@ -279,16 +293,13 @@ export class BuildingsView {
       detailZ,
     );
     archetype.details.setMatrixAt(slot, MATRIX);
-    const facadeWidth = Math.min(BUILDING_FACADE_WIDTHS[view.zone], sx * 0.72);
-    const facadeHeight = Math.min(BUILDING_FACADE_HEIGHTS[view.zone], height * 0.65);
-    const facadeX = cx + (cellHash01(view.id + 0x8888) - 0.5) * sx * BUILDING_FACADE_X_JITTER;
-    const facadeZ = cz + sz / 2 + BUILDING_FACADE_DEPTH / 2 + BUILDING_FACADE_FRONT_OFFSET;
-    MATRIX.makeScale(facadeWidth, facadeHeight, BUILDING_FACADE_DEPTH).setPosition(
-      facadeX,
-      baseY + BUILDING_FACADE_BASE_Y,
-      facadeZ,
-    );
-    archetype.facades.setMatrixAt(slot, MATRIX);
+    // Features are authored in normalized body space. Windows span the current
+    // level height; entrances keep a ground-floor cap while sharing horizontal
+    // footprint jitter and the same terrain anchor.
+    MATRIX.makeScale(sx, height, sz).setPosition(cx, baseY, cz);
+    archetype.windows.setMatrixAt(slot, MATRIX);
+    MATRIX.makeScale(sx, Math.min(height, BUILDING_FRONTAGE_HEIGHT_MAX), sz).setPosition(cx, baseY, cz);
+    archetype.frontages.setMatrixAt(slot, MATRIX);
 
     if (view.abandoned) {
       // Per-building shade jitter so a derelict block reads as varied, weathered
@@ -301,11 +312,12 @@ export class BuildingsView {
         slot,
         COLOR.setHex(BUILDING_ABANDONED_DETAIL_COLOR).offsetHSL(0, 0, decayJit * 0.5),
       );
-      archetype.facades.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit));
-      // Facade emissive is shared per material, so abandoned windows must have
+      archetype.windows.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_ROOF_COLOR));
+      archetype.frontages.setColorAt(slot, COLOR.setHex(BUILDING_ABANDONED_FRONTAGE_COLOR));
+      // Window emissive is shared per material, so abandoned windows must have
       // no geometry rather than merely a dark instance tint.
       MATRIX.makeScale(0, 0, 0).setPosition(cx, baseY, cz);
-      archetype.facades.setMatrixAt(slot, MATRIX);
+      archetype.windows.setMatrixAt(slot, MATRIX);
     } else {
       // Subtle per-building tint (walls and roof shift together) on top of the
       // per-level lightening, so a district varies without losing its zone hue.
@@ -321,12 +333,16 @@ export class BuildingsView {
         slot,
         COLOR.setHex(BUILDING_DETAIL_COLORS[view.zone]).offsetHSL(hueJit, 0, lightJit * 0.5),
       );
-      archetype.facades.setColorAt(
+      archetype.windows.setColorAt(
         slot,
-        COLOR.setHex(BUILDING_FACADE_COLORS[view.zone]).offsetHSL(hueJit, 0, lightJit),
+        COLOR.setHex(BUILDING_WINDOW_COLORS[view.zone]).offsetHSL(hueJit, 0, lightJit),
+      );
+      archetype.frontages.setColorAt(
+        slot,
+        COLOR.setHex(BUILDING_FRONTAGE_COLORS[view.zone]).offsetHSL(hueJit, 0, lightJit * 0.5),
       );
     }
-    for (const mesh of [archetype.walls, archetype.roofs, archetype.details, archetype.facades]) {
+    for (const mesh of archetypeMeshes(archetype)) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }

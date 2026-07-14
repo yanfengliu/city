@@ -211,13 +211,77 @@ export const BUILDING_DETAIL_COLORS: Record<ZoneKind, number> = {
   I: 0xb98a52,
 };
 export const BUILDING_ABANDONED_DETAIL_COLOR = 0x7a7f7c;
-/** Residential entry, commercial glass band, and industrial loading frontage. */
-export const BUILDING_FACADE_WIDTHS: Record<ZoneKind, number> = { R: 0.28, C: 0.62, I: 0.56 };
-export const BUILDING_FACADE_HEIGHTS: Record<ZoneKind, number> = { R: 0.28, C: 0.58, I: 0.3 };
-export const BUILDING_FACADE_DEPTH = 0.04;
-export const BUILDING_FACADE_BASE_Y = 0.08;
-export const BUILDING_FACADE_FRONT_OFFSET = 0.024;
-export const BUILDING_FACADE_X_JITTER = 0.28;
+/** Window positions use normalized wall space and are instanced with each building body. */
+export interface BuildingWindowLayout {
+  frontColumns: readonly number[];
+  sideColumns: readonly number[];
+  rows: readonly number[];
+  width: number;
+  height: number;
+}
+
+export const BUILDING_WINDOW_LAYOUTS: Record<ZoneKind, BuildingWindowLayout> = {
+  R: { frontColumns: [-0.24, 0.24], sideColumns: [0], rows: [0.4, 0.7], width: 0.18, height: 0.16 },
+  C: {
+    frontColumns: [-0.28, 0.28],
+    sideColumns: [-0.24, 0.24],
+    rows: [0.3, 0.56, 0.82],
+    width: 0.22,
+    height: 0.13,
+  },
+  I: { frontColumns: [-0.28, 0.28], sideColumns: [0], rows: [0.8], width: 0.2, height: 0.13 },
+};
+/** Small outward offset prevents coplanar wall/window flicker. */
+export const BUILDING_WINDOW_SURFACE_OFFSET = 0.008;
+
+export type BuildingFrontageKind =
+  | 'front-door'
+  | 'stoop'
+  | 'porch-canopy'
+  | 'double-entry'
+  | 'awning'
+  | 'sign-band'
+  | 'blade-sign'
+  | 'loading-bay'
+  | 'personnel-door'
+  | 'loading-dock'
+  | 'loading-hood'
+  | 'bollard-left'
+  | 'bollard-right';
+
+export interface BuildingFrontagePart {
+  kind: BuildingFrontageKind;
+  /** Normalized width, height, and outward depth. */
+  size: readonly [number, number, number];
+  /** Normalized horizontal center and bottom edge. */
+  x: number;
+  baseY: number;
+}
+
+export const BUILDING_FRONTAGE_PARTS: Record<ZoneKind, readonly BuildingFrontagePart[]> = {
+  R: [
+    { kind: 'front-door', size: [0.22, 0.5, 0.045], x: 0, baseY: 0 },
+    { kind: 'stoop', size: [0.4, 0.06, 0.28], x: 0, baseY: 0 },
+    { kind: 'porch-canopy', size: [0.42, 0.06, 0.24], x: 0, baseY: 0.56 },
+  ],
+  C: [
+    { kind: 'double-entry', size: [0.3, 0.56, 0.045], x: 0, baseY: 0 },
+    { kind: 'awning', size: [0.8, 0.08, 0.26], x: 0, baseY: 0.58 },
+    { kind: 'sign-band', size: [0.84, 0.14, 0.05], x: 0, baseY: 0.7 },
+    { kind: 'blade-sign', size: [0.12, 0.3, 0.2], x: -0.4, baseY: 0.66 },
+  ],
+  I: [
+    { kind: 'loading-bay', size: [0.58, 0.56, 0.05], x: 0.1, baseY: 0 },
+    { kind: 'personnel-door', size: [0.16, 0.42, 0.045], x: -0.34, baseY: 0 },
+    { kind: 'loading-dock', size: [0.72, 0.1, 0.3], x: 0.08, baseY: 0 },
+    { kind: 'loading-hood', size: [0.68, 0.08, 0.22], x: 0.08, baseY: 0.62 },
+    { kind: 'bollard-left', size: [0.05, 0.28, 0.05], x: -0.24, baseY: 0 },
+    { kind: 'bollard-right', size: [0.05, 0.28, 0.05], x: 0.4, baseY: 0 },
+  ],
+};
+export const BUILDING_FRONTAGE_SURFACE_OFFSET = 0.008;
+/** Entrances stay ground-floor sized when the body grows into a higher-level building. */
+export const BUILDING_FRONTAGE_HEIGHT_MAX = 1.1;
 export const BUILDING_WALL_COLORS: Record<ZoneKind, number> = {
   R: 0xa4c995,
   C: 0x78add6,
@@ -228,21 +292,27 @@ export const BUILDING_ROOF_COLORS: Record<ZoneKind, number> = {
   C: 0x4a78ad,
   I: 0xa77443,
 };
-export const BUILDING_FACADE_COLORS: Record<ZoneKind, number> = {
-  R: 0xcbe5b8,
-  C: 0x8fd2ee,
-  I: 0xf3c16f,
+export const BUILDING_WINDOW_COLORS: Record<ZoneKind, number> = {
+  R: 0x8eb8d1,
+  C: 0x79d4e8,
+  I: 0x6c7d7f,
+};
+export const BUILDING_FRONTAGE_COLORS: Record<ZoneKind, number> = {
+  R: 0x7a3f2a,
+  C: 0x245b88,
+  I: 0x242a2c,
 };
 /** Per-level lightness boost so level differences read beyond height alone. */
 export const BUILDING_LEVEL_WALL_LIGHTEN = 0.02;
 export const BUILDING_LEVEL_ROOF_LIGHTEN = 0.04;
 export const BUILDING_ABANDONED_WALL_COLOR = 0x8b918e;
 export const BUILDING_ABANDONED_ROOF_COLOR = 0x6f7472;
-/** Warm emissive hue for live facade/window panels only. */
+export const BUILDING_ABANDONED_FRONTAGE_COLOR = 0x555a58;
+/** Warm emissive hue for live window panels only. */
 export const BUILDING_NIGHT_GLOW_COLOR = 0xffca7a;
-/** Facades stay dark through daylight; intensity normalizes from START to full night. */
-export const BUILDING_FACADE_GLOW_START = 0.75;
-export const BUILDING_FACADE_GLOW_MAX = 0.55;
+/** Windows stay dark through daylight; intensity normalizes from START to full night. */
+export const BUILDING_WINDOW_GLOW_START = 0.75;
+export const BUILDING_WINDOW_GLOW_MAX = 0.55;
 
 // Ghost drag preview. Capacity covers the longest L-path on a 128x128 grid (255
 // cells) and rect drags up to 1024 cells; larger rect previews clip (the command

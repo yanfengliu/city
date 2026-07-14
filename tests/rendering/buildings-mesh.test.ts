@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Color, InstancedMesh, Matrix4 } from 'three';
 import type { MeshLambertMaterial } from 'three';
 import {
-  BUILDING_FACADE_BASE_Y,
-  BUILDING_FACADE_DEPTH,
+  BUILDING_ABANDONED_FRONTAGE_COLOR,
+  BUILDING_FRONTAGE_HEIGHT_MAX,
   BUILDING_START_CAPACITY,
   BUILDING_WALL_COLORS,
   type ZoneKind,
@@ -79,51 +79,63 @@ describe('BuildingsView', () => {
     view.upsert({ id: 1, zone: 'R', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
 
     const wallMatrix = matrixAt(mesh(view, 'R-walls'), 0);
-    const facadeMatrix = matrixAt(mesh(view, 'R-facades'), 0);
+    const windowMatrix = matrixAt(mesh(view, 'R-windows'), 0);
+    const frontageMatrix = matrixAt(mesh(view, 'R-frontages'), 0);
     expect(wallMatrix[13]).toBeCloseTo(surface.maxHeight, 5);
-    expect(facadeMatrix[13]).toBeCloseTo(surface.maxHeight + BUILDING_FACADE_BASE_Y, 5);
+    expect(windowMatrix[13]).toBeCloseTo(surface.maxHeight, 5);
+    expect(frontageMatrix[13]).toBeCloseTo(surface.maxHeight, 5);
   });
 
-  it('keeps named wall, roof, roof-detail, and facade layers synchronized per zone', () => {
+  it('keeps five named instanced layers synchronized per zone', () => {
     const view = new BuildingsView();
 
     for (const zone of zoneKinds) {
       mesh(view, `${zone}-walls`);
       mesh(view, `${zone}-roofs`);
       mesh(view, `${zone}-roof-details`);
-      mesh(view, `${zone}-facades`);
+      mesh(view, `${zone}-windows`);
+      mesh(view, `${zone}-frontages`);
     }
+    expect(view.group.children).toHaveLength(15);
 
     view.upsert({ id: 1, zone: 'R', x: 10, y: 12, w: 2, h: 2, level: 1, abandoned: false });
 
     expect(mesh(view, 'R-walls').count).toBe(1);
     expect(mesh(view, 'R-roofs').count).toBe(1);
     expect(mesh(view, 'R-roof-details').count).toBe(1);
-    expect(mesh(view, 'R-facades').count).toBe(1);
+    expect(mesh(view, 'R-windows').count).toBe(1);
+    expect(mesh(view, 'R-frontages').count).toBe(1);
     expect(mesh(view, 'R-walls').castShadow).toBe(true);
-    expect(mesh(view, 'R-facades').castShadow).toBe(false);
-    expect(mesh(view, 'R-facades').receiveShadow).toBe(false);
+    expect(mesh(view, 'R-windows').castShadow).toBe(false);
+    expect(mesh(view, 'R-windows').receiveShadow).toBe(false);
+    expect(mesh(view, 'R-frontages').castShadow).toBe(false);
+    expect(mesh(view, 'R-frontages').receiveShadow).toBe(false);
 
     const matrix = new Matrix4();
-    mesh(view, 'R-facades').getMatrixAt(0, matrix);
+    mesh(view, 'R-frontages').getMatrixAt(0, matrix);
     const e = matrix.elements;
-    expect(e[10]).toBeCloseTo(BUILDING_FACADE_DEPTH, 5);
-    expect(e[13]).toBeCloseTo(BUILDING_FACADE_BASE_Y, 5);
-    expect(e[14]).toBeGreaterThan(13);
+    expect(e[0]).toBeGreaterThan(1);
+    expect(e[5]).toBeGreaterThan(0);
+    expect(e[10]).toBeGreaterThan(1);
+    expect(e[13]).toBeCloseTo(0, 5);
+    expect(e[14]).toBeCloseTo(13, 5);
 
     view.remove(1);
 
     expect(mesh(view, 'R-walls').count).toBe(0);
     expect(mesh(view, 'R-roofs').count).toBe(0);
     expect(mesh(view, 'R-roof-details').count).toBe(0);
-    expect(mesh(view, 'R-facades').count).toBe(0);
+    expect(mesh(view, 'R-windows').count).toBe(0);
+    expect(mesh(view, 'R-frontages').count).toBe(0);
   });
 
-  it('keeps facade instances synchronized after capacity growth', () => {
+  it('keeps window and frontage instances synchronized after capacity growth', () => {
     const view = new BuildingsView();
     view.upsert({ id: 1, zone: 'C', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
-    const beforeMatrix = matrixAt(mesh(view, 'C-facades'), 0);
-    const beforeColor = colorAt(mesh(view, 'C-facades'), 0);
+    const beforeWindowMatrix = matrixAt(mesh(view, 'C-windows'), 0);
+    const beforeWindowColor = colorAt(mesh(view, 'C-windows'), 0);
+    const beforeFrontageMatrix = matrixAt(mesh(view, 'C-frontages'), 0);
+    const beforeFrontageColor = colorAt(mesh(view, 'C-frontages'), 0);
 
     for (let id = 2; id <= BUILDING_START_CAPACITY + 1; id++) {
       view.upsert({ id, zone: 'C', x: id % 24, y: Math.floor(id / 24), w: 1, h: 1, level: 1, abandoned: false });
@@ -132,26 +144,35 @@ describe('BuildingsView', () => {
     expect(mesh(view, 'C-walls').count).toBe(BUILDING_START_CAPACITY + 1);
     expect(mesh(view, 'C-roofs').count).toBe(BUILDING_START_CAPACITY + 1);
     expect(mesh(view, 'C-roof-details').count).toBe(BUILDING_START_CAPACITY + 1);
-    expect(mesh(view, 'C-facades').count).toBe(BUILDING_START_CAPACITY + 1);
-    expectCloseArray(matrixAt(mesh(view, 'C-facades'), 0), beforeMatrix);
-    expectCloseArray(colorAt(mesh(view, 'C-facades'), 0), beforeColor);
+    expect(mesh(view, 'C-windows').count).toBe(BUILDING_START_CAPACITY + 1);
+    expect(mesh(view, 'C-frontages').count).toBe(BUILDING_START_CAPACITY + 1);
+    expectCloseArray(matrixAt(mesh(view, 'C-windows'), 0), beforeWindowMatrix);
+    expectCloseArray(colorAt(mesh(view, 'C-windows'), 0), beforeWindowColor);
+    expectCloseArray(matrixAt(mesh(view, 'C-frontages'), 0), beforeFrontageMatrix);
+    expectCloseArray(colorAt(mesh(view, 'C-frontages'), 0), beforeFrontageColor);
   });
 
-  it('swap-removes facade matrices and colors with the other building layers', () => {
+  it('swap-removes window and frontage matrices and colors with the other building layers', () => {
     const view = new BuildingsView();
 
     view.upsert({ id: 1, zone: 'I', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
     view.upsert({ id: 2, zone: 'I', x: 4, y: 4, w: 2, h: 2, level: 1, abandoned: false });
 
-    const facade = mesh(view, 'I-facades');
-    const movedMatrix = matrixAt(facade, 1);
-    const movedColor = colorAt(facade, 1);
+    const windows = mesh(view, 'I-windows');
+    const frontages = mesh(view, 'I-frontages');
+    const movedWindowMatrix = matrixAt(windows, 1);
+    const movedWindowColor = colorAt(windows, 1);
+    const movedFrontageMatrix = matrixAt(frontages, 1);
+    const movedFrontageColor = colorAt(frontages, 1);
 
     view.remove(1);
 
-    expect(facade.count).toBe(1);
-    expectCloseArray(matrixAt(facade, 0), movedMatrix);
-    expectCloseArray(colorAt(facade, 0), movedColor);
+    expect(windows.count).toBe(1);
+    expect(frontages.count).toBe(1);
+    expectCloseArray(matrixAt(windows, 0), movedWindowMatrix);
+    expectCloseArray(colorAt(windows, 0), movedWindowColor);
+    expectCloseArray(matrixAt(frontages, 0), movedFrontageMatrix);
+    expectCloseArray(colorAt(frontages, 0), movedFrontageColor);
   });
 
   it('uses a friendly mid-light palette while keeping zones visibly separated', () => {
@@ -171,7 +192,8 @@ describe('BuildingsView', () => {
         wall: effectiveColorAt(mesh(view, `${zone}-walls`), 0),
         roof: effectiveColorAt(mesh(view, `${zone}-roofs`), 0),
         detail: effectiveColorAt(mesh(view, `${zone}-roof-details`), 0),
-        facade: effectiveColorAt(mesh(view, `${zone}-facades`), 0),
+        window: effectiveColorAt(mesh(view, `${zone}-windows`), 0),
+        frontage: effectiveColorAt(mesh(view, `${zone}-frontages`), 0),
       };
     });
     for (const colors of rendered) {
@@ -183,12 +205,13 @@ describe('BuildingsView', () => {
         expect(perceptualDistance(rendered[i].wall, rendered[j].wall)).toBeGreaterThanOrEqual(0.09);
         expect(perceptualDistance(rendered[i].roof, rendered[j].roof)).toBeGreaterThanOrEqual(0.08);
         expect(perceptualDistance(rendered[i].detail, rendered[j].detail)).toBeGreaterThanOrEqual(0.08);
-        expect(perceptualDistance(rendered[i].facade, rendered[j].facade)).toBeGreaterThanOrEqual(0.1);
+        expect(perceptualDistance(rendered[i].window, rendered[j].window)).toBeGreaterThanOrEqual(0.04);
+        expect(perceptualDistance(rendered[i].frontage, rendered[j].frontage)).toBeGreaterThanOrEqual(0.08);
       }
     }
   });
 
-  it('uses distinct rooftop and facade proportions for each zone', () => {
+  it('uses distinct rooftop and physical feature geometry for each zone', () => {
     const scaleAt = (target: InstancedMesh): [number, number, number] => {
       const matrix = new Matrix4();
       target.getMatrixAt(0, matrix);
@@ -199,7 +222,8 @@ describe('BuildingsView', () => {
       view.upsert({ id: 11, zone, x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
       return {
         detail: scaleAt(mesh(view, `${zone}-roof-details`)),
-        facade: scaleAt(mesh(view, `${zone}-facades`)),
+        windowVertices: mesh(view, `${zone}-windows`).geometry.getAttribute('position').count,
+        frontageVertices: mesh(view, `${zone}-frontages`).geometry.getAttribute('position').count,
       };
     });
 
@@ -207,42 +231,55 @@ describe('BuildingsView', () => {
     expect(shapes[1].detail[0]).toBeGreaterThan(shapes[0].detail[0]);
     expect(shapes[1].detail[1]).toBeGreaterThan(shapes[0].detail[1]);
     expect(shapes[0].detail[1]).toBeGreaterThan(shapes[2].detail[1]);
-    expect(shapes[1].facade[0]).toBeGreaterThan(shapes[2].facade[0]);
-    expect(shapes[2].facade[0]).toBeGreaterThan(shapes[0].facade[0]);
-    expect(shapes[1].facade[1]).toBeGreaterThan(shapes[2].facade[1]);
-    expect(shapes[2].facade[1]).toBeGreaterThan(shapes[0].facade[1]);
+    expect(new Set(shapes.map((shape) => shape.windowVertices)).size).toBe(3);
+    expect(new Set(shapes.map((shape) => shape.frontageVertices)).size).toBe(3);
   });
 
-  it('keeps building bodies non-emissive and hides abandoned facade glow', () => {
+  it('keeps frontage assemblies at ground-floor scale on higher-level buildings', () => {
+    const view = new BuildingsView();
+    view.upsert({ id: 11, zone: 'C', x: 1, y: 1, w: 1, h: 1, level: 3, abandoned: false });
+
+    const windowMatrix = matrixAt(mesh(view, 'C-windows'), 0);
+    const frontageMatrix = matrixAt(mesh(view, 'C-frontages'), 0);
+    expect(frontageMatrix[5]).toBeCloseTo(BUILDING_FRONTAGE_HEIGHT_MAX, 5);
+    expect(windowMatrix[5]).toBeGreaterThan(frontageMatrix[5]);
+  });
+
+  it('lights only live windows while retaining non-emissive abandoned frontage', () => {
     const view = new BuildingsView();
     view.upsert({ id: 1, zone: 'R', x: 1, y: 1, w: 1, h: 1, level: 1, abandoned: false });
     view.upsert({ id: 2, zone: 'I', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: false });
-    const liveFacade = matrixAt(mesh(view, 'I-facades'), 0);
-    expect(liveFacade[0]).toBeGreaterThan(0);
+    const liveWindows = matrixAt(mesh(view, 'I-windows'), 0);
+    expect(liveWindows[0]).toBeGreaterThan(0);
     view.upsert({ id: 2, zone: 'I', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: true });
     view.setNightGlow(1);
 
     const bodyMaterial = mesh(view, 'R-walls').material as MeshLambertMaterial;
-    const facadeMaterial = mesh(view, 'R-facades').material as MeshLambertMaterial;
+    const windowMaterial = mesh(view, 'R-windows').material as MeshLambertMaterial;
+    const frontageMaterial = mesh(view, 'R-frontages').material as MeshLambertMaterial;
     expect(bodyMaterial.emissive.getHex()).toBe(0x000000);
+    expect(frontageMaterial.emissive.getHex()).toBe(0x000000);
     view.setNightGlow(0.7);
-    expect(facadeMaterial.emissiveIntensity).toBe(0);
+    expect(windowMaterial.emissiveIntensity).toBe(0);
     view.setNightGlow(0.8);
-    expect(facadeMaterial.emissiveIntensity).toBeGreaterThan(0);
+    expect(windowMaterial.emissiveIntensity).toBeGreaterThan(0);
     view.setNightGlow(1);
-    expect(facadeMaterial.emissiveIntensity).toBeGreaterThan(0);
+    expect(windowMaterial.emissiveIntensity).toBeGreaterThan(0);
 
-    const abandonedFacade = new Matrix4();
-    mesh(view, 'I-facades').getMatrixAt(0, abandonedFacade);
-    expect(abandonedFacade.elements[0]).toBe(0);
-    expect(abandonedFacade.elements[5]).toBe(0);
-    expect(abandonedFacade.elements[10]).toBe(0);
+    const abandonedWindows = new Matrix4();
+    mesh(view, 'I-windows').getMatrixAt(0, abandonedWindows);
+    expect(abandonedWindows.elements[0]).toBe(0);
+    expect(abandonedWindows.elements[5]).toBe(0);
+    expect(abandonedWindows.elements[10]).toBe(0);
+    const abandonedFrontage = matrixAt(mesh(view, 'I-frontages'), 0);
+    expect(abandonedFrontage[0]).toBeGreaterThan(0);
+    expectCloseArray(colorAt(mesh(view, 'I-frontages'), 0), new Color(BUILDING_ABANDONED_FRONTAGE_COLOR).toArray());
 
     view.upsert({ id: 2, zone: 'I', x: 3, y: 1, w: 1, h: 1, level: 1, abandoned: false });
-    const recoveredFacade = new Matrix4();
-    mesh(view, 'I-facades').getMatrixAt(0, recoveredFacade);
-    expect(recoveredFacade.elements[0]).toBeGreaterThan(0);
-    expect(recoveredFacade.elements[5]).toBeGreaterThan(0);
-    expect(recoveredFacade.elements[10]).toBeGreaterThan(0);
+    const recoveredWindows = new Matrix4();
+    mesh(view, 'I-windows').getMatrixAt(0, recoveredWindows);
+    expect(recoveredWindows.elements[0]).toBeGreaterThan(0);
+    expect(recoveredWindows.elements[5]).toBeGreaterThan(0);
+    expect(recoveredWindows.elements[10]).toBeGreaterThan(0);
   });
 });

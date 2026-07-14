@@ -24,6 +24,16 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-14 — Distinct, detailed RCI buildings
+
+User request: houses need at least windows and doors, and residential, commercial, and industrial buildings need distinct physical features rather than color-only differentiation.
+
+The renderer now gives every growable building literal outward-facing windows on all four walls plus a separate physical frontage assembly. Residential buildings have a front door, stoop, porch canopy, pitched roof, and chimney; commercial buildings have a double storefront entry, awning, sign band, blade sign, dense glazing, and a taller rooftop core; industrial buildings have a loading bay, personnel door, dock, hood, bollards, sparse clerestory windows, and broad rooftop HVAC. Frontage height is capped independently of building level so doors and bays remain human-scaled. Live windows share the existing night-emissive material, while abandoned windows collapse and abandoned frontage assemblies remain visible in dark gray.
+
+The presentation remains renderer-only and population-independent: five synchronized instanced layers per zone produce a fixed 15 RCI draw batches for walls, roofs, rooftop details, windows, and frontages. Capacity growth, swap-removal, dirty flags, terrain foundations, abandonment, and shadow-map invalidation remain covered by tests. The new window layer does not cast or receive shadows, and the frontage layer does not cast shadows, so the cached 2048-square shadow map still refreshes only for the established building shells. The A-B-B-A render benchmark on the 453-building fixture measured 0.13758 ms before and 0.15467 ms after, a +0.01708 ms mean delta, with scene calls 34 to 37 and submitted triangles 394,815 to 421,227; `output/performance/building-details-render.json` retains the local diagnostic artifact and the result remains below the documented 50-call budget.
+
+Headless Chromium verified the live localhost with zero browser errors: `output/playwright/building-archetypes/final-day-close.png` shows residential entries/windows alongside commercial glazing and signage, `final-day-industrial.png` shows loading bays/docks and rooftop HVAC after a real camera pan, and `final-night-close-staged.png` is explicitly renderer-staged evidence of window glow rather than simulated night-state evidence. Verification: `npm test` passed 274/274 across 66 files; `npm run typecheck`, `npm run lint`, and `npm run build` passed; the production worker remains 111,133/120,000 bytes and the existing greater-than-500-kB main-chunk warning remains non-blocking. Three adversarial review lenses found no substantive correctness, lifecycle, rendering, performance, documentation, or clean-code defects after geometry tests were strengthened to reject zero-size and duplicate feature parts.
+
 ### 2026-07-13 — Zone repaint protection
 
 User request: setting zones must not overwrite zones that are already set; existing zoning must be erased first.
