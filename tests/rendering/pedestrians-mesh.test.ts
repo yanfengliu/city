@@ -166,7 +166,7 @@ describe('PedestriansView', () => {
     expect(replacement.yaw).toBeCloseTo(0, 5);
   });
 
-  it('clears both batches and interpolation history for an empty full-list update', () => {
+  it('clears all three batches and interpolation history for an empty full-list update', () => {
     let now = 100;
     const view = new PedestriansView(10, () => now);
     view.setPedestrians([pedestrian({ id: 7 })]);

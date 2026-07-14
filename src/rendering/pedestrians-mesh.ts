@@ -11,7 +11,7 @@ import {
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { PedestrianPurpose, PedestrianView } from '../protocol/messages';
+import type { PedestrianView } from '../protocol/messages';
 import {
   PEDESTRIAN_BODY,
   PEDESTRIAN_CAPACITY,
@@ -36,7 +36,6 @@ import {
 
 interface PedestrianState {
   generation: number;
-  purpose: PedestrianPurpose;
   style: PedestrianStyle;
   motion: VehicleMotionSegment;
 }
@@ -163,7 +162,6 @@ export class PedestriansView {
         : undefined;
       next.set(pedestrian.id, {
         generation: pedestrian.generation,
-        purpose: pedestrian.purpose,
         style: pedestrianStyle(pedestrian.id, pedestrian.generation, pedestrian.purpose),
         motion: retargetVehicleMotion(continuing?.motion, previousAlpha, target),
       });

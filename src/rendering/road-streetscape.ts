@@ -69,17 +69,52 @@ export function addSidewalks(
     patch(x + 1 - SIDEWALK_WIDTH, z, x + 1, z + SIDEWALK_WIDTH);
     patch(x, z + 1 - SIDEWALK_WIDTH, x + SIDEWALK_WIDTH, z + 1);
     patch(x + 1 - SIDEWALK_WIDTH, z + 1 - SIDEWALK_WIDTH, x + 1, z + 1);
-    return 4;
+    let count = 4;
+    if (!neighbors.n) {
+      patch(x + SIDEWALK_WIDTH, z, x + 1 - SIDEWALK_WIDTH, z + SIDEWALK_WIDTH);
+      count++;
+    }
+    if (!neighbors.s) {
+      patch(x + SIDEWALK_WIDTH, z + 1 - SIDEWALK_WIDTH, x + 1 - SIDEWALK_WIDTH, z + 1);
+      count++;
+    }
+    if (!neighbors.w) {
+      patch(x, z + SIDEWALK_WIDTH, x + SIDEWALK_WIDTH, z + 1 - SIDEWALK_WIDTH);
+      count++;
+    }
+    if (!neighbors.e) {
+      patch(x + 1 - SIDEWALK_WIDTH, z + SIDEWALK_WIDTH, x + 1, z + 1 - SIDEWALK_WIDTH);
+      count++;
+    }
+    return count;
   }
   if (horizontal) {
     patch(x, z, x + 1, z + SIDEWALK_WIDTH);
     patch(x, z + 1 - SIDEWALK_WIDTH, x + 1, z + 1);
-    return 2;
+    let count = 2;
+    if (!neighbors.w) {
+      patch(x, z + SIDEWALK_WIDTH, x + SIDEWALK_WIDTH, z + 1 - SIDEWALK_WIDTH);
+      count++;
+    }
+    if (!neighbors.e) {
+      patch(x + 1 - SIDEWALK_WIDTH, z + SIDEWALK_WIDTH, x + 1, z + 1 - SIDEWALK_WIDTH);
+      count++;
+    }
+    return count;
   }
   if (vertical) {
     patch(x, z, x + SIDEWALK_WIDTH, z + 1);
     patch(x + 1 - SIDEWALK_WIDTH, z, x + 1, z + 1);
-    return 2;
+    let count = 2;
+    if (!neighbors.n) {
+      patch(x + SIDEWALK_WIDTH, z, x + 1 - SIDEWALK_WIDTH, z + SIDEWALK_WIDTH);
+      count++;
+    }
+    if (!neighbors.s) {
+      patch(x + SIDEWALK_WIDTH, z + 1 - SIDEWALK_WIDTH, x + 1 - SIDEWALK_WIDTH, z + 1);
+      count++;
+    }
+    return count;
   }
   patch(x, z, x + 1, z + SIDEWALK_WIDTH);
   patch(x, z + 1 - SIDEWALK_WIDTH, x + 1, z + 1);
@@ -121,14 +156,15 @@ function addTrafficSignal(
       : arm === 'n'
         ? [x + inset, z + inset]
         : [x + 1 - inset, z + 1 - inset];
-  const base = surface.heightAt(px, pz) + SIDEWALK_Y;
+  const poleBase = surface.heightAt(px, pz) + SIDEWALK_Y;
+  const fixtureBase = surface.footprintRange(x, z, 1, 1).max + SIDEWALK_Y;
   const poleHalf = TRAFFIC_SIGNAL_POLE_HALF_WIDTH;
   builder.coloredBox(
     px - poleHalf,
-    base,
+    poleBase,
     pz - poleHalf,
     px + poleHalf,
-    base + TRAFFIC_SIGNAL_POLE_HEIGHT,
+    fixtureBase + TRAFFIC_SIGNAL_POLE_HEIGHT,
     pz + poleHalf,
     new Color(TRAFFIC_SIGNAL_POLE_COLOR),
   );
@@ -140,10 +176,10 @@ function addTrafficSignal(
   const hz = horizontal ? halfWidth : halfDepth;
   builder.coloredBox(
     px - hx,
-    base + TRAFFIC_SIGNAL_HOUSING_BOTTOM,
+    fixtureBase + TRAFFIC_SIGNAL_HOUSING_BOTTOM,
     pz - hz,
     px + hx,
-    base + TRAFFIC_SIGNAL_HOUSING_TOP,
+    fixtureBase + TRAFFIC_SIGNAL_HOUSING_TOP,
     pz + hz,
     new Color(TRAFFIC_SIGNAL_HOUSING_COLOR),
   );
@@ -159,7 +195,7 @@ function addTrafficSignal(
       builder,
       arm,
       px,
-      base + TRAFFIC_SIGNAL_LENS_HEIGHTS[lens],
+      fixtureBase + TRAFFIC_SIGNAL_LENS_HEIGHTS[lens],
       pz,
       new Color(lensColors[lens]),
     );

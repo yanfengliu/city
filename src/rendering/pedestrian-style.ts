@@ -30,6 +30,8 @@ export const PEDESTRIAN_SKIN_COLORS = [
 
 const WIDTH_SCALES = [0.9, 1, 1.1] as const;
 const HEIGHT_SCALES = [0.92, 1, 1.08] as const;
+export const PEDESTRIAN_MAX_WIDTH_SCALE = 1.1;
+export const PEDESTRIAN_MAX_HEIGHT_SCALE = 1.08;
 
 /** Feet sit just above the raised sidewalk top. */
 export const PEDESTRIAN_Y = SIDEWALK_Y + 0.01;

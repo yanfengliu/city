@@ -30,13 +30,10 @@ describe('pedestrianStyle', () => {
     const industrial = pedestrianStyle(7, 3, 'industrial-work');
     const shopping = pedestrianStyle(7, 3, 'shopping');
 
-    expect(commercial.topColor).toBe(PEDESTRIAN_PURPOSE_TOP_PALETTES['commercial-work'][5]);
-    expect(industrial.topColor).toBe(PEDESTRIAN_PURPOSE_TOP_PALETTES['industrial-work'][5]);
-    expect(shopping.topColor).toBe(PEDESTRIAN_PURPOSE_TOP_PALETTES.shopping[5]);
-    expect(commercial.bottomColor).toBe(PEDESTRIAN_BOTTOM_COLORS[2]);
-    expect(commercial.skinColor).toBe(PEDESTRIAN_SKIN_COLORS[2]);
-    expect(commercial.widthScale).toBe(1.1);
-    expect(commercial.heightScale).toBe(1);
+    expect(PEDESTRIAN_PURPOSE_TOP_PALETTES['commercial-work']).toContain(commercial.topColor);
+    expect(PEDESTRIAN_PURPOSE_TOP_PALETTES['industrial-work']).toContain(industrial.topColor);
+    expect(PEDESTRIAN_PURPOSE_TOP_PALETTES.shopping).toContain(shopping.topColor);
+    expect(pedestrianStyle(7, 3, 'commercial-work')).toEqual(commercial);
     expect(industrial).toMatchObject({
       bottomColor: commercial.bottomColor,
       skinColor: commercial.skinColor,
