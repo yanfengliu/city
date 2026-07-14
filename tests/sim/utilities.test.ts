@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { createCitySim, getTreasury, rebuildDerived } from '../../src/sim/city';
+import { PIPE_COST_PER_CELL } from '../../src/sim/constants/utilities';
 import { UTILITY_ABANDON_EVALS } from '../../src/sim/constants/zoning';
 import { LEVEL_INTERVAL } from '../../src/sim/constants/zoning';
-import { buildDistrict, findConnectablePumpSpot, findLandBlock, stats } from './helpers';
+import { cellIndex, lPathCells } from '../../src/sim/grid';
+import {
+  buildDistrict,
+  findBridgeSite,
+  findConnectablePumpSpot,
+  findLandBlock,
+  stats,
+} from './helpers';
 import type { CitySim } from '../../src/sim/city';
 
 function poweredCounts(sim: CitySim) {
@@ -17,6 +25,30 @@ function poweredCounts(sim: CitySim) {
     else unpowered++;
   }
   return { powered, unpowered, abandoned };
+}
+
+function seedDryBuilding(sim: CitySim, x: number, y: number): number {
+  let entity = -1;
+  sim.world.runMaintenance(() => {
+    entity = sim.world.createEntity();
+    sim.world.setPosition(entity, { x, y });
+    sim.world.addComponent(entity, 'building', {
+      zone: 'R',
+      level: 1,
+      w: 1,
+      h: 1,
+      residents: 0,
+      jobsFilled: 0,
+      abandoned: false,
+      upEvals: 0,
+      badEvals: 0,
+      badUtilityEvals: 0,
+      recoverEvals: 0,
+      powered: true,
+      watered: false,
+    });
+  });
+  return entity;
 }
 
 
@@ -169,6 +201,69 @@ describe('power network', () => {
 });
 
 describe('water network', () => {
+  it('lays and charges for an underground pipe across lake cells', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const site = findBridgeSite(sim);
+    const from = { x: site.x0, y: site.y };
+    const to = { x: site.x1, y: site.y };
+    const path = lPathCells(from, to);
+    const waterCells = path.filter(
+      ({ x, y }) => sim.terrain.water[cellIndex(x, y)] === 1,
+    );
+    const before = getTreasury(sim.world);
+
+    expect(waterCells.length).toBeGreaterThan(0);
+    expect(
+      sim.world.submit('placePipe', { ax: from.x, ay: from.y, bx: to.x, by: to.y }),
+    ).toBe(true);
+    sim.world.step();
+
+    expect(path.every(({ x, y }) => sim.pipeCells.has(cellIndex(x, y)))).toBe(true);
+    expect(getTreasury(sim.world)).toBe(before - path.length * PIPE_COST_PER_CELL);
+  });
+
+  it('conducts water across a lake and rebuilds the same water-cell pipes after load', () => {
+    const config = { seed: 7, utilitiesEnabled: true } as const;
+    const sim = createCitySim(config);
+    const site = findBridgeSite(sim);
+    const pump = { x: site.x0 + 7, y: site.y };
+    const destination = { x: site.x1, y: site.y };
+    const building = seedDryBuilding(sim, destination.x, destination.y);
+
+    expect(sim.world.submit('placeWaterPump', pump)).toBe(true);
+    sim.world.step();
+    expect(
+      sim.world.submit('placePipe', {
+        ax: pump.x,
+        ay: pump.y,
+        bx: destination.x,
+        by: destination.y,
+      }),
+    ).toBe(true);
+    for (let i = 0; i < 16; i++) sim.world.step();
+
+    expect(sim.world.getComponent(building, 'building')?.watered).toBe(true);
+    const waterPipeCells = [...sim.pipeCells.keys()].filter(
+      (index) => sim.terrain.water[index] === 1,
+    );
+    expect(waterPipeCells.length).toBeGreaterThan(0);
+
+    const snapshot = JSON.parse(JSON.stringify(sim.world.serialize()));
+    const restored = createCitySim(config);
+    restored.world.applySnapshot(snapshot);
+    rebuildDerived(restored);
+
+    expect([...restored.pipeCells.keys()].sort((a, b) => a - b)).toEqual(
+      [...sim.pipeCells.keys()].sort((a, b) => a - b),
+    );
+    expect(waterPipeCells.every((index) => restored.pipeCells.has(index))).toBe(true);
+    for (let i = 0; i < 16; i++) {
+      sim.world.step();
+      restored.world.step();
+    }
+    expect(JSON.stringify(restored.world.serialize())).toBe(JSON.stringify(sim.world.serialize()));
+  });
+
   it('rejects pumps away from water and accepts pipes under roads', () => {
     const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
     const base = findLandBlock(sim, 18, 18);

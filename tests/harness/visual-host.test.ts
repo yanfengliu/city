@@ -15,7 +15,7 @@ import type { PlayerInput } from '../../src/harness/player';
 import type { CommandName } from '../../src/protocol/messages';
 import type { CityCommands } from '../../src/sim/types';
 
-function stubHarness() {
+function stubHarness(stateOverrides: Record<string, unknown> = {}) {
   const calls = {
     hud: [] as string[],
     clickAt: [] as Array<[number, number]>,
@@ -61,6 +61,7 @@ function stubHarness() {
       activeOverlay: 'none',
       advisories: ['Build a road to the highway'],
       cameraTarget: { x: 64, y: 0, z: 64 },
+      ...stateOverrides,
     }),
     advance: (ms) => calls.advance.push(ms),
     command: <K extends CommandName>(_name: K, _data: CityCommands[K]) => {
@@ -154,6 +155,44 @@ describe('city visual playtest host', () => {
         value: originalDocument,
       });
     }
+  });
+
+  it('surfaces retained pipe previews, installed lake cells, and command rejections', () => {
+    const { api } = stubHarness({
+      pipeCellCount: 18,
+      waterPipeCellCount: 6,
+      pipePreview: {
+        active: false,
+        submitted: true,
+        from: { x: 4, y: 9 },
+        to: { x: 21, y: 9 },
+        selectedCellCount: 18,
+        newCellCount: 18,
+        waterCellCount: 6,
+        valid: true,
+        rejectionReason: null,
+      },
+      lastCommandRejection: {
+        name: 'placePipe',
+        message: 'Validation failed',
+        tick: 3,
+      },
+    });
+
+    const observation = cityVisualObservation(api);
+
+    expect(observation.visibleText).toEqual(
+      expect.arrayContaining([
+        'pipe cells 18',
+        'pipe cells under water 6',
+        'pipe preview valid: 18 selected, 18 new, 6 under water, submitted',
+        'last command rejected placePipe at tick 3: Validation failed',
+      ]),
+    );
+    expect(observation.state?.[0]).toMatchObject({
+      summary: expect.stringContaining('pipe preview valid'),
+      value: expect.objectContaining({ pipeCellCount: 18, waterPipeCellCount: 6 }),
+    });
   });
 
   it('advertises only supported canvas action kinds', () => {

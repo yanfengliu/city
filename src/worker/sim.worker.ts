@@ -427,7 +427,7 @@ addEventListener('message', (event) => {
     case 'command': {
       const result = world.submitWithResult(message.name, message.data as never);
       if (!result.accepted) {
-        post({ type: 'commandRejected', name: message.name, message: result.message });
+        post({ type: 'commandRejected', name: message.name, message: result.message, tick: world.tick });
       }
       break;
     }

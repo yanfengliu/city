@@ -115,7 +115,7 @@ function performCityVisualAction(
       return click(api, action);
     case 'drag':
       api.player.dragAt(action.from.x, action.from.y, action.to.x, action.to.y);
-      return ok(action, 'dragged on player surface');
+      return ok(action, 'drag dispatched; observe retained preview and command state for outcome');
     case 'key':
       if (action.modifiers?.length) {
         return fail(action, `key modifiers are not supported by city player.key: ${action.modifiers.join('+')}`);
@@ -231,8 +231,25 @@ function visibleTextFromState(state: Record<string, unknown>): string[] {
   add(out, 'active tool', state.activeTool);
   add(out, 'active overlay', state.activeOverlay);
   add(out, 'road cells', state.roadCellCount);
+  add(out, 'pipe cells', state.pipeCellCount);
+  add(out, 'pipe cells under water', state.waterPipeCellCount);
   add(out, 'buildings', state.buildingCount);
   add(out, 'vehicles', state.vehiclesOnScreen);
+  const preview = state.pipePreview;
+  if (isRecord(preview)) {
+    const validity = preview.valid === true ? 'valid' : 'invalid';
+    const phase = preview.submitted === true ? 'submitted' : preview.active === true ? 'active' : 'idle';
+    const reason = typeof preview.rejectionReason === 'string' ? `: ${preview.rejectionReason}` : '';
+    out.push(
+      `pipe preview ${validity}: ${String(preview.selectedCellCount)} selected, ${String(preview.newCellCount)} new, ${String(preview.waterCellCount)} under water, ${phase}${reason}`,
+    );
+  }
+  const rejection = state.lastCommandRejection;
+  if (isRecord(rejection)) {
+    out.push(
+      `last command rejected ${String(rejection.name)} at tick ${String(rejection.tick)}: ${String(rejection.message)}`,
+    );
+  }
   const advisories = state.advisories;
   if (Array.isArray(advisories)) {
     for (const advisory of advisories) {
@@ -244,7 +261,17 @@ function visibleTextFromState(state: Record<string, unknown>): string[] {
 }
 
 function summarizeState(state: Record<string, unknown>): string {
-  return visibleTextFromState(state).slice(0, 8).join('; ');
+  const visible = visibleTextFromState(state);
+  const summary = visible.slice(0, 8);
+  for (const line of visible) {
+    if (
+      (line.startsWith('pipe preview ') || line.startsWith('last command rejected ')) &&
+      !summary.includes(line)
+    ) {
+      summary.push(line);
+    }
+  }
+  return summary.join('; ');
 }
 
 function add(out: string[], label: string, value: unknown): void {

@@ -65,6 +65,14 @@ describe('session replay self-check', () => {
         by: stub.y + 2 * stub.dy,
       }),
     ).toBe(true);
+    expect(
+      sim.world.submit('placePipe', {
+        ax: stub.x,
+        ay: stub.y,
+        bx: stub.x + 2 * stub.dx,
+        by: stub.y + 2 * stub.dy,
+      }),
+    ).toBe(true);
     for (let i = 0; i < 700; i++) sim.world.step();
 
     // Mid-run topology edits while traffic may be in flight, plus a rect

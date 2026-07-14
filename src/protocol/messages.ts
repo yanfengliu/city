@@ -208,7 +208,7 @@ export type WorkerToClient =
       defaultValue: number;
       cells: Array<[index: number, value: number]>;
     }
-  | { type: 'commandRejected'; name: CommandName; message: string }
+  | { type: 'commandRejected'; name: CommandName; message: string; tick: number }
   /** Save response: the serialized world + metadata for persistence. */
   | { type: 'snapshot'; snapshot: unknown; meta: SaveMeta }
   /** Harness: a finding was recorded, anchored to `tick`. */

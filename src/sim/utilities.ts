@@ -138,10 +138,7 @@ export function registerUtilityCommands(sim: CitySim): void {
     if (!endpointsInBounds(data)) return false;
     const newCells = pathIndices(data).filter((i) => !sim.pipeCells.has(i));
     if (newCells.length === 0) return false;
-    // Underground: only water rejects — pipes go under roads/buildings/anything.
-    for (const i of newCells) {
-      if (sim.terrain.water[i] === 1) return false;
-    }
+    // Underground pipes may cross terrain, water, roads, and occupied cells.
     return purchaseAllowed(world, newCells.length * PIPE_COST_PER_CELL, true);
   });
 

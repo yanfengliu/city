@@ -193,6 +193,7 @@ export class Game {
   private congestionBuckets: ReadonlyMap<number, number> = new Map();
   private employed = 0;
   private disconnectedTrips = 0;
+  private lastCommandRejection: { name: CommandName; message: string; tick: number } | null = null;
   private ready = false;
   private readonly recordPlaytest: boolean;
 
@@ -333,6 +334,7 @@ export class Game {
   }
 
   private send(message: ClientToWorker): void {
+    if (message.type === 'command') this.lastCommandRejection = null;
     this.worker.postMessage(message);
   }
 
@@ -457,6 +459,7 @@ export class Game {
         this.water = message.stats.water;
         break;
       case 'commandRejected':
+        this.lastCommandRejection = message;
         this.hud.showToast(`Command rejected: ${message.message}`);
         break;
       case 'annotated':
@@ -913,6 +916,10 @@ export class Game {
       // subtract HIGHWAY_CELLS.length for a player-built-road baseline.
       roadCellCount: this.roadsView.cellCount,
       bridgeCellCount: this.roadsView.bridgeCellCount,
+      pipeCellCount: this.pipeCells.size,
+      waterPipeCellCount: [...this.pipeCells].filter((index) => this.terrain?.water[index] === 1).length,
+      pipePreview: this.tools.pipePreview,
+      lastCommandRejection: this.lastCommandRejection,
       levelUpsCelebrated: this.levelUpFx.celebrated,
       utilityIconsShown: this.utilityIconsFx.count,
       zonedCellCount: this.zonedCells.size,

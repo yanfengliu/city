@@ -96,3 +96,70 @@ describe('zone painting ghosts', () => {
     expect(showGhost).toHaveBeenLastCalledWith([{ x: 2, y: 2 }], [false]);
   });
 });
+
+describe('utility line ghosts', () => {
+  it('retains an observable valid pipe preview across water and submits the drag', () => {
+    const showGhost = vi.fn();
+    const submitPipe = vi.fn();
+    const tools = new Tools(
+      host({
+        isWater: (x, y) => x === 2 && y === 1,
+        showGhost,
+        submitPipe,
+      }),
+    );
+    tools.setTool('pipe');
+
+    tools.pointerDown({ x: 1, y: 1 });
+    tools.pointerMove({ x: 3, y: 1 });
+
+    expect(showGhost).toHaveBeenLastCalledWith(
+      [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+        { x: 3, y: 1 },
+      ],
+      true,
+    );
+
+    tools.pointerUp({ x: 3, y: 1 });
+
+    expect(submitPipe).toHaveBeenCalledWith({ x: 1, y: 1 }, { x: 3, y: 1 });
+    expect(tools.pipePreview).toEqual({
+      active: false,
+      submitted: true,
+      from: { x: 1, y: 1 },
+      to: { x: 3, y: 1 },
+      selectedCellCount: 3,
+      newCellCount: 3,
+      waterCellCount: 1,
+      valid: true,
+      rejectionReason: null,
+    });
+  });
+
+  it('keeps power lines blocked over water and explains an all-existing pipe run', () => {
+    const lineGhost = vi.fn();
+    const lineTools = new Tools(
+      host({
+        isWater: (x, y) => x === 2 && y === 1,
+        showGhost: lineGhost,
+      }),
+    );
+    lineTools.setTool('powerLine');
+    lineTools.pointerDown({ x: 1, y: 1 });
+    lineTools.pointerMove({ x: 3, y: 1 });
+    expect(lineGhost).toHaveBeenLastCalledWith(expect.any(Array), false);
+
+    const pipeTools = new Tools(host({ hasPipe: () => true }));
+    pipeTools.setTool('pipe');
+    pipeTools.pointerDown({ x: 1, y: 1 });
+    pipeTools.pointerUp({ x: 3, y: 1 });
+    expect(pipeTools.pipePreview).toMatchObject({
+      submitted: true,
+      newCellCount: 0,
+      valid: false,
+      rejectionReason: 'All selected cells already have pipes',
+    });
+  });
+});

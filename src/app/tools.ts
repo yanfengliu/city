@@ -106,6 +106,19 @@ export interface ToolHost {
   onToolChanged(tool: ToolName): void;
 }
 
+/** Semantic pipe ghost retained after pointer-up for headless playtest evidence. */
+export interface PipePreviewState {
+  active: boolean;
+  submitted: boolean;
+  from: Cell;
+  to: Cell;
+  selectedCellCount: number;
+  newCellCount: number;
+  waterCellCount: number;
+  valid: boolean;
+  rejectionReason: string | null;
+}
+
 /** All cells of the inclusive rectangle between two corner cells, row-major. */
 export function rectCells(a: Cell, b: Cell): Cell[] {
   const x0 = Math.min(a.x, b.x);
@@ -131,6 +144,7 @@ export function rectCells(a: Cell, b: Cell): Cell[] {
 export class Tools {
   activeTool: ToolName = 'select';
   private dragAnchor: Cell | null = null;
+  private retainedPipePreview: PipePreviewState | null = null;
 
   constructor(private readonly host: ToolHost) {}
 
@@ -143,9 +157,14 @@ export class Tools {
     return this.dragAnchor !== null;
   }
 
+  get pipePreview(): PipePreviewState | null {
+    return this.retainedPipePreview;
+  }
+
   setTool(tool: ToolName): void {
     if (tool === this.activeTool) return;
     this.dragAnchor = null;
+    this.retainedPipePreview = null;
     this.activeTool = tool;
     this.host.clearGhost();
     this.host.onToolChanged(tool);
@@ -190,7 +209,10 @@ export class Tools {
     const zone = ZONE_BY_TOOL[this.activeTool];
     if (this.activeTool === 'road') this.host.submitRoad(a, b);
     else if (this.activeTool === 'powerLine') this.host.submitPowerLine(a, b);
-    else if (this.activeTool === 'pipe') this.host.submitPipe(a, b);
+    else if (this.activeTool === 'pipe') {
+      this.retainedPipePreview = this.describePipePreview(a, b, lPathCells(a, b), false, true);
+      this.host.submitPipe(a, b);
+    }
     else if (this.activeTool === 'bulldoze') this.host.submitBulldozeRect(a, b);
     else if (this.activeTool === 'dezone') this.host.submitDezone(a, b);
     else if (zone) this.host.submitZone(zone, a, b);
@@ -258,6 +280,18 @@ export class Tools {
       this.activeTool === 'road' || LINE_TOOLS.has(this.activeTool)
         ? lPathCells(anchor, current)
         : rectCells(anchor, current);
+    if (this.activeTool === 'pipe') {
+      const preview = this.describePipePreview(
+        anchor,
+        current,
+        cells,
+        this.dragAnchor !== null,
+        false,
+      );
+      this.retainedPipePreview = preview;
+      this.host.showGhost(cells, preview.valid);
+      return;
+    }
     // Zone/dezone paint only their eligible subset — tint each cell honestly.
     const zone = ZONE_BY_TOOL[this.activeTool];
     if (zone) {
@@ -339,8 +373,9 @@ export class Tools {
   /**
    * Mirrors the sim validators so ghosts stay honest. Road: builds over water
    * as a bridge and crosses power lines; anything else occupying a cell
-   * (buildings, services, plants, pumps) blocks. Power line and pipe: thin
-   * overlays that run over everything on land — only water blocks. Bulldoze:
+   * (buildings, services, plants, pumps) blocks. A power line runs over
+   * everything on land but water blocks it; an underground pipe may also cross
+   * water. Bulldoze:
    * needs ≥1 demolishable cell (road, building, structure, plant/pump, line,
    * or pipe). Dezone: needs ≥1 zoned cell. Zone: needs ≥1 unzoned, zoneable
    * cell (land, non-road, within ZONE_MAX_ROAD_DISTANCE of a road).
@@ -355,8 +390,7 @@ export class Tools {
         // everything on land and only water blocks it.
         return !cells.some((cell) => this.host.isWater(cell.x, cell.y));
       case 'pipe':
-        // Pipes run under everything on land.
-        return !cells.some((cell) => this.host.isWater(cell.x, cell.y));
+        return cells.some((cell) => !this.host.hasPipe(index(cell)));
       case 'bulldoze':
         return cells.some(
           (cell) =>
@@ -385,6 +419,28 @@ export class Tools {
       this.host.hasStructure(index) ||
       this.host.hasUtilityFootprint(index)
     );
+  }
+
+  private describePipePreview(
+    from: Cell,
+    to: Cell,
+    cells: Cell[],
+    active: boolean,
+    submitted: boolean,
+  ): PipePreviewState {
+    const indices = cells.map((cell) => cellIndex(cell.x, cell.y, this.host.gridWidth));
+    const newCellCount = indices.filter((index) => !this.host.hasPipe(index)).length;
+    return {
+      active,
+      submitted,
+      from,
+      to,
+      selectedCellCount: cells.length,
+      newCellCount,
+      waterCellCount: cells.filter((cell) => this.host.isWater(cell.x, cell.y)).length,
+      valid: newCellCount > 0,
+      rejectionReason: newCellCount === 0 ? 'All selected cells already have pipes' : null,
+    };
   }
 
   private isDezoneable(cell: Cell): boolean {
