@@ -128,6 +128,7 @@ Whenever `package.json` dependency surface changes: re-resolve the lockfile with
 
 ## Git
 
+- During substantial multi-step work, treat each minimal coherent unit as a delivery boundary: once it passes the applicable verification and review and all substantive findings are resolved, promptly stage only its scoped files and commit it before unrelated completed units accumulate in the worktree or diff. Self-review trivial changes; adversarially review behavior and public-contract changes. Never commit failing, in-flight, or partial work merely as a checkpoint.
 - Commit directly to `main` — solo-developer repo; each coherent, self-contained unit lands as its own commit with all four gates green.
 - Commit durable docs that guide future work. Never revert user changes unless explicitly requested.
 - Push at the end of a task if local commits are ahead and network access is available.
