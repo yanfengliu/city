@@ -47,7 +47,10 @@ interface Aggregate {
   meanBundleJsonBytes: number;
 }
 
-const resultText = readFileSync('benchmarks/results/2026-07-12-recorder-profile.json', 'utf8');
+// The newest recorder profile. Its manifest must describe the current tree, so
+// this points at a freshly captured file whenever a pinned input changes;
+// earlier dated profiles stay in results/ as history.
+const resultText = readFileSync('benchmarks/results/2026-07-15-recorder-profile.json', 'utf8');
 const result = JSON.parse(resultText) as RecorderResult;
 
 function mean(runs: RecorderRun[], select: (run: RecorderRun) => number): number {
