@@ -1,5 +1,9 @@
-import type { Camera, Scene, WebGLRenderer } from 'three';
-import { ThreeRenderRuntime, type ThreePreparedFrameTicket } from 'voxel/three';
+import type { Camera, Scene } from 'three';
+import {
+  ThreeRenderRuntime,
+  type RendererLike,
+  type ThreePreparedFrameTicket,
+} from 'voxel/three';
 
 import type { BuildingRenderView } from './buildings-mesh';
 import type { TerrainSurfaceView } from './terrain-surface';
@@ -13,7 +17,8 @@ export function voxelWallsRequested(search: string): boolean {
 }
 
 export interface VoxelWallsHostOptions {
-  readonly renderer: WebGLRenderer;
+  /** City's own renderer, borrowed. Voxel must never resize or dispose it. */
+  readonly renderer: RendererLike;
   readonly scene: Scene;
   readonly camera: Camera;
   readonly width: number;
@@ -39,6 +44,7 @@ export class VoxelWallsHost {
   private frameIndex = 0;
   private lastNowMs: number | null = null;
   private failed = false;
+  private disposed = false;
 
   constructor(options: VoxelWallsHostOptions) {
     this.runtime = new ThreeRenderRuntime({
@@ -74,7 +80,7 @@ export class VoxelWallsHost {
 
   /** Prepares Voxel's scene changes for City's imminent draw. */
   prepareFrame(nowMs: number): void {
-    if (this.failed) return;
+    if (this.failed || this.disposed) return;
     try {
       const snapshot = this.lane.snapshotIfDirty();
       if (snapshot) {
@@ -103,7 +109,7 @@ export class VoxelWallsHost {
   commitFrame(): void {
     const ticket = this.ticket;
     this.ticket = null;
-    if (!ticket || this.failed) return;
+    if (!ticket || this.failed || this.disposed) return;
     try {
       this.runtime.commitFrame(ticket);
     } catch (error) {
@@ -111,8 +117,11 @@ export class VoxelWallsHost {
     }
   }
 
+  /** Idempotent: repeated disposal, and any later use, are silent no-ops. */
   dispose(): void {
+    if (this.disposed) return;
     this.abortPendingTicket();
+    this.disposed = true;
     try {
       this.runtime.dispose();
     } catch (error) {
