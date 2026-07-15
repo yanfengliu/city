@@ -49,6 +49,11 @@ const shotSink = (): Plugin => ({
 
 export default defineConfig({
   resolve: {
+    // Local `voxel` is linked during development and carries its own Three
+    // devDependency, so a bundler following the symlink would resolve a second
+    // copy. Pin every import to this app's Three instance: with two copies,
+    // instanceof checks and material identity silently fail across the boundary.
+    dedupe: ['three'],
     alias: {
       'node:fs': shim('node-fs'),
       'node:path': shim('node-path'),
