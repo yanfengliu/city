@@ -1,105 +1,21 @@
 {
-  "capturedAt": "2026-07-15T20:51:27.876Z",
+  "capturedAt": "2026-07-15T21:42:49.493Z",
   "viewport": {
     "width": 1280,
     "height": 720
   },
   "fixture": "benchmarks/fixtures/performance-city-save.json",
+  "lanes": "building walls, roofs and rooftop details",
   "buildings": 453,
   "drawCalls": {
     "before": 39,
-    "after": 37,
-    "delta": -2
+    "after": 34,
+    "delta": -5
   },
   "triangles": {
     "before": 452211,
     "after": 452211,
     "delta": 0
-  },
-  "drawnWallInstances": {
-    "before": 453,
-    "after": 453
-  },
-  "wallMeshes": {
-    "before": [
-      {
-        "name": "R-walls",
-        "visible": true,
-        "count": 292
-      },
-      {
-        "name": "C-walls",
-        "visible": true,
-        "count": 67
-      },
-      {
-        "name": "I-walls",
-        "visible": true,
-        "count": 94
-      },
-      {
-        "name": "fireStation-walls",
-        "visible": true,
-        "count": 0
-      },
-      {
-        "name": "police-walls",
-        "visible": true,
-        "count": 0
-      },
-      {
-        "name": "clinic-walls",
-        "visible": true,
-        "count": 0
-      },
-      {
-        "name": "school-walls",
-        "visible": true,
-        "count": 0
-      }
-    ],
-    "after": [
-      {
-        "name": "batch:building-walls",
-        "visible": true,
-        "count": 453
-      },
-      {
-        "name": "R-walls",
-        "visible": false,
-        "count": 292
-      },
-      {
-        "name": "C-walls",
-        "visible": false,
-        "count": 67
-      },
-      {
-        "name": "I-walls",
-        "visible": false,
-        "count": 94
-      },
-      {
-        "name": "fireStation-walls",
-        "visible": true,
-        "count": 0
-      },
-      {
-        "name": "police-walls",
-        "visible": true,
-        "count": 0
-      },
-      {
-        "name": "clinic-walls",
-        "visible": true,
-        "count": 0
-      },
-      {
-        "name": "school-walls",
-        "visible": true,
-        "count": 0
-      }
-    ]
   },
   "voxelRuntimeRoots": {
     "before": 0,
@@ -109,19 +25,20 @@
     "before": [],
     "after": []
   },
+  "note": "controlVsBefore is the same-config animation noise floor; afterVsBefore is meaningful only against it.",
   "pixels": {
     "controlVsBefore": {
-      "worstChannelDelta": 37,
-      "meanChannelDelta": 0.23828125,
-      "channelsOver8": 26,
-      "channelsOver24": 4,
+      "worstChannelDelta": 34,
+      "meanChannelDelta": 0.4774305555555556,
+      "channelsOver8": 72,
+      "channelsOver24": 3,
       "comparedChannels": 6912
     },
     "afterVsBefore": {
-      "worstChannelDelta": 35,
-      "meanChannelDelta": 0.6312210648148148,
-      "channelsOver8": 90,
-      "channelsOver24": 6,
+      "worstChannelDelta": 34,
+      "meanChannelDelta": 0.5400752314814815,
+      "channelsOver8": 75,
+      "channelsOver24": 3,
       "comparedChannels": 6912
     }
   }

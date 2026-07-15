@@ -1,4 +1,4 @@
-import { BoxGeometry, Color, Matrix4, SRGBColorSpace } from 'three';
+import { BoxGeometry, Color, ConeGeometry, Matrix4, SRGBColorSpace } from 'three';
 import type {
   GeometryResourceV1,
   InstanceBatchV1,
@@ -7,16 +7,26 @@ import type {
 } from 'voxel/core';
 
 import {
+  BUILDING_ABANDONED_DETAIL_COLOR,
+  BUILDING_ABANDONED_ROOF_COLOR,
   BUILDING_ABANDONED_WALL_COLOR,
+  BUILDING_DETAIL_COLORS,
+  BUILDING_DETAIL_HEIGHTS,
+  BUILDING_DETAIL_WIDTHS,
   BUILDING_FOOTPRINT_JITTER,
   BUILDING_FOOTPRINT_MARGIN,
   BUILDING_HEIGHT_JITTER,
   BUILDING_LEVEL_HEIGHTS,
+  BUILDING_LEVEL_ROOF_LIGHTEN,
   BUILDING_LEVEL_WALL_LIGHTEN,
+  BUILDING_ROOF_COLORS,
+  BUILDING_ROOF_HEIGHTS,
+  BUILDING_ROOF_OVERHANG,
   BUILDING_TINT_HUE_JITTER,
   BUILDING_TINT_LIGHT_JITTER,
   BUILDING_WALL_COLORS,
   cellHash01,
+  type ZoneKind,
 } from './constants';
 import type { BuildingRenderView } from './buildings-mesh';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
@@ -26,6 +36,15 @@ export const VOXEL_WALLS_EPOCH = 'epoch:city-walls/1';
 export const VOXEL_WALLS_GEOMETRY_KEY = 'geometry:building-wall-unit-box';
 export const VOXEL_WALLS_MATERIAL_KEY = 'material:building-wall';
 export const VOXEL_WALLS_BATCH_KEY = 'batch:building-walls';
+export const VOXEL_ROOF_PYRAMID_GEOMETRY_KEY = 'geometry:building-roof-pyramid';
+export const VOXEL_ROOF_PYRAMID_BATCH_KEY = 'batch:building-roofs-pyramid';
+export const VOXEL_ROOF_BOX_BATCH_KEY = 'batch:building-roofs-box';
+export const VOXEL_DETAIL_BATCH_KEY = 'batch:building-roof-details';
+
+/** Residential roofs are pyramids; commercial and industrial reuse the box. */
+function roofIsPyramid(zone: ZoneKind): boolean {
+  return zone === 'R';
+}
 
 const MATRIX = new Matrix4();
 const COLOR = new Color();
@@ -55,6 +74,38 @@ function unitBoxGeometry(): GeometryResourceV1 {
     pivot: { x: 0, y: 0, z: 0 },
   };
   box.dispose();
+  return resource;
+}
+
+/**
+ * BuildingsView's residential pyramid roof as a Voxel geometry resource: a
+ * four-sided cone rotated square, base at y=0.
+ */
+function pyramidRoofGeometry(): GeometryResourceV1 {
+  const cone = new ConeGeometry(Math.SQRT1_2, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0);
+  const index = cone.getIndex();
+  if (!index) throw new Error('Pyramid roof geometry must be indexed.');
+  const position = cone.getAttribute('position');
+  const normal = cone.getAttribute('normal');
+  cone.computeBoundingBox();
+  const box = cone.boundingBox!;
+  const resource: GeometryResourceV1 = {
+    kind: 'geometry',
+    key: VOXEL_ROOF_PYRAMID_GEOMETRY_KEY,
+    incarnation: 1,
+    revision: 1,
+    topology: 'triangles',
+    positions: new Float32Array(position.array),
+    normals: new Float32Array(normal.array),
+    indices: new Uint16Array(index.array),
+    groups: [],
+    bounds: {
+      min: { x: box.min.x, y: box.min.y, z: box.min.z },
+      max: { x: box.max.x, y: box.max.y, z: box.max.z },
+    },
+    pivot: { x: 0, y: 0, z: 0 },
+  };
+  cone.dispose();
   return resource;
 }
 
@@ -107,6 +158,87 @@ export function wallMatrixInto(
   return target
     .makeScale(sx, height + foundationDepth, sz)
     .setPosition(cx, foundation.min, cz);
+}
+
+/**
+ * The roof transform for one building, mirroring BuildingsView's own
+ * `writeInstance`: an overhang clamped to the cell, the zone's roof height,
+ * and a base sitting on the wall top at the highest covered terrain.
+ */
+export function roofMatrixInto(
+  view: BuildingRenderView,
+  surface: TerrainSurfaceView,
+  target: Matrix4,
+): Matrix4 {
+  const levelIndex = Math.min(Math.max(view.level, 1), BUILDING_LEVEL_HEIGHTS.length) - 1;
+  const jitter = 1 + (cellHash01(view.id) - 0.5) * BUILDING_HEIGHT_JITTER;
+  const height = BUILDING_LEVEL_HEIGHTS[levelIndex]! * jitter;
+  const cx = view.x + view.w / 2;
+  const cz = view.y + view.h / 2;
+  const foundation = surface.footprintRange(view.x, view.y, view.w, view.h);
+  const sx = view.w * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x1111) * BUILDING_FOOTPRINT_JITTER);
+  const sz = view.h * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x2222) * BUILDING_FOOTPRINT_JITTER);
+  const roofSx = Math.min(view.w * 0.98, sx + BUILDING_ROOF_OVERHANG);
+  const roofSz = Math.min(view.h * 0.98, sz + BUILDING_ROOF_OVERHANG);
+  return target
+    .makeScale(roofSx, BUILDING_ROOF_HEIGHTS[view.zone], roofSz)
+    .setPosition(cx, foundation.max + height, cz);
+}
+
+/**
+ * The rooftop detail transform, mirroring BuildingsView's `writeInstance`: a
+ * jittered offset within the body, a width clamped to the footprint, and a
+ * base sunk slightly into the roof.
+ */
+export function detailMatrixInto(
+  view: BuildingRenderView,
+  surface: TerrainSurfaceView,
+  target: Matrix4,
+): Matrix4 {
+  const levelIndex = Math.min(Math.max(view.level, 1), BUILDING_LEVEL_HEIGHTS.length) - 1;
+  const jitter = 1 + (cellHash01(view.id) - 0.5) * BUILDING_HEIGHT_JITTER;
+  const height = BUILDING_LEVEL_HEIGHTS[levelIndex]! * jitter;
+  const cx = view.x + view.w / 2;
+  const cz = view.y + view.h / 2;
+  const foundation = surface.footprintRange(view.x, view.y, view.w, view.h);
+  const sx = view.w * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x1111) * BUILDING_FOOTPRINT_JITTER);
+  const sz = view.h * (BUILDING_FOOTPRINT_MARGIN - cellHash01(view.id + 0x2222) * BUILDING_FOOTPRINT_JITTER);
+  const detailX = cx + (cellHash01(view.id + 0x6666) - 0.5) * sx * 0.35;
+  const detailZ = cz + (cellHash01(view.id + 0x7777) - 0.5) * sz * 0.35;
+  const detailWidth = Math.min(BUILDING_DETAIL_WIDTHS[view.zone], Math.min(sx, sz) * 0.65);
+  return target
+    .makeScale(detailWidth, BUILDING_DETAIL_HEIGHTS[view.zone], detailWidth)
+    .setPosition(
+      detailX,
+      foundation.max + height + BUILDING_ROOF_HEIGHTS[view.zone] * 0.82,
+      detailZ,
+    );
+}
+
+/** BuildingsView's rooftop detail tint, including the abandoned decay jitter. */
+export function detailColorInto(view: BuildingRenderView, target: Color): Color {
+  if (view.abandoned) {
+    const decayJit = (cellHash01(view.id + 0x5555) - 0.5) * BUILDING_TINT_LIGHT_JITTER * 1.5;
+    return target.setHex(BUILDING_ABANDONED_DETAIL_COLOR).offsetHSL(0, 0, decayJit * 0.5);
+  }
+  const hueJit = (cellHash01(view.id + 0x3333) - 0.5) * BUILDING_TINT_HUE_JITTER;
+  const lightJit = (cellHash01(view.id + 0x4444) - 0.5) * BUILDING_TINT_LIGHT_JITTER;
+  return target
+    .setHex(BUILDING_DETAIL_COLORS[view.zone])
+    .offsetHSL(hueJit, 0, lightJit * 0.5);
+}
+
+/** BuildingsView's roof tint, including the abandoned decay jitter. */
+export function roofColorInto(view: BuildingRenderView, target: Color): Color {
+  if (view.abandoned) {
+    const decayJit = (cellHash01(view.id + 0x5555) - 0.5) * BUILDING_TINT_LIGHT_JITTER * 1.5;
+    return target.setHex(BUILDING_ABANDONED_ROOF_COLOR).offsetHSL(0, 0, decayJit);
+  }
+  const levelIndex = Math.min(Math.max(view.level, 1), BUILDING_LEVEL_HEIGHTS.length) - 1;
+  const hueJit = (cellHash01(view.id + 0x3333) - 0.5) * BUILDING_TINT_HUE_JITTER;
+  const lightJit = (cellHash01(view.id + 0x4444) - 0.5) * BUILDING_TINT_LIGHT_JITTER;
+  target.setHex(BUILDING_ROOF_COLORS[view.zone]);
+  return target.offsetHSL(hueJit, 0, BUILDING_LEVEL_ROOF_LIGHTEN * levelIndex + lightJit);
 }
 
 /** BuildingsView's wall tint, including the abandoned decay jitter. */
@@ -206,31 +338,38 @@ export class VoxelWallsLane {
     this.revision += 1;
     this.dirty = false;
     const views = this.sortedViews();
-    const matrices = new Float32Array(views.length * 16);
-    const colors = new Uint8Array(views.length * 4);
-    const instanceKeys: string[] = [];
-    for (let index = 0; index < views.length; index += 1) {
-      const view = views[index]!;
-      instanceKeys.push(String(view.id));
-      wallMatrixInto(view, this.surface, MATRIX);
-      matrices.set(MATRIX.elements, index * 16);
-      wallColorInto(view, COLOR);
-      writeSrgbBytesInto(COLOR, SRGB_BYTES);
-      colors.set([SRGB_BYTES.r, SRGB_BYTES.g, SRGB_BYTES.b, 255], index * 4);
-    }
-    const batch: InstanceBatchV1 = {
-      key: VOXEL_WALLS_BATCH_KEY,
-      incarnation: 1,
-      revision: this.revision,
-      geometryKey: VOXEL_WALLS_GEOMETRY_KEY,
-      materialKey: VOXEL_WALLS_MATERIAL_KEY,
-      instanceKeys,
-      matrices,
-      colors,
-      // City keeps shadow-map policy; these are neutral opt-in flags matching
-      // the wall meshes they replace.
-      presentation: { castShadow: true, receiveShadow: true },
-    };
+    const batch = this.buildBatchInternal(
+      VOXEL_WALLS_BATCH_KEY,
+      VOXEL_WALLS_GEOMETRY_KEY,
+      views,
+      wallMatrixInto,
+      wallColorInto,
+    );
+    // Roofs split by geometry, not by zone: residential is a pyramid and the
+    // other two reuse the wall box, so they are two batches rather than three.
+    const pyramidRoofs = this.buildBatchInternal(
+      VOXEL_ROOF_PYRAMID_BATCH_KEY,
+      VOXEL_ROOF_PYRAMID_GEOMETRY_KEY,
+      views.filter((view) => roofIsPyramid(view.zone)),
+      roofMatrixInto,
+      roofColorInto,
+    );
+    const boxRoofs = this.buildBatchInternal(
+      VOXEL_ROOF_BOX_BATCH_KEY,
+      VOXEL_WALLS_GEOMETRY_KEY,
+      views.filter((view) => !roofIsPyramid(view.zone)),
+      roofMatrixInto,
+      roofColorInto,
+    );
+    // Rooftop details reuse the wall box, so all three zones collapse into one
+    // batch exactly as the walls do.
+    const details = this.buildBatchInternal(
+      VOXEL_DETAIL_BATCH_KEY,
+      VOXEL_WALLS_GEOMETRY_KEY,
+      views,
+      detailMatrixInto,
+      detailColorInto,
+    );
     return {
       schemaVersion: 'voxel.render-snapshot/1',
       descriptor: {
@@ -253,7 +392,7 @@ export class VoxelWallsLane {
           maxResources: 8,
           maxPaletteEntries: 1,
           maxChunks: 1,
-          maxBatches: 1,
+          maxBatches: 6,
           maxVoxelsPerChunk: 1,
           maxGeometryVertices: 4_096,
           maxGeometryIndices: 12_288,
@@ -262,9 +401,51 @@ export class VoxelWallsLane {
         },
       },
       revision: this.revision,
-      resources: [unitBoxGeometry(), wallMaterial()],
+      resources: [unitBoxGeometry(), pyramidRoofGeometry(), wallMaterial()],
       chunks: [],
-      batches: [batch],
+      batches: [batch, pyramidRoofs, boxRoofs, details],
+    };
+  }
+
+  /**
+   * One keyed batch over the given views. Voxel copies every typed array it
+   * retains, so these buffers are never aliased by the renderer.
+   */
+  private buildBatchInternal(
+    key: string,
+    geometryKey: string,
+    views: readonly BuildingRenderView[],
+    matrixInto: (
+      view: BuildingRenderView,
+      surface: TerrainSurfaceView,
+      target: Matrix4,
+    ) => Matrix4,
+    colorInto: (view: BuildingRenderView, target: Color) => Color,
+  ): InstanceBatchV1 {
+    const matrices = new Float32Array(views.length * 16);
+    const colors = new Uint8Array(views.length * 4);
+    const instanceKeys: string[] = [];
+    for (let index = 0; index < views.length; index += 1) {
+      const view = views[index]!;
+      instanceKeys.push(String(view.id));
+      matrixInto(view, this.surface, MATRIX);
+      matrices.set(MATRIX.elements, index * 16);
+      colorInto(view, COLOR);
+      writeSrgbBytesInto(COLOR, SRGB_BYTES);
+      colors.set([SRGB_BYTES.r, SRGB_BYTES.g, SRGB_BYTES.b, 255], index * 4);
+    }
+    return {
+      key,
+      incarnation: 1,
+      revision: this.revision,
+      geometryKey,
+      materialKey: VOXEL_WALLS_MATERIAL_KEY,
+      instanceKeys,
+      matrices,
+      colors,
+      // City keeps shadow-map policy; these are neutral opt-in flags matching
+      // the meshes they replace.
+      presentation: { castShadow: true, receiveShadow: true },
     };
   }
 

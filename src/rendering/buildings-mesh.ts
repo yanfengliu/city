@@ -91,7 +91,7 @@ const archetypeMeshes = (archetype: Archetype): readonly InstancedMesh[] => [
 export class BuildingsView {
   readonly group = new Group();
   private readonly archetypes: Record<ZoneKind, Archetype>;
-  private wallsVisible = true;
+  private bodyLayersVisible = true;
   private readonly slots = new Map<number, { zone: ZoneKind; slot: number }>();
   private readonly views = new Map<number, BuildingRenderView>();
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
@@ -125,17 +125,20 @@ export class BuildingsView {
   }
 
   /**
-   * Hides the wall bodies so another renderer can draw them instead.
+   * Hides the building bodies -- walls and roofs -- so another renderer can
+   * draw them instead.
    *
-   * Used while the voxel wall lane is A/B'd against this view: the instance
-   * buffers stay live and correct, so the comparison is against real data and
-   * flipping back costs nothing. When the voxel lane is accepted, the wall
-   * layer is deleted outright rather than left hidden.
+   * Used while the voxel building lane is A/B'd against this view: the
+   * instance buffers stay live and correct, so the comparison is against real
+   * data and flipping back costs nothing. When the voxel lane is accepted,
+   * these layers are deleted outright rather than left hidden.
    */
-  setWallsVisible(visible: boolean): void {
-    this.wallsVisible = visible;
+  setBodyLayersVisible(visible: boolean): void {
+    this.bodyLayersVisible = visible;
     for (const archetype of Object.values(this.archetypes)) {
       archetype.walls.visible = visible;
+      archetype.roofs.visible = visible;
+      archetype.details.visible = visible;
     }
   }
 
@@ -250,10 +253,12 @@ export class BuildingsView {
     archetype.capacity *= 2;
     archetype.walls = this.replaceMesh(archetype.walls, archetype.capacity);
     // A grown mesh is a fresh object and defaults to visible, which would
-    // resurrect hidden walls under whatever renderer replaced them.
-    archetype.walls.visible = this.wallsVisible;
+    // resurrect hidden bodies under whatever renderer replaced them.
+    archetype.walls.visible = this.bodyLayersVisible;
     archetype.roofs = this.replaceMesh(archetype.roofs, archetype.capacity);
+    archetype.roofs.visible = this.bodyLayersVisible;
     archetype.details = this.replaceMesh(archetype.details, archetype.capacity);
+    archetype.details.visible = this.bodyLayersVisible;
     archetype.windows = this.replaceMesh(archetype.windows, archetype.capacity, {
       material: this.windowMaterial,
       shadows: false,

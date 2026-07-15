@@ -4,7 +4,12 @@ import { RenderWorld } from 'voxel/core';
 
 import { BuildingsView, type BuildingRenderView } from '../../src/rendering/buildings-mesh';
 import {
+  VOXEL_DETAIL_BATCH_KEY,
+  VOXEL_ROOF_BOX_BATCH_KEY,
+  VOXEL_ROOF_PYRAMID_BATCH_KEY,
+  VOXEL_ROOF_PYRAMID_GEOMETRY_KEY,
   VOXEL_WALLS_BATCH_KEY,
+  VOXEL_WALLS_GEOMETRY_KEY,
   VoxelWallsLane,
 } from '../../src/rendering/voxel-walls-lane';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from '../../src/rendering/terrain-surface';
@@ -37,19 +42,18 @@ interface WallMeshReader {
   getColorAt(index: number, target: Color): void;
 }
 
-/** The wall mesh BuildingsView itself wrote, for the same building. */
-function referenceWallMesh(
+/** The mesh of one BuildingsView layer, for the same building. */
+function referenceMesh(
   target: BuildingRenderView,
   surface: TerrainSurfaceView,
+  layer: string,
 ): WallMeshReader {
   const buildings = new BuildingsView();
   buildings.setTerrainSurface(surface);
   buildings.upsert(target);
-  const walls = buildings.group.children.find(
-    (child) => child.name === `${target.zone}-walls`,
-  );
-  if (!walls || !('getMatrixAt' in walls)) throw new Error('Expected a walls mesh.');
-  return walls as unknown as WallMeshReader;
+  const mesh = buildings.group.children.find((child) => child.name === layer);
+  if (!mesh || !('getMatrixAt' in mesh)) throw new Error(`Expected the ${layer} mesh.`);
+  return mesh as unknown as WallMeshReader;
 }
 
 function referenceWallMatrix(
@@ -57,14 +61,14 @@ function referenceWallMatrix(
   surface: TerrainSurfaceView,
 ): Matrix4 {
   const matrix = new Matrix4();
-  referenceWallMesh(target, surface).getMatrixAt(0, matrix);
+  referenceMesh(target, surface, `${target.zone}-walls`).getMatrixAt(0, matrix);
   return matrix;
 }
 
 /** The working-space colour BuildingsView uploads for the same building. */
 function referenceWallColor(target: BuildingRenderView): Color {
   const color = new Color();
-  referenceWallMesh(target, FLAT_TERRAIN_SURFACE).getColorAt(0, color);
+  referenceMesh(target, FLAT_TERRAIN_SURFACE, `${target.zone}-walls`).getColorAt(0, color);
   return color;
 }
 
@@ -85,6 +89,92 @@ describe('VoxelWallsLane', () => {
         }
       }
     }
+  });
+
+  it('writes the roof matrix and colour BuildingsView writes', () => {
+    for (const zone of ['R', 'C', 'I'] as const) {
+      for (const level of [1, 2, 3]) {
+        for (const abandoned of [false, true]) {
+          const target = view({ id: 61 + level, zone, level, abandoned });
+          const lane = new VoxelWallsLane();
+          lane.setTerrainSurface(SLOPED);
+          lane.upsert(target);
+          const snapshot = lane.snapshot();
+          const batchKey = zone === 'R'
+            ? VOXEL_ROOF_PYRAMID_BATCH_KEY
+            : VOXEL_ROOF_BOX_BATCH_KEY;
+          const batch = snapshot.batches.find((candidate) => candidate.key === batchKey)!;
+
+          expect(batch.instanceKeys).toEqual([String(target.id)]);
+          const actual = new Matrix4().fromArray(batch.matrices, 0);
+          const expected = new Matrix4();
+          referenceMesh(target, SLOPED, `${zone}-roofs`).getMatrixAt(0, expected);
+          expect(actual.elements).toEqual(expected.elements);
+
+          const decoded = new Color().setRGB(
+            batch.colors![0]! / 255,
+            batch.colors![1]! / 255,
+            batch.colors![2]! / 255,
+            SRGBColorSpace,
+          );
+          const expectedColor = new Color();
+          referenceMesh(target, FLAT_TERRAIN_SURFACE, `${zone}-roofs`).getColorAt(0, expectedColor);
+          expect(decoded.r).toBeCloseTo(expectedColor.r, 2);
+          expect(decoded.g).toBeCloseTo(expectedColor.g, 2);
+          expect(decoded.b).toBeCloseTo(expectedColor.b, 2);
+        }
+      }
+    }
+  });
+
+  it('writes the rooftop detail matrix and colour BuildingsView writes', () => {
+    for (const zone of ['R', 'C', 'I'] as const) {
+      for (const abandoned of [false, true]) {
+        const target = view({ id: 83, zone, level: 2, abandoned });
+        const lane = new VoxelWallsLane();
+        lane.setTerrainSurface(SLOPED);
+        lane.upsert(target);
+        const batch = lane.snapshot().batches.find(
+          (candidate) => candidate.key === VOXEL_DETAIL_BATCH_KEY,
+        )!;
+
+        const actual = new Matrix4().fromArray(batch.matrices, 0);
+        const expected = new Matrix4();
+        referenceMesh(target, SLOPED, `${zone}-roof-details`).getMatrixAt(0, expected);
+        expect(actual.elements).toEqual(expected.elements);
+
+        const decoded = new Color().setRGB(
+          batch.colors![0]! / 255,
+          batch.colors![1]! / 255,
+          batch.colors![2]! / 255,
+          SRGBColorSpace,
+        );
+        const expectedColor = new Color();
+        referenceMesh(target, FLAT_TERRAIN_SURFACE, `${zone}-roof-details`)
+          .getColorAt(0, expectedColor);
+        expect(decoded.r).toBeCloseTo(expectedColor.r, 2);
+        expect(decoded.g).toBeCloseTo(expectedColor.g, 2);
+        expect(decoded.b).toBeCloseTo(expectedColor.b, 2);
+      }
+    }
+  });
+
+  it('splits roofs by geometry rather than by zone', () => {
+    const lane = new VoxelWallsLane();
+    lane.upsert(view({ id: 1, zone: 'R' }));
+    lane.upsert(view({ id: 2, zone: 'C' }));
+    lane.upsert(view({ id: 3, zone: 'I' }));
+    const snapshot = lane.snapshot();
+
+    // Three zones, but only two roof geometries, so two roof batches.
+    const pyramid = snapshot.batches.find((b) => b.key === VOXEL_ROOF_PYRAMID_BATCH_KEY)!;
+    const box = snapshot.batches.find((b) => b.key === VOXEL_ROOF_BOX_BATCH_KEY)!;
+    expect(pyramid.instanceKeys).toEqual(['1']);
+    expect(box.instanceKeys).toEqual(['2', '3']);
+    expect(pyramid.geometryKey).toBe(VOXEL_ROOF_PYRAMID_GEOMETRY_KEY);
+    // Box roofs reuse the wall box rather than duplicating a geometry.
+    expect(box.geometryKey).toBe(VOXEL_WALLS_GEOMETRY_KEY);
+    expect(snapshot.batches).toHaveLength(4);
   });
 
   it('keeps the batch keys equal to the live building set through churn', () => {
@@ -137,16 +227,16 @@ describe('VoxelWallsLane', () => {
     }
   });
 
-  it('collapses all three zones into one batch, varying only by colour', () => {
+  it('collapses all three zones into one wall batch, varying only by colour', () => {
     const lane = new VoxelWallsLane();
     lane.upsert(view({ id: 1, zone: 'R' }));
     lane.upsert(view({ id: 2, zone: 'C' }));
     lane.upsert(view({ id: 3, zone: 'I' }));
     const snapshot = lane.snapshot();
 
-    expect(snapshot.batches).toHaveLength(1);
-    expect(snapshot.batches[0]!.key).toBe(VOXEL_WALLS_BATCH_KEY);
-    const colors = snapshot.batches[0]!.colors!;
+    const walls = snapshot.batches.find((batch) => batch.key === VOXEL_WALLS_BATCH_KEY)!;
+    expect(walls.instanceKeys).toEqual(['1', '2', '3']);
+    const colors = walls.colors!;
     const rgb = (index: number) => [...colors.slice(index * 4, index * 4 + 3)];
     expect(rgb(0)).not.toEqual(rgb(1));
     expect(rgb(1)).not.toEqual(rgb(2));

@@ -247,7 +247,7 @@ export class Game {
           height: this.scene.renderer.domElement.height,
         })
       : null;
-    if (this.voxelWalls) this.buildingsView.setWallsVisible(false);
+    if (this.voxelWalls) this.buildingsView.setBodyLayersVisible(false);
     this.vehiclesView = new VehiclesView(GRID_WIDTH);
     this.pedestriansView = new PedestriansView(GRID_WIDTH);
     this.structuresView = new StructuresView();
