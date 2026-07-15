@@ -262,6 +262,7 @@ export class Game {
       this.flushDirtyViews();
       this.vehiclesView.updateFrame(now);
       this.pedestriansView.updateFrame(now);
+      this.networksView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
       this.utilityIconsFx.updateFrame(now, this.scene.camera.quaternion);
       // Day/night cycle: the sun orbits with game time (phase-offset so boot is
@@ -354,6 +355,7 @@ export class Game {
         this.scene.setTerrainSurface(surface);
         this.picker.setTerrainSurface(surface);
         this.roadsView.setWater(message.terrain.water);
+        this.networksView.setWater(message.terrain.water);
         this.roadsView.setTerrainSurface(surface);
         this.zonesView.setTerrainSurface(surface);
         this.buildingsView.setTerrainSurface(surface);
@@ -411,6 +413,8 @@ export class Game {
         this.refreshInspect();
         break;
       case 'networks':
+        // Plants/pumps cast shadows; the occupancyDirty flush below already
+        // invalidates the cached shadow map for every networks change.
         this.networksView.update(message.power, message.water);
         this.hasPlant = message.power.plantCells.length > 0;
         this.hasPump = message.water.pumpCells.length > 0;

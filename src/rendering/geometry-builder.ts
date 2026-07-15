@@ -269,6 +269,11 @@ export class GeometryBuilder {
   }
 
   build(): BufferGeometry {
+    if (this.colors.length > 0 && this.colors.length !== this.positions.length) {
+      // Mixing colored and uncolored primitives yields a short color attribute,
+      // which WebGL silently reads as black — fail loudly instead.
+      throw new Error('GeometryBuilder: colored and uncolored primitives mixed in one build');
+    }
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(this.positions), 3));
     geometry.setAttribute('normal', new BufferAttribute(new Float32Array(this.normals), 3));
