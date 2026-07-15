@@ -23,6 +23,7 @@ describe('CityScene water wave clock', () => {
       terrainSurface: FLAT_TERRAIN_SURFACE,
       waterWaveMaterials: new Set<WaterWaveMaterial>(),
       frameCallbacks: [] as Array<(now: number) => void>,
+      afterFrameCallbacks: [] as Array<(now: number) => void>,
       flight: null,
     }) as CityScene;
     const material = new WaterWaveMaterial();

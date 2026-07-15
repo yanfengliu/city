@@ -76,6 +76,7 @@ export class CityScene {
   private lastFpsSample = performance.now();
   private lastFrameTime = performance.now();
   private readonly frameCallbacks: Array<(now: number) => void> = [];
+  private readonly afterFrameCallbacks: Array<(now: number) => void> = [];
   /** Currently-held WASD keys, drained each frame into a camera pan. */
   private readonly panKeys = new Set<string>();
   private readonly gridWidth: number;
@@ -196,6 +197,17 @@ export class CityScene {
   /** Registers a callback run once per rendered frame, before drawing (dirty-flag flushes). */
   onFrame(callback: (now: number) => void): void {
     this.frameCallbacks.push(callback);
+  }
+
+  /**
+   * Registers a callback run once per rendered frame, immediately after the
+   * draw. An embedded renderer cannot draw for itself, so it prepares in
+   * `onFrame` and needs this to learn its work actually reached the canvas.
+   * A throwing callback is contained: the frame is already drawn, so one
+   * misbehaving consumer must not strand the others or stop the loop.
+   */
+  onAfterFrame(callback: (now: number) => void): void {
+    this.afterFrameCallbacks.push(callback);
   }
 
   /**
@@ -335,6 +347,14 @@ export class CityScene {
     this.conformCameraTargetToTerrain();
     for (const callback of this.frameCallbacks) callback(now);
     this.renderer.render(this.scene, this.camera);
+    for (const callback of this.afterFrameCallbacks) {
+      try {
+        callback(now);
+      } catch (error) {
+        // The draw already happened; a failed acknowledgement cannot unmake it.
+        console.error('after-frame callback failed', error);
+      }
+    }
   }
 
   /** Keep mouse-drag panning at the terrain datum without changing its view angle. */
