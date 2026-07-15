@@ -4,9 +4,25 @@ Status: proposed from 2026-07-15. City-owned. This plan covers the first slice o
 one opaque building instance lane onto the sibling `voxel` renderer while City keeps every
 other lane, its simulation, and its visual semantics unchanged.
 
-This is the C-02 deliverable of `../voxel/docs/plans/v1-implementation.md`. Voxel's 1.0 claim
-requires a second real consumer; City's requirement is different and is the one this document
-serves: adopt shared rendering only where it costs City nothing it currently owns.
+## Why City is doing this
+
+The owner's stated direction is that every game in this fleet is eventually rendered in a 3D
+voxel art style with `voxel` as its graphics engine. City is therefore not lending itself to
+another package's validation; this is the first step of City's own migration.
+
+The route is the one AoE2 already walked: adopt lane by lane through an embedded, borrowed
+renderer, then promote to a standalone sole-renderer host once the lanes have moved. AoE2 is
+live on `voxel` today as a sole renderer, and it got there after an initial opt-in
+composition. Embedded mode is the on-ramp, not the destination.
+
+That has a consequence worth stating plainly, because it decides what to do when this hurts:
+**if the embedded boundary fights City's ownership, that is a `voxel` defect to fix, not a
+reason for City to retreat.** Every later migration in the fleet walks through the same door,
+and City is the first real host to open it — AoE2 never used embedded mode, and `voxel`'s only
+other coverage is a fixture it wrote for itself, which cannot discover that its own boundary is
+wrong.
+
+This is also the C-02 deliverable of `../voxel/docs/plans/v1-implementation.md`.
 
 ## What City owns today (traced 2026-07-15)
 
@@ -59,18 +75,24 @@ for `C`/`I` — so it needs two geometry resources and a per-zone split), `detai
 archetype geometry). Also out: terrain, water, roads, zones, vehicles, pedestrians, networks,
 structures, overlays, FX, the picker, and capture.
 
-### The lane collapses from three batches to one
+### The lane collapses from three batches to one — but do not credit that to Voxel
 
-Worth noting because it is the slice's only expected win: City needs three wall
-`InstancedMesh`es because it keys archetypes by zone, but **walls do not actually vary by
-zone** — all three use the same `unitBox` geometry and the same shared material, and zone
-affects only the per-instance color. As one keyed Voxel batch, the whole wall lane is a single
-draw call instead of three.
+City needs three wall `InstancedMesh`es because it keys archetypes by zone, but **walls do not
+actually vary by zone** — all three use the same `unitBox` geometry and the same shared
+material, and zone affects only the per-instance color. As one keyed Voxel batch, the wall
+lane is a single draw call instead of three.
 
-The offsetting cost is honest and small: City's shared `MeshLambertMaterial` is used by walls,
-roofs, details, and frontages, so while walls live in Voxel there are two equivalent Lambert
+That is a real improvement and it is **not a benefit of adopting Voxel**. City could merge its
+three wall meshes into one instanced mesh today, unilaterally, in a few lines. The finding
+came from the migration trace, not from the migration. It is recorded here so nobody later
+mistakes it for the payoff, and so that the payoff is judged on what it actually is: the first
+lane of City's move to a voxel-rendered art style, and the first real host to exercise Voxel's
+embedded boundary.
+
+The honest offsetting cost: City's shared `MeshLambertMaterial` is used by walls, roofs,
+details, and frontages, so while walls live in Voxel there are two equivalent Lambert
 materials alive (City's, minus walls; Voxel's, for walls). That is a second shader program for
-the duration of the slice, and it disappears when the remaining opaque layers follow.
+the duration of the slice, and it disappears as the remaining opaque layers follow.
 
 ## Why the slot layouts may safely diverge
 
@@ -165,11 +187,18 @@ should be measured rather than assumed cheap.
 - City's own gates stay green: `npm run typecheck`, `npm run lint`, `npm run test`,
   `npm run build`.
 
-## Rollback
+## Rollback, and what a failure actually means
 
 The lane is flagged until parity holds. If any exit item fails, drop the flag and the adapter;
-`BuildingsView` is unchanged underneath and City loses nothing. The `Scene.onAfterFrame` hook
-is additive and may stay.
+`BuildingsView` is unchanged underneath and City loses nothing that day. The
+`Scene.onAfterFrame` hook is additive and may stay.
+
+But rollback is a schedule decision, not a verdict. Because the fleet's direction is that City
+ends up voxel-rendered, a failure here is a `voxel` bug report with a reproduction, and the
+next move is to fix `voxel` and retry — not to conclude City should keep its own renderer.
+The one outcome that would genuinely re-open the strategy is discovering that the embedded
+boundary cannot express City's ownership at all, and that is worth knowing early, on one layer
+of boxes, rather than later on terrain.
 
 ## Explicit non-goals
 
@@ -177,3 +206,18 @@ Voxel does not take City's terrain, water, camera, picker, capture, shadow polic
 protocol, simulation model, or composition root in this slice, and City gains no dependency on
 Voxel's voxel-chunk path — that path is reachable only through a package-internal option and is
 irrelevant to buildings.
+
+## Known tension to resolve later, not now
+
+`voxel` currently declares as explicit non-goals several things City's renderer does today:
+engine-owned shadow-map/quality policy, post-processing (City uses ACES tone mapping), liquids
+and water, and GPU particle systems. City also has roughly thirty-five render lanes. "Every
+lane of City runs on `voxel`" and "`voxel` is not a general-purpose replacement for Three.js"
+cannot both stay true forever.
+
+Nothing about this slice depends on resolving that: buildings are instanced opaque boxes, well
+inside `voxel`'s stated scope, and the borrowed-renderer boundary is designed for exactly this
+mixed period. The question comes due when a lane arrives that `voxel` has deliberately
+excluded — water is the likely first — and the answer belongs in `voxel`'s roadmap, as an
+explicit scope revision with its own evidence gates, rather than being decided by accretion
+here.
