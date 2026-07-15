@@ -1,6 +1,7 @@
 import { Game } from './app/game';
 import { createHarness, type HarnessApi } from './harness/api';
 import { playtestRecordingRequested } from './harness/recording-mode';
+import { voxelWallsRequested } from './rendering/voxel-walls-host';
 
 declare global {
   interface Window {
@@ -15,7 +16,10 @@ const container = document.getElementById('app');
 if (!container) throw new Error('missing #app container');
 
 const recordPlaytest = import.meta.env.DEV && playtestRecordingRequested(location.search);
-const game = new Game(container, { recordPlaytest });
+// `?voxelWalls=1` draws building walls through the embedded Voxel runtime.
+// Opt-in while the lane is compared against City's own wall meshes.
+const voxelWalls = voxelWallsRequested(location.search);
+const game = new Game(container, { recordPlaytest, voxelWalls });
 
 window.render_game_to_text = () => JSON.stringify(game.getTextState());
 window.advanceTime = (ms: number) => game.advanceTime(ms);

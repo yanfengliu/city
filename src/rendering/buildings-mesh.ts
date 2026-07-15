@@ -91,6 +91,7 @@ const archetypeMeshes = (archetype: Archetype): readonly InstancedMesh[] => [
 export class BuildingsView {
   readonly group = new Group();
   private readonly archetypes: Record<ZoneKind, Archetype>;
+  private wallsVisible = true;
   private readonly slots = new Map<number, { zone: ZoneKind; slot: number }>();
   private readonly views = new Map<number, BuildingRenderView>();
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
@@ -121,6 +122,21 @@ export class BuildingsView {
 
   get count(): number {
     return this.slots.size;
+  }
+
+  /**
+   * Hides the wall bodies so another renderer can draw them instead.
+   *
+   * Used while the voxel wall lane is A/B'd against this view: the instance
+   * buffers stay live and correct, so the comparison is against real data and
+   * flipping back costs nothing. When the voxel lane is accepted, the wall
+   * layer is deleted outright rather than left hidden.
+   */
+  setWallsVisible(visible: boolean): void {
+    this.wallsVisible = visible;
+    for (const archetype of Object.values(this.archetypes)) {
+      archetype.walls.visible = visible;
+    }
   }
 
   /** Fades live window glow in after dusk; bodies and frontages stay non-emissive. */
@@ -233,6 +249,9 @@ export class BuildingsView {
   private grow(archetype: Archetype): void {
     archetype.capacity *= 2;
     archetype.walls = this.replaceMesh(archetype.walls, archetype.capacity);
+    // A grown mesh is a fresh object and defaults to visible, which would
+    // resurrect hidden walls under whatever renderer replaced them.
+    archetype.walls.visible = this.wallsVisible;
     archetype.roofs = this.replaceMesh(archetype.roofs, archetype.capacity);
     archetype.details = this.replaceMesh(archetype.details, archetype.capacity);
     archetype.windows = this.replaceMesh(archetype.windows, archetype.capacity, {

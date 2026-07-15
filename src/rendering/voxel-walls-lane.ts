@@ -1,4 +1,4 @@
-import { BoxGeometry, Color, Matrix4 } from 'three';
+import { BoxGeometry, Color, Matrix4, SRGBColorSpace } from 'three';
 import type {
   GeometryResourceV1,
   InstanceBatchV1,
@@ -58,7 +58,15 @@ function unitBoxGeometry(): GeometryResourceV1 {
   return resource;
 }
 
-/** Mirrors BuildingsView's shared opaque Lambert material. */
+/**
+ * Mirrors BuildingsView's shared opaque Lambert material, which is
+ * `MeshLambertMaterial({ color: 0xffffff })`.
+ *
+ * `vertexColors` stays false because the wall box carries no per-vertex
+ * colour attribute. Per-instance tints ride on the batch colour lane, which
+ * Three applies through `instanceColor` independently of this flag; enabling
+ * it would multiply every wall by an unbound attribute and render them black.
+ */
 function wallMaterial(): MaterialResourceV1 {
   return {
     kind: 'material',
@@ -67,7 +75,7 @@ function wallMaterial(): MaterialResourceV1 {
     revision: 1,
     shading: 'lambert',
     color: { r: 255, g: 255, b: 255, a: 255 },
-    vertexColors: true,
+    vertexColors: false,
     transparent: false,
     opacity: 1,
     doubleSided: false,
@@ -114,8 +122,23 @@ export function wallColorInto(view: BuildingRenderView, target: Color): Color {
   return target.offsetHSL(hueJit, 0, BUILDING_LEVEL_WALL_LIGHTEN * levelIndex + lightJit);
 }
 
-function srgb8(channel: number): number {
-  return Math.max(0, Math.min(255, Math.round(channel * 255)));
+const SRGB_BYTES = { r: 0, g: 0, b: 0 };
+
+/**
+ * Encodes a working-space colour as the straight-alpha sRGB8 Voxel's batch
+ * colour lane declares.
+ *
+ * City builds wall tints with `Color.setHex`, which converts sRGB into the
+ * working (linear) space, and uploads those floats directly. Voxel instead
+ * decodes its byte lane as sRGB and converts. Writing City's working-space
+ * floats as bytes would therefore convert a second time and render every wall
+ * markedly darker, so convert back out to sRGB here.
+ */
+function writeSrgbBytesInto(color: Color, target: typeof SRGB_BYTES): void {
+  const hex = color.getHex(SRGBColorSpace);
+  target.r = (hex >> 16) & 0xff;
+  target.g = (hex >> 8) & 0xff;
+  target.b = hex & 0xff;
 }
 
 /**
@@ -131,9 +154,15 @@ export class VoxelWallsLane {
   private readonly views = new Map<number, BuildingRenderView>();
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private revision = 0;
+  private dirty = false;
 
   get count(): number {
     return this.views.size;
+  }
+
+  /** True when the live set changed since the last snapshot. */
+  get isDirtyInternal(): boolean {
+    return this.dirty;
   }
 
   /** The exact live building ids, in the batch's deterministic order. */
@@ -143,15 +172,30 @@ export class VoxelWallsLane {
 
   upsert(view: BuildingRenderView): void {
     this.views.set(view.id, view);
+    this.dirty = true;
   }
 
   /** Tolerates unknown ids, matching BuildingsView's defensive removal. */
   remove(id: number): void {
-    this.views.delete(id);
+    if (this.views.delete(id)) this.dirty = true;
   }
 
   setTerrainSurface(surface: TerrainSurfaceView): void {
     this.surface = surface;
+    this.dirty = true;
+  }
+
+  /**
+   * The next snapshot, or null when nothing changed.
+   *
+   * City's renderer is dirty-flag driven and this lane matches it: a snapshot
+   * rebuilds every matrix, so it is built at most once per frame and only
+   * when the live set actually moved. If profiling shows that whole-world
+   * rebuild costs more than City's per-instance writes did, the fix is
+   * Voxel's sparse delta path, not a rebuild every frame.
+   */
+  snapshotIfDirty(): RenderSnapshotV1 | null {
+    return this.dirty ? this.snapshot() : null;
   }
 
   /**
@@ -160,6 +204,7 @@ export class VoxelWallsLane {
    */
   snapshot(): RenderSnapshotV1 {
     this.revision += 1;
+    this.dirty = false;
     const views = this.sortedViews();
     const matrices = new Float32Array(views.length * 16);
     const colors = new Uint8Array(views.length * 4);
@@ -170,10 +215,8 @@ export class VoxelWallsLane {
       wallMatrixInto(view, this.surface, MATRIX);
       matrices.set(MATRIX.elements, index * 16);
       wallColorInto(view, COLOR);
-      colors.set(
-        [srgb8(COLOR.r), srgb8(COLOR.g), srgb8(COLOR.b), 255],
-        index * 4,
-      );
+      writeSrgbBytesInto(COLOR, SRGB_BYTES);
+      colors.set([SRGB_BYTES.r, SRGB_BYTES.g, SRGB_BYTES.b, 255], index * 4);
     }
     const batch: InstanceBatchV1 = {
       key: VOXEL_WALLS_BATCH_KEY,

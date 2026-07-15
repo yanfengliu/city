@@ -1,4 +1,5 @@
 import { BuildingsView } from '../rendering/buildings-mesh';
+import { VoxelWallsHost } from '../rendering/voxel-walls-host';
 import { ZONE_COLORS } from '../rendering/constants';
 import { CityScene } from '../rendering/scene';
 import { GhostView } from '../rendering/ghost';
@@ -101,6 +102,8 @@ type Inspected = { kind: 'building' | 'structure'; id: number };
 
 interface GameOptions {
   recordPlaytest?: boolean;
+  /** Draws building walls through the embedded Voxel runtime instead of City's own mesh. */
+  voxelWalls?: boolean;
 }
 
 function round2(value: number): number {
@@ -117,6 +120,7 @@ export class Game {
   private readonly roadsView: RoadsView;
   private readonly zonesView: ZonesView;
   private readonly buildingsView: BuildingsView;
+  private readonly voxelWalls: VoxelWallsHost | null;
   private readonly vehiclesView: VehiclesView;
   private readonly pedestriansView: PedestriansView;
   private readonly structuresView: StructuresView;
@@ -232,6 +236,18 @@ export class Game {
     this.roadsView = new RoadsView(GRID_WIDTH, HIGHWAY_CELL_SET);
     this.zonesView = new ZonesView(GRID_WIDTH);
     this.buildingsView = new BuildingsView();
+    // The Voxel wall lane replaces City's wall meshes rather than adding to
+    // them, so the old layer is hidden for exactly as long as Voxel draws it.
+    this.voxelWalls = options.voxelWalls === true
+      ? new VoxelWallsHost({
+          renderer: this.scene.renderer,
+          scene: this.scene.scene,
+          camera: this.scene.camera,
+          width: this.scene.renderer.domElement.width,
+          height: this.scene.renderer.domElement.height,
+        })
+      : null;
+    if (this.voxelWalls) this.buildingsView.setWallsVisible(false);
     this.vehiclesView = new VehiclesView(GRID_WIDTH);
     this.pedestriansView = new PedestriansView(GRID_WIDTH);
     this.structuresView = new StructuresView();
@@ -272,6 +288,14 @@ export class Game {
         (this.tick / TICKS_PER_DAY + DAY_START_FRACTION) % 1,
       );
       this.buildingsView.setNightGlow(1 - daylight);
+      // Last, so Voxel stages against the pose and view data this frame will
+      // actually draw with.
+      this.voxelWalls?.prepareFrame(now);
+    });
+    // Voxel cannot draw for itself here: City owns the draw, so its completion
+    // is what lets Voxel call the revision presented.
+    this.scene.onAfterFrame(() => {
+      this.voxelWalls?.commitFrame();
     });
 
     this.tools = new Tools({
@@ -359,6 +383,7 @@ export class Game {
         this.roadsView.setTerrainSurface(surface);
         this.zonesView.setTerrainSurface(surface);
         this.buildingsView.setTerrainSurface(surface);
+        this.voxelWalls?.setTerrainSurface(surface);
         this.vehiclesView.setTerrainSurface(surface);
         this.pedestriansView.setTerrainSurface(surface);
         this.structuresView.setTerrainSurface(surface);
@@ -559,6 +584,7 @@ export class Game {
     this.buildings.set(view.id, view);
     if (footprintChanged) this.occupancyDirty = true;
     this.buildingsView.upsert(view);
+    this.voxelWalls?.upsert(view);
     if (previous && (previous.level !== view.level || previous.zone !== view.zone)) {
       this.scene.invalidateShadows();
     }
@@ -572,6 +598,7 @@ export class Game {
     replaceFootprintOwner(this.buildingCellOwner, previous, null, GRID_WIDTH);
     this.buildings.delete(id);
     this.buildingsView.remove(id);
+    this.voxelWalls?.remove(id);
     this.utilityIconsFx.remove(id);
     this.occupancyDirty = true;
   }
