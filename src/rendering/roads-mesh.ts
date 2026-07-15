@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshLambertMaterial } from 'three';
+import { BufferGeometry, Color, Group, Mesh, MeshLambertMaterial } from 'three';
 import {
   BRIDGE_COLOR,
   BRIDGE_PYLON_BOTTOM_Y,
@@ -18,7 +18,7 @@ import {
   ROAD_LANE_MARKING_Y,
   ROAD_SURFACE_Y,
 } from './constants';
-import { buildSurfacePatch } from './surface-geometry';
+import { GeometryBuilder } from './geometry-builder';
 import {
   SIDEWALK_COLOR,
 } from './road-streetscape-style';
@@ -28,136 +28,6 @@ import {
   type RoadNeighbors,
 } from './road-streetscape';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
-
-/** Accumulates merged quads/boxes into one BufferGeometry. */
-class GeometryBuilder {
-  private readonly positions: number[] = [];
-  private readonly normals: number[] = [];
-  private readonly colors: number[] = [];
-  private readonly indices: number[] = [];
-
-  private corners(
-    points: ReadonlyArray<readonly [number, number, number]>,
-    normal: readonly [number, number, number] = [0, 1, 0],
-  ): void {
-    const base = this.positions.length / 3;
-    for (const point of points) this.positions.push(point[0], point[1], point[2]);
-    for (let i = 0; i < 4; i++) this.normals.push(normal[0], normal[1], normal[2]);
-    this.indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-  }
-
-  /** One rectangular face: origin o plus edge vectors u and v, flat normal n. */
-  private face(
-    o: readonly [number, number, number],
-    u: readonly [number, number, number],
-    v: readonly [number, number, number],
-    n: readonly [number, number, number],
-  ): void {
-    this.corners([
-      o,
-      [o[0] + u[0], o[1] + u[1], o[2] + u[2]],
-      [o[0] + v[0], o[1] + v[1], o[2] + v[2]],
-      [o[0] + u[0] + v[0], o[1] + u[1] + v[1], o[2] + u[2] + v[2]],
-    ], n);
-  }
-
-  /** Upward-facing quad covering [x0,x1]×[z0,z1] at height y. */
-  quad(x0: number, z0: number, x1: number, z1: number, y: number): void {
-    this.face([x0, y, z0], [x1 - x0, 0, 0], [0, 0, z1 - z0], [0, 1, 0]);
-  }
-
-  surfaceQuad(
-    x0: number,
-    z0: number,
-    x1: number,
-    z1: number,
-    lift: number,
-    surface: TerrainSurfaceView,
-  ): void {
-    this.corners([
-      [x0, surface.heightAt(x0, z0) + lift, z0],
-      [x1, surface.heightAt(x1, z0) + lift, z0],
-      [x0, surface.heightAt(x0, z1) + lift, z1],
-      [x1, surface.heightAt(x1, z1) + lift, z1],
-    ]);
-  }
-
-  surfacePatch(
-    x0: number,
-    z0: number,
-    x1: number,
-    z1: number,
-    lift: number,
-    surface: TerrainSurfaceView,
-  ): number {
-    const patch = buildSurfacePatch(surface, x0, z0, x1, z1, lift);
-    const base = this.positions.length / 3;
-    this.positions.push(...patch.positions);
-    const count = patch.positions.length / 3;
-    for (let i = 0; i < count; i++) this.normals.push(0, 1, 0);
-    for (const index of patch.indices) this.indices.push(base + index);
-    return count;
-  }
-
-  /** Upward-facing quad with a per-vertex color for one merged detail layer. */
-  coloredQuad(x0: number, z0: number, x1: number, z1: number, y: number, color: Color): void {
-    this.quad(x0, z0, x1, z1, y);
-    for (let i = 0; i < 4; i++) this.colors.push(color.r, color.g, color.b);
-  }
-
-  coloredSurfacePatch(
-    x0: number,
-    z0: number,
-    x1: number,
-    z1: number,
-    lift: number,
-    surface: TerrainSurfaceView,
-    color: Color,
-  ): void {
-    const count = this.surfacePatch(x0, z0, x1, z1, lift, surface);
-    for (let i = 0; i < count; i++) this.colors.push(color.r, color.g, color.b);
-  }
-
-  /** Axis-aligned box between opposite corners (all six faces). */
-  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): void {
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const dz = z1 - z0;
-    this.face([x0, y1, z0], [dx, 0, 0], [0, 0, dz], [0, 1, 0]); // top
-    this.face([x0, y0, z0], [0, 0, dz], [dx, 0, 0], [0, -1, 0]); // bottom
-    this.face([x1, y0, z0], [0, 0, dz], [0, dy, 0], [1, 0, 0]); // +x
-    this.face([x0, y0, z0], [0, dy, 0], [0, 0, dz], [-1, 0, 0]); // -x
-    this.face([x0, y0, z1], [0, dy, 0], [dx, 0, 0], [0, 0, 1]); // +z
-    this.face([x0, y0, z0], [dx, 0, 0], [0, dy, 0], [0, 0, -1]); // -z
-  }
-
-  coloredBox(
-    x0: number,
-    y0: number,
-    z0: number,
-    x1: number,
-    y1: number,
-    z1: number,
-    color: Color,
-  ): void {
-    const before = this.positions.length / 3;
-    this.box(x0, y0, z0, x1, y1, z1);
-    const added = this.positions.length / 3 - before;
-    for (let i = 0; i < added; i++) this.colors.push(color.r, color.g, color.b);
-  }
-
-  build(): BufferGeometry {
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(new Float32Array(this.positions), 3));
-    geometry.setAttribute('normal', new BufferAttribute(new Float32Array(this.normals), 3));
-    if (this.colors.length > 0) {
-      geometry.setAttribute('color', new BufferAttribute(new Float32Array(this.colors), 3));
-    }
-    geometry.setIndex(new BufferAttribute(new Uint32Array(this.indices), 1));
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-}
 
 function roadDetailColor(index: number): Color {
   return new Color(ROAD_DETAIL_COLOR).offsetHSL(
