@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-07-18T17:33:10.723Z",
+  "capturedAt": "2026-07-18T17:45:11.728Z",
   "profileTicks": 3000,
   "runOrder": [
     "recorded",
@@ -679,27 +679,27 @@
   "aggregate": {
     "recorded": {
       "runs": 2,
-      "meanWallMs": 6552.2059500000005,
-      "meanTicksPerSecond": 457.8998670799134,
-      "meanBundleJsonBytes": 102668345.5
+      "meanWallMs": 6557.446550000001,
+      "meanTicksPerSecond": 457.5475826929337,
+      "meanBundleJsonBytes": 102668799
     },
     "lean": {
       "runs": 2,
-      "meanWallMs": 2838.625,
-      "meanTicksPerSecond": 1056.8743400157575,
+      "meanWallMs": 2744.3733499999994,
+      "meanTicksPerSecond": 1093.1529630629916,
       "meanBundleJsonBytes": 0
     },
-    "wallMsReduction": 3713.5809500000005,
-    "wallMsReductionPct": 56.6768043974564,
-    "throughputGain": 2.3080905149756465
+    "wallMsReduction": 3813.073200000001,
+    "wallMsReductionPct": 58.148749988667475,
+    "throughputGain": 2.3891568973638773
   },
   "runs": [
     {
       "label": "recorded",
       "sequence": 1,
-      "wallMs": 6491.891,
-      "ticksPerSecond": 462.1149677343628,
-      "bundleJsonBytes": 102665597,
+      "wallMs": 6487.2504,
+      "ticksPerSecond": 462.4455377890146,
+      "bundleJsonBytes": 102665672,
       "final": {
         "tick": 3002,
         "buildingCount": 560,
@@ -712,8 +712,8 @@
     {
       "label": "lean",
       "sequence": 2,
-      "wallMs": 2824.9208,
-      "ticksPerSecond": 1061.9766755938786,
+      "wallMs": 2737.3124,
+      "ticksPerSecond": 1095.9655171254842,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -727,8 +727,8 @@
     {
       "label": "lean",
       "sequence": 3,
-      "wallMs": 2852.3292,
-      "ticksPerSecond": 1051.7720044376365,
+      "wallMs": 2751.434299999999,
+      "ticksPerSecond": 1090.3404090004988,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -742,9 +742,9 @@
     {
       "label": "recorded",
       "sequence": 4,
-      "wallMs": 6612.520900000001,
-      "ticksPerSecond": 453.68476642546403,
-      "bundleJsonBytes": 102671094,
+      "wallMs": 6627.6427,
+      "ticksPerSecond": 452.6496275968528,
+      "bundleJsonBytes": 102671926,
       "final": {
         "tick": 3002,
         "buildingCount": 560,

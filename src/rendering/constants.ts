@@ -201,6 +201,10 @@ export const BUILDING_ROOF_OVERHANG = 0.18;
  * the row-of-clones look). */
 export const BUILDING_TINT_HUE_JITTER = 0.03;
 export const BUILDING_TINT_LIGHT_JITTER = 0.08;
+/** Overlay-mode status tint: roofs read brighter than walls so massing survives
+ * the flattening into a single status hue. */
+export const BUILDING_OVERLAY_WALL_SHADE = -0.06;
+export const BUILDING_OVERLAY_ROOF_SHADE = 0.06;
 export const BUILDING_ROOF_HEIGHTS: Record<ZoneKind, number> = { R: 0.5, C: 0.16, I: 0.24 };
 /** Zone-specific rooftop profiles: chimney, service core, and broad low HVAC. */
 export const BUILDING_DETAIL_HEIGHTS: Record<ZoneKind, number> = { R: 0.42, C: 0.62, I: 0.18 };

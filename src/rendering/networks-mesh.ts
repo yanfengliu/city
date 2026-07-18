@@ -14,6 +14,8 @@ import {
 } from 'three';
 import type { PowerNetworkView, WaterNetworkView } from '../protocol/messages';
 import { PIPE_COLOR, PIPE_Y, POLE_COLOR, WIRE_COLOR, WIRE_Y } from './constants';
+import { desaturateToLuminance } from './desaturation';
+import { OVERLAY_STATUS_RGBA } from './overlay-semantics';
 import { GeometryBuilder } from './geometry-builder';
 import { deriveLineGeometry } from './line-geometry';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
@@ -35,6 +37,8 @@ const instanceScale = new Vector3(1, 1, 1);
 const spinQuaternion = new Quaternion();
 const ROTOR_AXIS = new Vector3(0, 0, 1);
 const FULL_TURN = Math.PI * 2;
+/** Flat tone for the utility family the active overlay is not about. */
+const INACTIVE_STRUCTURE_GREY = new Color(0x9aa0a4);
 
 /** A world-space translation for one instance. */
 interface Placement {
@@ -55,7 +59,8 @@ class CellInstances {
   constructor(
     private readonly parent: Group,
     private readonly geometry: BoxGeometry,
-    private readonly material: MeshLambertMaterial,
+    /** Readable so the overlay tint can shift this family's colour. */
+    readonly material: MeshLambertMaterial,
     private capacity: number,
     private readonly name = '',
   ) {
@@ -159,6 +164,14 @@ export class NetworksView {
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   /** Terrain water mask from boot; aims each pump's intake at its water cell. */
   private water: Uint8Array | null = null;
+  /** Materials the overlay tint drives, with their untinted colours. */
+  private readonly tintables: Array<{
+    material: MeshLambertMaterial;
+    utility: 'power' | 'water';
+    original: Color;
+    /** Whether this family paints itself from vertex colours. */
+    vertexColors: boolean;
+  }>;
   private lastPower: PowerNetworkView | null = null;
   private lastWater: WaterNetworkView | null = null;
   private lastNow = 0;
@@ -204,6 +217,62 @@ export class NetworksView {
       'water-pipes',
     );
     this.pipes.setVisible(false);
+    // Overlay tinting needs each material's untinted colour to restore, and
+    // which utility it belongs to so only the inspected one lights up.
+    const families: Array<[MeshLambertMaterial, 'power' | 'water']> = [
+      [this.coalPlants.material as MeshLambertMaterial, 'power'],
+      [this.windTurbines.material as MeshLambertMaterial, 'power'],
+      [this.rotorMaterial, 'power'],
+      [this.poles.material, 'power'],
+      [this.eastWires.material, 'power'],
+      [this.southWires.material, 'power'],
+      [this.waterPumps.material as MeshLambertMaterial, 'water'],
+      [this.pipes.material, 'water'],
+    ];
+    this.tintables = families.map(([material, utility]) => ({
+      material,
+      utility,
+      original: material.color.clone(),
+      vertexColors: material.vertexColors,
+    }));
+  }
+
+  /**
+   * Tints the utility infrastructure to match the active overlay, so plants,
+   * poles, wires, pumps, and pipes read in the same green family as the
+   * buildings they serve.
+   *
+   * `'power'`/`'water'` light that utility's hardware and grey the other's;
+   * `'grey'` greys all of it (an overlay is up, but it says nothing about
+   * utilities); `null` restores the untinted world. These meshes opt out of
+   * the scene desaturation shader, so the grey cases are produced here.
+   *
+   * The materials multiply their colour with any vertex colours, so a merged
+   * structure keeps its internal shading while shifting into the status hue.
+   */
+  setOverlayTint(mode: 'power' | 'water' | 'grey' | null): void {
+    const [r, g, b] = OVERLAY_STATUS_RGBA.source;
+    for (const entry of this.tintables) {
+      const { material, utility, original, vertexColors } = entry;
+      // A merged structure carries its palette in vertex colours, which a
+      // material colour can only multiply — never neutralise. So the greyed
+      // case switches vertex colours off and paints one flat grey; otherwise a
+      // "de-emphasised" pump would still read bright blue on the power map.
+      const greyed = mode !== null && utility !== mode;
+      const wantVertexColors = vertexColors && !greyed;
+      if (material.vertexColors !== wantVertexColors) {
+        material.vertexColors = wantVertexColors;
+        material.needsUpdate = true;
+      }
+      if (mode === null) {
+        material.color.copy(original);
+      } else if (!greyed) {
+        material.color.setRGB(r / 255, g / 255, b / 255);
+      } else {
+        material.color.copy(vertexColors ? INACTIVE_STRUCTURE_GREY : original);
+        desaturateToLuminance(material.color);
+      }
+    }
   }
 
   /** Empty merged mesh for one structure family; geometry swaps in on update. */

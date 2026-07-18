@@ -1,7 +1,12 @@
 import { BuildingsView } from '../rendering/buildings-mesh';
 import { VoxelWallsHost } from '../rendering/voxel-walls-host';
-import { ZONE_COLORS } from '../rendering/constants';
+import { FIELD_OVERLAY_VALUE_MAX, ZONE_COLORS } from '../rendering/constants';
 import { markOverlayKeepColor } from '../rendering/desaturation';
+import {
+  fieldStatus,
+  utilityStatus,
+  type OverlayStatus,
+} from '../rendering/overlay-semantics';
 import { CityScene } from '../rendering/scene';
 import { GhostView } from '../rendering/ghost';
 import { FieldOverlayView, TrafficOverlayView } from '../rendering/overlay';
@@ -174,6 +179,14 @@ export class Game {
   private occupancyDirty = false;
   private inspected: Inspected | null = null;
   private activeOverlay: OverlayName = 'none';
+  /** Densified snapshot of the subscribed field, for per-building grading. */
+  private lastField: {
+    name: OverlayFieldName;
+    blockSize: number;
+    width: number;
+    height: number;
+    values: Float32Array;
+  } | null = null;
   private citizens = 0;
   private demand: DemandState = { r: 0, c: 0, i: 0 };
   private tick = 0;
@@ -280,6 +293,12 @@ export class Game {
       this.inspectCoverage.group,
       this.levelUpFx.group,
       this.utilityIconsFx.group,
+      // Buildings grade themselves in overlay mode (BuildingsView.setOverlayStatuses):
+      // they carry the active system's status colour, and grey their own
+      // "nothing to report" cases, so the scene shader must not re-grey them.
+      this.buildingsView.group,
+      // Same contract for utility hardware (NetworksView.setOverlayTint).
+      this.networksView.group,
     );
     this.scene.add(
       this.ghost.mesh,
@@ -501,7 +520,24 @@ export class Game {
         break;
       }
       case 'field':
-        if (message.name === this.activeOverlay) this.fieldOverlay.setField(message);
+        if (message.name === this.activeOverlay) {
+          this.fieldOverlay.setField(message);
+          // Densify once here so per-building sampling is an array read.
+          const values = new Float32Array(message.width * message.height).fill(
+            message.defaultValue,
+          );
+          for (const [index, value] of message.cells) {
+            if (index >= 0 && index < values.length) values[index] = value;
+          }
+          this.lastField = {
+            name: message.name,
+            blockSize: message.blockSize,
+            width: message.width,
+            height: message.height,
+            values,
+          };
+          this.refreshBuildingOverlayStatuses();
+        }
         break;
       case 'frame':
         this.tick = message.tick;
@@ -546,7 +582,11 @@ export class Game {
         });
         break;
     }
-    if (networkOverlayInputsChanged(message.type)) this.refreshNetworkOverlay();
+    if (networkOverlayInputsChanged(message.type)) {
+      this.refreshNetworkOverlay();
+      // Building connectivity rides the same payloads as the network overlay.
+      if (message.type === 'buildings') this.refreshBuildingOverlayStatuses();
+    }
   }
 
   /**
@@ -561,12 +601,52 @@ export class Game {
     const field = FIELD_OVERLAYS.includes(overlay) ? (overlay as OverlayFieldName) : null;
     this.send({ type: 'setFieldSubscriptions', fields: field ? [field] : [] });
     this.fieldOverlay.hide();
+    // A stale snapshot belongs to the overlay we just left.
+    if (field === null || this.lastField?.name !== field) this.lastField = null;
     this.trafficOverlay.setActive(overlay === 'traffic');
     this.networksView.setWaterOverlayActive(overlay === 'water');
+    // Only the inspected utility's hardware lights up; any other overlay greys
+    // it, and leaving overlay mode restores its own colours.
+    if (overlay === 'power' || overlay === 'water') {
+      this.networksView.setOverlayTint(overlay);
+    } else {
+      this.networksView.setOverlayTint(overlay === 'none' ? null : 'grey');
+    }
     this.refreshNetworkOverlay();
+    this.refreshBuildingOverlayStatuses();
     // Any overlay greys the world so the overlay is the only color on screen.
     this.scene.setOverlayDesaturation(overlay !== 'none');
     this.refreshHud();
+  }
+
+  /**
+   * Grades every building for the active overlay so buildings share the colour
+   * family of the system affecting them. Utility overlays read the building's
+   * own connectivity; field and coverage overlays sample the last field
+   * snapshot under the building's anchor cell. Overlays that say nothing about
+   * buildings (traffic, none) clear the grading entirely.
+   */
+  private refreshBuildingOverlayStatuses(): void {
+    const overlay = this.activeOverlay;
+    if (overlay === 'none' || overlay === 'traffic') {
+      this.buildingsView.setOverlayStatuses(null);
+      return;
+    }
+    const statuses = new Map<number, OverlayStatus>();
+    if (overlay === 'power' || overlay === 'water') {
+      for (const view of this.buildings.values()) {
+        statuses.set(view.id, utilityStatus(overlay, view));
+      }
+    } else if (this.lastField && this.lastField.name === overlay) {
+      const field = this.lastField;
+      for (const view of this.buildings.values()) {
+        const bx = Math.min(Math.floor(view.x / field.blockSize), field.width - 1);
+        const by = Math.min(Math.floor(view.y / field.blockSize), field.height - 1);
+        const value = field.values[by * field.width + bx];
+        statuses.set(view.id, fieldStatus(overlay, value / FIELD_OVERLAY_VALUE_MAX));
+      }
+    }
+    this.buildingsView.setOverlayStatuses(statuses);
   }
 
   /** Rebuilds the client-computed power/water overlay when active. */

@@ -28,6 +28,8 @@ import {
   BUILDING_LEVEL_WALL_LIGHTEN,
   BUILDING_NIGHT_GLOW_COLOR,
   BUILDING_TINT_HUE_JITTER,
+  BUILDING_OVERLAY_ROOF_SHADE,
+  BUILDING_OVERLAY_WALL_SHADE,
   BUILDING_TINT_LIGHT_JITTER,
   BUILDING_ROOF_COLORS,
   BUILDING_ROOF_HEIGHTS,
@@ -44,6 +46,8 @@ import {
   createBuildingFrontageGeometry,
   createBuildingWindowGeometry,
 } from './building-archetype-geometry';
+import { desaturateToLuminance } from './desaturation';
+import { OVERLAY_STATUS_RGBA, type OverlayStatus } from './overlay-semantics';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 /** Plain-data building view (structurally mirrors the protocol BuildingView). */
@@ -94,6 +98,8 @@ export class BuildingsView {
   private bodyLayersVisible = true;
   private readonly slots = new Map<number, { zone: ZoneKind; slot: number }>();
   private readonly views = new Map<number, BuildingRenderView>();
+  /** Non-null only while an overlay grades buildings (see setOverlayStatuses). */
+  private overlayStatuses: ReadonlyMap<number, OverlayStatus> | null = null;
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private readonly unitBox: BufferGeometry;
   private readonly pyramidRoof: BufferGeometry;
@@ -154,6 +160,25 @@ export class BuildingsView {
 
   setTerrainSurface(surface: TerrainSurfaceView): void {
     this.surface = surface;
+    this.rewriteAll();
+  }
+
+  /**
+   * Grades every building for the active overlay, so the buildings a system
+   * affects carry the same colour family as its infrastructure instead of
+   * staying grey while only the ground beneath them is painted.
+   *
+   * Pass null to leave overlay mode and restore zone colours. While a map is
+   * given, a building absent from it is "nothing to report" and is greyed here
+   * rather than by the scene-wide desaturation shader — these meshes opt out of
+   * that shader so their status tint survives it.
+   */
+  setOverlayStatuses(statuses: ReadonlyMap<number, OverlayStatus> | null): void {
+    this.overlayStatuses = statuses;
+    this.rewriteAll();
+  }
+
+  private rewriteAll(): void {
     for (const view of this.views.values()) {
       const entry = this.slots.get(view.id);
       if (entry) this.writeInstance(this.archetypes[entry.zone], entry.slot, view);
@@ -288,6 +313,46 @@ export class BuildingsView {
     return next;
   }
 
+  /**
+   * Paints one building in the active overlay's status colour. Roofs read
+   * brightest and walls a shade darker so massing still reads at play zoom,
+   * and the per-building lightness jitter is kept so a graded district varies
+   * like the normal one. A building the overlay has nothing to say about
+   * collapses to its own luminance — the grey everything else already is.
+   */
+  private writeOverlayColors(
+    archetype: Archetype,
+    slot: number,
+    view: BuildingRenderView,
+    levelIndex: number,
+  ): void {
+    const status = this.overlayStatuses?.get(view.id) ?? 'neutral';
+    const lightJit = (cellHash01(view.id + 0x4444) - 0.5) * BUILDING_TINT_LIGHT_JITTER;
+
+    if (status === 'neutral') {
+      const grey = (hex: number, lighten: number): Color => {
+        COLOR.setHex(hex).offsetHSL(0, 0, lighten + lightJit);
+        desaturateToLuminance(COLOR);
+        return COLOR;
+      };
+      archetype.walls.setColorAt(slot, grey(BUILDING_WALL_COLORS[view.zone], BUILDING_LEVEL_WALL_LIGHTEN * levelIndex));
+      archetype.roofs.setColorAt(slot, grey(BUILDING_ROOF_COLORS[view.zone], BUILDING_LEVEL_ROOF_LIGHTEN * levelIndex));
+      archetype.details.setColorAt(slot, grey(BUILDING_DETAIL_COLORS[view.zone], 0));
+      archetype.windows.setColorAt(slot, grey(BUILDING_WINDOW_COLORS[view.zone], 0));
+      archetype.frontages.setColorAt(slot, grey(BUILDING_FRONTAGE_COLORS[view.zone], 0));
+      return;
+    }
+
+    const [r, g, b] = OVERLAY_STATUS_RGBA[status];
+    const tint = (lighten: number): Color =>
+      COLOR.setRGB(r / 255, g / 255, b / 255).offsetHSL(0, 0, lighten + lightJit);
+    archetype.walls.setColorAt(slot, tint(BUILDING_OVERLAY_WALL_SHADE));
+    archetype.roofs.setColorAt(slot, tint(BUILDING_OVERLAY_ROOF_SHADE));
+    archetype.details.setColorAt(slot, tint(BUILDING_OVERLAY_ROOF_SHADE));
+    archetype.windows.setColorAt(slot, tint(BUILDING_OVERLAY_ROOF_SHADE));
+    archetype.frontages.setColorAt(slot, tint(BUILDING_OVERLAY_WALL_SHADE));
+  }
+
   private writeInstance(archetype: Archetype, slot: number, view: BuildingRenderView): void {
     const levelIndex = Math.min(Math.max(view.level, 1), BUILDING_LEVEL_HEIGHTS.length) - 1;
     const jitter = 1 + (cellHash01(view.id) - 0.5) * BUILDING_HEIGHT_JITTER;
@@ -324,6 +389,15 @@ export class BuildingsView {
     archetype.windows.setMatrixAt(slot, MATRIX);
     MATRIX.makeScale(sx, Math.min(height, BUILDING_FRONTAGE_HEIGHT_MAX), sz).setPosition(cx, baseY, cz);
     archetype.frontages.setMatrixAt(slot, MATRIX);
+
+    if (this.overlayStatuses) {
+      this.writeOverlayColors(archetype, slot, view, levelIndex);
+      for (const mesh of archetypeMeshes(archetype)) {
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      }
+      return;
+    }
 
     if (view.abandoned) {
       // Per-building shade jitter so a derelict block reads as varied, weathered
