@@ -16,6 +16,7 @@ import {
   nodePathToLegs,
 } from './pathing';
 import { spawnPedestrian, validShop } from './pedestrians';
+import { spawnBlocked } from './vehicles';
 
 function countDisconnected(w: CityWorld): void {
   w.setState(
@@ -197,6 +198,12 @@ function startWorkLeg(
     return;
   }
   if (capacity.vehicles >= MAX_VEHICLES) return;
+  // A car may not materialize inside another's headway gap — wait for the
+  // curb space to clear (docs/design/simulation-realism.md T1).
+  if (spawnBlocked(sim, w, legs[0])) {
+    retryLater(w, citizenId);
+    return;
+  }
   w.patchComponent(citizenId, 'citizen', (data) => {
     data.phase = outbound ? 'toWork' : 'toHome';
   });

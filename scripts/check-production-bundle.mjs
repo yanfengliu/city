@@ -1,7 +1,10 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const MAX_WORKER_BYTES = 120_000;
+// Raised 120k → 132k on 2026-07-17 for the T1 traffic realism sim (headway
+// lanes, signal stop lines, spawn gaps); the budget still exists to catch
+// accidental bloat and recorder leakage, not to freeze the sim's feature set.
+const MAX_WORKER_BYTES = 132_000;
 const FORBIDDEN_RECORDER_STRINGS = ['SessionRecorder', 'MemorySink', 'city-playtest-recorder'];
 
 const assetsDir = resolve('dist/assets');

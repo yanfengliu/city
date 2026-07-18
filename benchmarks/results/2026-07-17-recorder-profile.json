@@ -1,0 +1,758 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-18T06:47:43.257Z",
+  "profileTicks": 3000,
+  "runOrder": [
+    "recorded",
+    "lean",
+    "lean",
+    "recorded"
+  ],
+  "scope": "Controlled headless sim-loop proxy: one protocol-like no-op diff listener in both modes; SessionRecorder + MemorySink only in recorded mode.",
+  "sourceRef": null,
+  "source": {
+    "treeSha256": "4cc3651795c287f1c2e8ee15cd681b0965f9cdb7b5db23943f720ad05fb9f0ab",
+    "files": [
+      {
+        "path": "node_modules/civ-engine/dist/ai-contract.js",
+        "bytes": 1166,
+        "sha256": "b3b36503836b3d7a74af446af146e376ec1f92b10ad374962b4ce39bcc8923be"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/ai-playtester.js",
+        "bytes": 10319,
+        "sha256": "60fff47ad3a04cbcb16f6e8324447cfc2e7e02a8e080941e9416b9d9e0021b5b"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/apply-tick-diff.js",
+        "bytes": 5573,
+        "sha256": "ada9d84893d830831badbc5ff04b8eef6fca6390495fe5601eaf375582742119"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/behavior-tree.js",
+        "bytes": 6766,
+        "sha256": "490dd82fbf2df111758397f660c710e4cb34a1575194ae360eba420c2679f797"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/behavioral-metrics.js",
+        "bytes": 9820,
+        "sha256": "7b61c422671c45576f8c903d2a10fe78604d84f6b62f2b0759512479c60be8f3"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/bundle-corpus-manifest.js",
+        "bytes": 8824,
+        "sha256": "d6211fc7cca696d53417d534e57c35534d5ee779347ce22cf9adae1371da10fb"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/bundle-corpus-types.js",
+        "bytes": 909,
+        "sha256": "48fff30e12a1aaa9c216cd27ed43dae88838e28c0d9bb3ef05a5b104c983d7d6"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/bundle-corpus.js",
+        "bytes": 14845,
+        "sha256": "8d7dee12a9ea35ceeaa8eb2cf785e5fcda423c7dee41360f0d649b54be39cc46"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/bundle-hotspots.js",
+        "bytes": 7205,
+        "sha256": "9b17bdf9cab782322ec2b488c6fef148a16d52918f24b94d6aeaeb11955009d3"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/bundle-viewer-internal.js",
+        "bytes": 6968,
+        "sha256": "a8bd86dd5eacfb9241f63fb31c5281e499f85c41919399ae5e09f5141d20a47d"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/bundle-viewer-types.js",
+        "bytes": 956,
+        "sha256": "3bcaa909d52a197003895453dfa463af163316580e7929482e9ecc680ab60f53"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/bundle-viewer.js",
+        "bytes": 15744,
+        "sha256": "423bdfd7241f58e4c6cc209a3c1025ff53a6ca6f56a458fdf3694903dcda22c3"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/cellular.js",
+        "bytes": 2273,
+        "sha256": "9c0f1578f8a94864ef401d81caa42c00974f023b6e30f4b2f04913f6f0439d5d"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/client-adapter.js",
+        "bytes": 6837,
+        "sha256": "a8de6753d940724078c37c0aff6241eeb877227f17d189aebf214b9a27445f00"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/command-queue.js",
+        "bytes": 440,
+        "sha256": "9cfc2ae2931cff1fdf5570834fb4ac8783bfeac359ae1d72839a6ae2c185fc19"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/command-transaction.js",
+        "bytes": 10360,
+        "sha256": "dbfd51f3f181451800ff767fa04030c2db559487aed93d3932840534d8668231"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/component-store.js",
+        "bytes": 4892,
+        "sha256": "c2551e37d04cdbbeb3baea924d9c7a8606bc821339daf087ec1c0d606e14e50e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/diff.js",
+        "bytes": 43,
+        "sha256": "3f6396d087718950564039de6e3365748fb4b215f32b64e0b365cd3c07d79661"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/engine-error.js",
+        "bytes": 5637,
+        "sha256": "22fdc86bcd2afdec41984ad6ca314e8e6d88b1ea9be011747161f6c03d01a2a7"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/entity-manager.js",
+        "bytes": 4243,
+        "sha256": "fb880146b205649f1e7e5ca15f92565f9c32c6dc8b4eff961cb59b96ba17e38b"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/event-bus.js",
+        "bytes": 1757,
+        "sha256": "7e3c69e6ced8394eb430653ed5d3128b3920c911833b53e12101e664c356ac26"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/game-loop.js",
+        "bytes": 3740,
+        "sha256": "081a33556c33a94b4785c41e0fed4bd4a0c12c40856ed212d78ef17d8bee3de2"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/history-range-summary.js",
+        "bytes": 5833,
+        "sha256": "e2f14f981ca5bfc88186ffba05d53ebab70c8a36a626b324e819de393a67146e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/history-recorder.js",
+        "bytes": 8377,
+        "sha256": "7fc0d3effed8e8ee34fdd87bb7f5625ed08861f2b4655ef10211c3acea9f4fef"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/improvement-loop-types.js",
+        "bytes": 61,
+        "sha256": "6440121cffc6ad378fbdc23fcc2bdd51f5b5262525ba8bb7f0c2695ae10fa563"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/improvement-loop.js",
+        "bytes": 17511,
+        "sha256": "c52a05d70d27ca8164d96bcc8bb7ed3273030f70acbcafda00b68acddf57ffd7"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/improvement-signature.js",
+        "bytes": 2971,
+        "sha256": "9984177cff94886b1802d8534f8d3aadb7b32716533e2c1bdc12f600583a88a4"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/index.browser.js",
+        "bytes": 7244,
+        "sha256": "d8e9cbebbe535f54fec19da49ba9179a52a72b6225ed18217b491a3753dbb7f9"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/index.js",
+        "bytes": 6698,
+        "sha256": "34bdeb3c9961f8478a54dc8a57a7e90fcc9e6d79fdeb37ff484871b09dc82f0e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/json.js",
+        "bytes": 3318,
+        "sha256": "f027eb26affbca46682acae1cd1d6b4f4dff8e5ecd9a847d5ef31fbf6dbe364e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/layer.js",
+        "bytes": 11478,
+        "sha256": "4c4dae2b1c8fea589d79c64819ad12014f9c62aa1dc46f8195671b93ff55b478"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/map-gen.js",
+        "bytes": 691,
+        "sha256": "3cc0bec67fb53fa2fa63cd0efc8ece69abbd18c5a41718bf27cf5dff899b4262"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/noise.js",
+        "bytes": 3760,
+        "sha256": "c3a54141cc585455816a266086878310f98d2ac634a1259fe060bc9a7400c85e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/occupancy-binding-internal.js",
+        "bytes": 2255,
+        "sha256": "506509ef48cded70240b0ae9088f12522d0871b7fc6a9d51663b404ced610100"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/occupancy-binding.js",
+        "bytes": 12589,
+        "sha256": "635280b47dc8c4d83dbe35114ab30cf8e5f4d4ad2ef4eeccd76625f75f2f4ee7"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/occupancy-cell-grid.js",
+        "bytes": 9658,
+        "sha256": "b0dc57847356e6dc5ef4e8acd72e0babf6322b695ae5599de488afa3f7a6c39f"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/occupancy-grid.js",
+        "bytes": 222,
+        "sha256": "edd5d79f31cdd4734f7791e46f7499f4f3faff99918bc751f70cb3182eb8b5a1"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/occupancy-internal.js",
+        "bytes": 2519,
+        "sha256": "1711d8c3da5f06a96e4c57f02a68e187b04e898454fe3a09f59ffe1eb98f3765"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/occupancy-subcell.js",
+        "bytes": 12104,
+        "sha256": "e6c72da43e37588269730d2d93a1e9178a677bbc05419b2ddc3e549aeee236d8"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/occupancy-types.js",
+        "bytes": 54,
+        "sha256": "60c56ee14d282c7dda05a0d9d92240233c06baad055b0698743c8ea9cee21369"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/path-service.js",
+        "bytes": 9688,
+        "sha256": "29b872b5f0e83fa913d040c75007dd28842fe4ac346ad22579125edf0f8e45ec"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/pathfinding.js",
+        "bytes": 3372,
+        "sha256": "6992b8e3d8c06cb53494f4ac6aa5235ed0926abbd06496bc3eb7e17c923667a1"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/player-observer.js",
+        "bytes": 13786,
+        "sha256": "def2b22d5453184d4f6255f351deb9f2ad4f460c92ae27cee5be207c0349aba7"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/random.js",
+        "bytes": 1530,
+        "sha256": "be2dd36fdacef8e0211ab7c9a4aa423dfd486eb35205cf02afbd2b7319c27734"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/render-adapter.js",
+        "bytes": 7000,
+        "sha256": "7ce2314efd50ca079c579ca02e4c8d8340e96fa3ed38901ae44908753a3e3c8e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/resource-store.js",
+        "bytes": 13036,
+        "sha256": "02825e0e310bed3703a0627351849e267faa748f67df10c8da3076c94ac89cfa"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/scenario-runner.js",
+        "bytes": 8040,
+        "sha256": "78a5efba0a7c6f35db6f68c05d8e46fd88f22a2fbfcd05cdaa399c9b3d9bd987"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/serializer.js",
+        "bytes": 49,
+        "sha256": "735526efa22fd29421707b1df13b89b9b7f9212b14c45ddf7908770ed7b6a25f"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-attachment-id.js",
+        "bytes": 1132,
+        "sha256": "58869b87a128cdd87e372f4b5336ae20bc873727ead418f84e399fe24e36a3ec"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-bundle-diff.js",
+        "bytes": 15628,
+        "sha256": "9d19c333576729c8df8af7939d37178fd11156b4187ea046e6a381ccf95d9634"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-bundle-equivalence.js",
+        "bytes": 2677,
+        "sha256": "0f59c6decb239c6b115447fbf511ad085c78c784670bf6293b85c2e44ed98afe"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-bundle.js",
+        "bytes": 1162,
+        "sha256": "056dcfd6ff1107b343b4b85f974f3a88205132cbf62660c13958c6cbfb9735ab"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-continuity.js",
+        "bytes": 1428,
+        "sha256": "4ccc1a0b6064c18985ea30a409db2170c071ce6c45a6a07fa4e76628b939d292"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-deep-equal.js",
+        "bytes": 2291,
+        "sha256": "e69acca7737ecad4a6ae6ffc80404b395b12af70aa520eaa91818780e7ce1d63"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-errors.js",
+        "bytes": 4972,
+        "sha256": "97fcdcc2cd7bb0f6524f1108c8bcb1ff21dd18970f8807ec37da439c6da98772"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-file-sink.js",
+        "bytes": 18424,
+        "sha256": "c09c09b434cd302d05f89f6204a8da75be3d3d0b0a76df0d9db23da19a657cb0"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-fork-divergence.js",
+        "bytes": 6493,
+        "sha256": "a023f30ccd301249315b29d019264af935ceafd0f445617c4e143f46be7c96ef"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-fork.js",
+        "bytes": 10861,
+        "sha256": "741d6b8738e0602004b4d4ca088aedec3fb0cee642701405352d571589a1fa60"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-internals.js",
+        "bytes": 56,
+        "sha256": "b66beea3867c53c7ccfee580581fdc56fe37a7fd551f071456f4bf3672239fd1"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-marker-validation.js",
+        "bytes": 3614,
+        "sha256": "6efb6cce0401020857f843dca09d34caf98e4bc4959bed5f1eb0e2ef2aaa18e2"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-recorder.js",
+        "bytes": 16399,
+        "sha256": "a46d88fc3e82abdfebeb5e2aacc770fd26a76e345c90aad58ad77d6e91b79760"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-registration.js",
+        "bytes": 5155,
+        "sha256": "503eb0233346f97701a0115df56c7ade563c8fe8bc361f0a061961e4bdba7c9a"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-replayer-guards.js",
+        "bytes": 5287,
+        "sha256": "21bb17e4c1983a5f09fdd5edea365cd190e9f510b55ab717a4834d0bcf9cecd3"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-replayer-markers.js",
+        "bytes": 1751,
+        "sha256": "aee18794240a0b0e36629b8aa37b5de9d93fbb7da068cab858f2454bb607ab13"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-replayer-types.js",
+        "bytes": 305,
+        "sha256": "f3206f6e6b9450439988ee630c19e0ff300eafba1fec9a77c941f99e4f01a550"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-replayer.js",
+        "bytes": 19376,
+        "sha256": "84d5c5244883c7ed38ec49308be910f0594c5126a9b1489b96100751e47dc5e1"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-scenario-bundle.js",
+        "bytes": 5334,
+        "sha256": "a53741f6f97e803f0e44c962994cf7f6d24596de355d59e463492f272831bf08"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/session-sink.js",
+        "bytes": 8852,
+        "sha256": "1a0f465cec0f47c44ab04c8ca485c50a10774062e30dcf0377dbd8ca71c7f972"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/snapshot-diff.js",
+        "bytes": 8505,
+        "sha256": "cecb207c7422a67b8b442c7520012e5243400350b174d4f61d66023db4a6f08a"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/spatial-grid.js",
+        "bytes": 4977,
+        "sha256": "3417673f464bb9eb67b93c329b6cddb3d7c94b365d677e62d9500c98498b893e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/state-digest.js",
+        "bytes": 3156,
+        "sha256": "9d14149250575162365165146d71ba4784b29c7724844b912ed90ea916763a1d"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/synthetic-playtest.js",
+        "bytes": 8035,
+        "sha256": "e5efd7d49a454638a1713a4a1e8bc449f5201a01eaf3895a8b42e2a36eb17a96"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/types.js",
+        "bytes": 44,
+        "sha256": "01ae2a5b120382f9a648ced7ee8507493a134f216d100fc61600c6c9738235d2"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/uuid.js",
+        "bytes": 1078,
+        "sha256": "65970a24d51d037d292c91fd3089f09ecab35ce0e98d32b66722bfc62de2b252"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/version.js",
+        "bytes": 368,
+        "sha256": "6daabef2d911dcdf18a2202b48b274085675d7923f8fc63cbb4ab589ce6fbb80"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/visibility-map.js",
+        "bytes": 8441,
+        "sha256": "d379d5122d5d8034e92c4aa19016579c38f2e9a175d7da4f4e6ef5b43ec1e881"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/visual-playtest-prompt.js",
+        "bytes": 4553,
+        "sha256": "6d846314994df886d2476e7540e536cfa90a39f089fc194940237a6adb96823b"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/visual-playtest-types.js",
+        "bytes": 60,
+        "sha256": "590ca3fd2e89f4fdaa381f451560eb9ce988bd9b1386d274273efe01171988da"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/visual-playtest.js",
+        "bytes": 16335,
+        "sha256": "d2a914f74f1c5c54562521535ed8cd45c25f8e39bfaa2ca0a34542b9126768b3"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-commands.js",
+        "bytes": 10753,
+        "sha256": "8a8971ad08e54fe120024d7e77a9d7c9c1495892b2f0bf0662f0f1780e0a190f"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-core.js",
+        "bytes": 9228,
+        "sha256": "e6e784958a21effa58fdf320304f2178ca04ada7725a2be6d826fd94650aa6b2"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-debug-probes.js",
+        "bytes": 2077,
+        "sha256": "9f365c444b3f1561ef357fbbd95c95025e340d6eaca3a513478188e3b7875663"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-debugger.js",
+        "bytes": 10578,
+        "sha256": "71a1308b3065226961d16207769fa1f5f21e27a17fc9b00efbc82c46fed46d3d"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-entities.js",
+        "bytes": 5417,
+        "sha256": "dee78e96968da2c7ed7cb030f90696936deef9b2a380811ae195fa7617e06f18"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-internal.js",
+        "bytes": 9379,
+        "sha256": "44de2d4158878b0af2c4fbe0b14eb7d714bfa8ef261922ce193168aea43202d3"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-observers.js",
+        "bytes": 6266,
+        "sha256": "05e369bedacf4bf240e742c69336df6fa9af09382fb4bc91e0b944baca9cb617"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-queries.js",
+        "bytes": 11003,
+        "sha256": "dfc2cdc44ee26871020fa602d27e15e46ee8eb2a5808cc3bfd026c67ad2bf7fa"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-strict-mode.js",
+        "bytes": 2595,
+        "sha256": "3b5f16ee6224c49f18d7309da66e1e2818928bc9537c101597342f78ba809e44"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-systems.js",
+        "bytes": 7986,
+        "sha256": "bb6d5e188d397e6c404100047773b2d63623fdd44cddddb60922d8ead920db6e"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-tags-meta.js",
+        "bytes": 6304,
+        "sha256": "45237f6f9894bab04351269bd037e71978a2992f8b7956a8dc00fb39174f074f"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-tick.js",
+        "bytes": 11680,
+        "sha256": "498e2a13c7a634e71d24bc1576b81d0c348c5d8dd0f90e9174a68fb7cf2f9f65"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world-types.js",
+        "bytes": 670,
+        "sha256": "fa165978f03c21ac0e91ac668ca340596f6dba9cb8fad0bece4709b1dfd7d91b"
+      },
+      {
+        "path": "node_modules/civ-engine/dist/world.js",
+        "bytes": 18511,
+        "sha256": "79c9787b197005b35c78a2d36639806b85a453b637a2934eb4ef3fcf6ce55b01"
+      },
+      {
+        "path": "node_modules/civ-engine/package.json",
+        "bytes": 2428,
+        "sha256": "577d1a4a673ead1959412abe9c54f9a7b313d1caa7e1d1bb64e7fddcf49988a3"
+      },
+      {
+        "path": "package-lock.json",
+        "bytes": 93122,
+        "sha256": "b83751a92ca19df5d681cff3f6e9357c31e7eac29d2493ef38030f4d9a6c1d6d"
+      },
+      {
+        "path": "package.json",
+        "bytes": 1098,
+        "sha256": "3d2c81ee990c4e5bf5145e5a8e25bd720929f1f66d819ef78e4173c72dcb184d"
+      },
+      {
+        "path": "scripts/benchmark-recorder.mjs",
+        "bytes": 5438,
+        "sha256": "6e5d16eb70ff20ef2ce2d3947ab0eb7556b1acf5c75532df87eb92dc4ba75ca4"
+      },
+      {
+        "path": "scripts/performance-scenario.mjs",
+        "bytes": 1368,
+        "sha256": "f84870076d071fc0e3e68e245e5d942a2166f6950ad4eece6597f47469c9bb30"
+      },
+      {
+        "path": "src/sim/buildings.ts",
+        "bytes": 11153,
+        "sha256": "b4f4d37b9828f136456102d97f9b34463277f9fffe8645969e6aea6610e138ae"
+      },
+      {
+        "path": "src/sim/citizens.ts",
+        "bytes": 2373,
+        "sha256": "864862697b3a798598fae7007277c55caf163453183d9bea1db647d00c5f8e6a"
+      },
+      {
+        "path": "src/sim/city.ts",
+        "bytes": 13373,
+        "sha256": "8bc86f207544988e76ad99b403b47d0a72d6ec480f52b7f08cf226cff03fbb17"
+      },
+      {
+        "path": "src/sim/constants/economy.ts",
+        "bytes": 1415,
+        "sha256": "db2480757c966954a6b1b9fb817c71517d7ef7709d11b824a03074299c542d9e"
+      },
+      {
+        "path": "src/sim/constants/fields.ts",
+        "bytes": 2144,
+        "sha256": "79a85d66d585050d37d156c1fcb8cc98acda20f908b93fa05fba965a63633164"
+      },
+      {
+        "path": "src/sim/constants/highway.ts",
+        "bytes": 1006,
+        "sha256": "24bde7064e06f9e2560ef83fd5a6721574107a44c248162c4317a35dbdec5d07"
+      },
+      {
+        "path": "src/sim/constants/map.ts",
+        "bytes": 449,
+        "sha256": "63138ca02ce3852082f785d288abf2861a358bee8be9eb65705c55e55f85cba1"
+      },
+      {
+        "path": "src/sim/constants/services.ts",
+        "bytes": 1107,
+        "sha256": "b5561dd8c4340bef53c7ddc9ff19b52b75b56d45658cc539d47ee49fcb2a9131"
+      },
+      {
+        "path": "src/sim/constants/terrain.ts",
+        "bytes": 620,
+        "sha256": "abf6560f1454b23a1c55368579a24f503023129e80a6c06ef719b111b9101aea"
+      },
+      {
+        "path": "src/sim/constants/traffic.ts",
+        "bytes": 2446,
+        "sha256": "56dac53ef55d1aac03c797ef882f15f41c49b9322c49b0249d4a2401b49f3dd3"
+      },
+      {
+        "path": "src/sim/constants/utilities.ts",
+        "bytes": 1730,
+        "sha256": "9318cae221b528871ce3394115a16e951b83f2ff094592ac5e9726f3f6e301d0"
+      },
+      {
+        "path": "src/sim/constants/zoning.ts",
+        "bytes": 2520,
+        "sha256": "59cfe18ed98b65519c61dab15bffeeaa843c8f1b7882b3975370941146003a1d"
+      },
+      {
+        "path": "src/sim/demand.ts",
+        "bytes": 2086,
+        "sha256": "4322961bebfe7a6ad782ace67750e4eeae31c000fd19c1fd5d70b7590d7975df"
+      },
+      {
+        "path": "src/sim/demolition.ts",
+        "bytes": 2228,
+        "sha256": "002c4e6123d5d0aeca3a353d6c34ff1310c3387b671e06b6cd61d5b4346f969d"
+      },
+      {
+        "path": "src/sim/economy.ts",
+        "bytes": 4639,
+        "sha256": "594a8a80a8fa6971e963825a7f9661c7b8400800033d5f104d31fbf4c779b780"
+      },
+      {
+        "path": "src/sim/employment.ts",
+        "bytes": 4181,
+        "sha256": "ee8caea9097a9c5ea29da75143f628c74c72fb50be0cbccd42b4d802d63be9aa"
+      },
+      {
+        "path": "src/sim/fields.ts",
+        "bytes": 14464,
+        "sha256": "87e858a9189e9196362b0f1aabb1341f15eebc98811db2ba8a2f0e2e0765c94b"
+      },
+      {
+        "path": "src/sim/grid.ts",
+        "bytes": 1447,
+        "sha256": "21f543741d822a1d731c3ced61ff031973ec9008a6eed192435fbccc266c881f"
+      },
+      {
+        "path": "src/sim/road/commands.ts",
+        "bytes": 9295,
+        "sha256": "9b4eff202d02bbab15494e2c9eb4b42a0521521c11f695afcc9e811041c31fe9"
+      },
+      {
+        "path": "src/sim/road/road-graph.ts",
+        "bytes": 4957,
+        "sha256": "a6caae5cce7a0df0287d750d98c9b315c7b12aa4aa4ec322956651dedf2cedad"
+      },
+      {
+        "path": "src/sim/services.ts",
+        "bytes": 6588,
+        "sha256": "b5534b8f9075fc0683806a9dc477208b3920903e86d856d98eed874c07618f21"
+      },
+      {
+        "path": "src/sim/summary.ts",
+        "bytes": 3018,
+        "sha256": "466c2301ca13c0fd68e5afb5ff82c5596ae26853022cab43b6c1de536cacdd93"
+      },
+      {
+        "path": "src/sim/terrain.ts",
+        "bytes": 3444,
+        "sha256": "2b32e11936827d870df63e7a819918fe41df018e0a01b3fb8aacd79c4f96e551"
+      },
+      {
+        "path": "src/sim/traffic/congestion.ts",
+        "bytes": 2529,
+        "sha256": "b688a101694529f20d3e530ea80a9abe285602eaab8537a3df17637a4b277054"
+      },
+      {
+        "path": "src/sim/traffic/pathing.ts",
+        "bytes": 5985,
+        "sha256": "dcac9eba88041666349e79605fd8261e1f00324b5e4575cc098cd019eae2619c"
+      },
+      {
+        "path": "src/sim/traffic/pedestrians.ts",
+        "bytes": 7961,
+        "sha256": "9803eede14de1f9a8e1680e720cdb359df5d7907fa33cc77809b875aa77dbb82"
+      },
+      {
+        "path": "src/sim/traffic/topology.ts",
+        "bytes": 2843,
+        "sha256": "901c5938edc89d081b9c4f43d3db630aaac64721ab2f3b1f2a0164538022740d"
+      },
+      {
+        "path": "src/sim/traffic/trips.ts",
+        "bytes": 10637,
+        "sha256": "6481c40362e29334691f64dee0fc6620adf9d19386c1a4df9822deb81a5ba2a7"
+      },
+      {
+        "path": "src/sim/traffic/vehicles.ts",
+        "bytes": 9704,
+        "sha256": "c7b311a8a0e53900d82715f0cfdd3cd60aaa298273102c1099c91b4317178de9"
+      },
+      {
+        "path": "src/sim/types.ts",
+        "bytes": 8481,
+        "sha256": "db6778ab3bf2db9bd500b3bcab11505b8b4f16761c23c5e7cf7a3c0c47fea04d"
+      },
+      {
+        "path": "src/sim/utilities.ts",
+        "bytes": 18588,
+        "sha256": "4f64636db4a25d0f25c387467450d88995d615d8de286e8a375110d1daf3984f"
+      },
+      {
+        "path": "src/sim/utility-placement.ts",
+        "bytes": 2067,
+        "sha256": "b8f48c5e6d4578bec7a757ff7c61d819280b0ef9ad322a4bf88f3f67b568cd54"
+      },
+      {
+        "path": "src/sim/zoning.ts",
+        "bytes": 4535,
+        "sha256": "4cfbe138760584564e7f412f52aeeaa7fa3706ce0793425919d3fb5506162c84"
+      }
+    ]
+  },
+  "host": {
+    "node": "v22.14.0",
+    "platform": "win32",
+    "release": "10.0.26100",
+    "cpu": "13th Gen Intel(R) Core(TM) i9-13900KF"
+  },
+  "aggregate": {
+    "recorded": {
+      "runs": 2,
+      "meanWallMs": 6592.76305,
+      "meanTicksPerSecond": 455.05802460500627,
+      "meanBundleJsonBytes": 102668192
+    },
+    "lean": {
+      "runs": 2,
+      "meanWallMs": 2882.4249500000005,
+      "meanTicksPerSecond": 1040.7932543310133,
+      "meanBundleJsonBytes": 0
+    },
+    "wallMsReduction": 3710.338099999999,
+    "wallMsReductionPct": 56.27895423907278,
+    "throughputGain": 2.2871660273092194
+  },
+  "runs": [
+    {
+      "label": "recorded",
+      "sequence": 1,
+      "wallMs": 6556.7077,
+      "ticksPerSecond": 457.54670442301403,
+      "bundleJsonBytes": 102665399,
+      "final": {
+        "tick": 3002,
+        "buildingCount": 560,
+        "vehicles": 85,
+        "pedestrians": 107,
+        "completedShoppingTrips": 509,
+        "populationPeople": 1572
+      }
+    },
+    {
+      "label": "lean",
+      "sequence": 2,
+      "wallMs": 2887.2608,
+      "ticksPerSecond": 1039.0471134439952,
+      "bundleJsonBytes": 0,
+      "final": {
+        "tick": 3002,
+        "buildingCount": 560,
+        "vehicles": 85,
+        "pedestrians": 107,
+        "completedShoppingTrips": 509,
+        "populationPeople": 1572
+      }
+    },
+    {
+      "label": "lean",
+      "sequence": 3,
+      "wallMs": 2877.589100000001,
+      "ticksPerSecond": 1042.5393952180314,
+      "bundleJsonBytes": 0,
+      "final": {
+        "tick": 3002,
+        "buildingCount": 560,
+        "vehicles": 85,
+        "pedestrians": 107,
+        "completedShoppingTrips": 509,
+        "populationPeople": 1572
+      }
+    },
+    {
+      "label": "recorded",
+      "sequence": 4,
+      "wallMs": 6628.8184,
+      "ticksPerSecond": 452.56934478699856,
+      "bundleJsonBytes": 102670985,
+      "final": {
+        "tick": 3002,
+        "buildingCount": 560,
+        "vehicles": 85,
+        "pedestrians": 107,
+        "completedShoppingTrips": 509,
+        "populationPeople": 1572
+      }
+    }
+  ]
+}

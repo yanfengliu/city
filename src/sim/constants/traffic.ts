@@ -21,6 +21,18 @@ export const PEDESTRIAN_WORK_MAX_CELLS = 24;
 export const CONGESTION_SLOWDOWN_PER_BUCKET = 0.25;
 export const MIN_SPEED_FACTOR = 0.25;
 
+// Micro traffic rules (docs/design/simulation-realism.md, phase T1).
+/** Minimum same-lane gap between cars: a car length plus margin, in cells. */
+export const VEHICLE_HEADWAY_CELLS = 0.6;
+/** Cars hold this far before a red junction node (the stop line), in cells. */
+export const VEHICLE_STOP_LINE_CELLS = 0.5;
+/** Same-lane walkers keep at least this personal-space gap, in cells. */
+export const PEDESTRIAN_MIN_GAP_CELLS = 0.25;
+/** Junctions with at least this many incident edges run a signal cycle. */
+export const SIGNAL_MIN_APPROACHES = 3;
+/** A car blocked from its next lane holds just short of the edge boundary. */
+export const VEHICLE_EDGE_HOLD_T = 0.999;
+
 /** Tuned so a busy artery in a ~100-citizen town reaches bucket 1-2 (playtest 2026-07-01). */
 export const EDGE_CAPACITY_PER_CELL = 2;
 /** Congestion (count/capacity) thresholds for buckets 1, 2, 3. */

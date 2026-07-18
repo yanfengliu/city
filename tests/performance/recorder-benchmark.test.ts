@@ -50,7 +50,7 @@ interface Aggregate {
 // The newest recorder profile. Its manifest must describe the current tree, so
 // this points at a freshly captured file whenever a pinned input changes;
 // earlier dated profiles stay in results/ as history.
-const resultText = readFileSync('benchmarks/results/2026-07-15-recorder-profile.json', 'utf8');
+const resultText = readFileSync('benchmarks/results/2026-07-17-recorder-profile.json', 'utf8');
 const result = JSON.parse(resultText) as RecorderResult;
 
 function mean(runs: RecorderRun[], select: (run: RecorderRun) => number): number {
@@ -132,13 +132,16 @@ describe('committed recorder benchmark evidence', () => {
 
   it('keeps measured city outcomes identical with and without recording', () => {
     expect(new Set(result.runs.map((run) => JSON.stringify(run.final))).size).toBe(1);
+    // Re-pinned 2026-07-17 with the T1 traffic-realism profile: headway and
+    // signals hold more cars on the road at once (85 vs 59) and slow trip
+    // turnover, while the city still clears 1,000+ population by tick 3002.
     expect(result.runs[0]?.final).toEqual({
       tick: 3002,
-      buildingCount: 618,
-      vehicles: 59,
-      pedestrians: 102,
-      completedShoppingTrips: 604,
-      populationPeople: 1557,
+      buildingCount: 560,
+      vehicles: 85,
+      pedestrians: 107,
+      completedShoppingTrips: 509,
+      populationPeople: 1572,
     });
     expect(result.runs.filter((run) => run.label === 'lean').every(
       (run) => run.bundleJsonBytes === 0,

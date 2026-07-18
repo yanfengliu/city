@@ -3,6 +3,7 @@ import {
   HOME_COOLDOWN_BASE,
   HOME_COOLDOWN_VARIANCE,
   PEDESTRIAN_BASE_SPEED,
+  PEDESTRIAN_MIN_GAP_CELLS,
   SHOP_WAIT_BASE,
   SHOP_WAIT_VARIANCE,
   TRIP_RETRY_TICKS,
@@ -12,6 +13,7 @@ import {
 import type { CitySim } from '../city';
 import type {
   CityWorld,
+  PedestrianComponent,
   PedestrianPathComponent,
   PedestrianPurpose,
 } from '../types';
@@ -164,9 +166,23 @@ function arrive(w: CityWorld, walker: number, path: PedestrianPathComponent): vo
   }
 }
 
-/** Advances active walkers one exact road-cell segment at a time. */
+interface WalkerEntry {
+  id: number;
+  path: PedestrianPathComponent;
+  motion: PedestrianComponent;
+}
+
+/**
+ * Advances active walkers one exact road-cell segment at a time. Walkers on
+ * the same directed segment form a lane (opposing flows walk separate curb
+ * lanes renderer-side): a follower may never pass its leader and keeps a
+ * personal-space gap, clamped forward-only so nobody teleports backward
+ * (docs/design/simulation-realism.md T1). Segments are unit cells, so
+ * `segmentIndex + t` is a global progress scale shared across a whole path.
+ */
 export function pedestrianSystem(_sim: CitySim): (w: CityWorld) => void {
   return (w) => {
+    const lanes = new Map<string, WalkerEntry[]>();
     for (const id of [...w.query('pedestrianPath', 'pedestrian')].sort((a, b) => a - b)) {
       const path = w.getComponent(id, 'pedestrianPath');
       const motion = w.getComponent(id, 'pedestrian');
@@ -180,20 +196,46 @@ export function pedestrianSystem(_sim: CitySim): (w: CityWorld) => void {
         w.destroyEntity(id);
         continue;
       }
+      const from = path.cells[motion.segmentIndex];
+      const to = path.cells[motion.segmentIndex + 1] ?? from;
+      const key = `${from}>${to}`;
+      const list = lanes.get(key);
+      const entry: WalkerEntry = { id, path, motion };
+      if (list) list.push(entry);
+      else lanes.set(key, [entry]);
+    }
 
-      let segmentIndex = motion.segmentIndex;
-      let t = motion.t + PEDESTRIAN_BASE_SPEED;
-      while (t >= 1 && segmentIndex + 1 < path.cells.length) {
-        t -= 1;
-        segmentIndex++;
+    for (const key of [...lanes.keys()].sort()) {
+      const queue = lanes.get(key);
+      if (!queue) continue;
+      queue.sort(
+        (m, n) =>
+          n.motion.segmentIndex + n.motion.t - (m.motion.segmentIndex + m.motion.t) ||
+          m.id - n.id,
+      );
+
+      /** Post-move global progress of the walker ahead on this lane. */
+      let leaderProgress: number | null = null;
+      for (const { id, path, motion } of queue) {
+        const current = motion.segmentIndex + motion.t;
+        let progress = current + PEDESTRIAN_BASE_SPEED;
+        if (leaderProgress !== null) {
+          progress = Math.min(progress, leaderProgress - PEDESTRIAN_MIN_GAP_CELLS);
+        }
+        progress = Math.max(progress, current);
+
+        const segmentIndex = Math.floor(progress);
+        const t = progress - segmentIndex;
+        if (path.cells.length <= 1 || segmentIndex + 1 >= path.cells.length) {
+          arrive(w, id, path);
+          leaderProgress = null; // the lane ahead of the next walker is open
+          continue;
+        }
+        leaderProgress = progress;
+        const cell = path.cells[segmentIndex];
+        w.setPosition(id, { x: cell % GRID_WIDTH, y: Math.floor(cell / GRID_WIDTH) });
+        w.setComponent(id, 'pedestrian', { segmentIndex, t });
       }
-      if (path.cells.length <= 1 || segmentIndex + 1 >= path.cells.length) {
-        arrive(w, id, path);
-        continue;
-      }
-      const cell = path.cells[segmentIndex];
-      w.setPosition(id, { x: cell % GRID_WIDTH, y: Math.floor(cell / GRID_WIDTH) });
-      w.setComponent(id, 'pedestrian', { segmentIndex, t });
     }
   };
 }
