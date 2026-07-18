@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Scene, Vector2, type Object3D } from 'three';
+import { PerspectiveCamera, Scene, type Object3D, type Vector2 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { RendererLike } from 'voxel/three';
 
