@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BufferGeometry, Group, Mesh, PerspectiveCamera, Scene, Vector3 } from 'three';
+import { OverlayDesaturation } from '../../src/rendering/desaturation';
 import { CityScene } from '../../src/rendering/scene';
 import { FLAT_TERRAIN_SURFACE } from '../../src/rendering/terrain-surface';
 import { WaterWaveMaterial } from '../../src/rendering/water-wave-material';
@@ -22,6 +23,7 @@ describe('CityScene water wave clock', () => {
       renderer: { render },
       terrainSurface: FLAT_TERRAIN_SURFACE,
       waterWaveMaterials: new Set<WaterWaveMaterial>(),
+      overlayDesaturation: new OverlayDesaturation(),
       frameCallbacks: [] as Array<(now: number) => void>,
       afterFrameCallbacks: [] as Array<(now: number) => void>,
       flight: null,

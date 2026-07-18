@@ -53,6 +53,8 @@ export class FieldOverlayView {
       transparent: true,
       opacity: FIELD_OVERLAY_OPACITY,
       depthWrite: false,
+      // Overlays are information, not world: distance haze must not wash them.
+      fog: false,
     });
     const geometry = buildDrapedPlaneGeometry(
       gridWidth,
@@ -150,7 +152,11 @@ export class TrafficOverlayView {
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor(private readonly gridWidth: number) {
-    this.mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true }));
+    this.mesh = new Mesh(
+      new BufferGeometry(),
+      // fog off: congestion colors must read at any camera distance.
+      new MeshBasicMaterial({ vertexColors: true, fog: false }),
+    );
     this.mesh.name = 'trafficOverlay';
     this.mesh.visible = false;
   }

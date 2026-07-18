@@ -18,6 +18,7 @@ import {
 import type { Object3D } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { ATMOSPHERE_COLORS, ATMOSPHERE_LIGHT_INTENSITY } from './constants';
+import { desaturateToLuminance, OverlayDesaturation } from './desaturation';
 import { applyRenderPixelRatio } from './render-pixel-ratio';
 import { captureCanvasAtCssSize } from './screenshot';
 import { refreshShadowsAfterContextRestore, ShadowMapUpdatePolicy } from './shadow-update';
@@ -84,6 +85,7 @@ export class CityScene {
   private terrainSurface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
   private readonly shadowUpdates = new ShadowMapUpdatePolicy();
   private readonly waterWaveMaterials = new Set<WaterWaveMaterial>();
+  private readonly overlayDesaturation = new OverlayDesaturation();
 
   constructor(container: HTMLElement, gridWidth: number, gridHeight: number) {
     this.gridWidth = gridWidth;
@@ -152,6 +154,7 @@ export class CityScene {
     this.sun.target.position.set(gridWidth / 2, 0, gridHeight / 2);
     this.scene.add(this.hemi, this.sun, this.sun.target);
     this.sky = this.makeSky(gridWidth, gridHeight);
+    this.overlayDesaturation.patchObject(this.sky);
     this.scene.add(this.sky);
 
     window.addEventListener('resize', () => {
@@ -190,8 +193,23 @@ export class CityScene {
           if (material instanceof WaterWaveMaterial) this.waterWaveMaterials.add(material);
         }
       });
+      this.overlayDesaturation.patchObject(object);
     }
     this.scene.add(...objects);
+  }
+
+  /**
+   * Overlay mode renders the world in greys so the active overlay is the only
+   * color on screen. Enabling sweeps the whole graph so content that bypassed
+   * add() (the embedded voxel wall lane) is patched too.
+   */
+  setOverlayDesaturation(on: boolean): void {
+    if (on) this.overlayDesaturation.patchObject(this.scene);
+    this.overlayDesaturation.setEnabled(on);
+  }
+
+  getOverlayDesaturation(): boolean {
+    return this.overlayDesaturation.enabled;
   }
 
   /** Registers a callback run once per rendered frame, before drawing (dirty-flag flushes). */
@@ -346,6 +364,10 @@ export class CityScene {
     this.controls.update();
     this.conformCameraTargetToTerrain();
     for (const callback of this.frameCallbacks) callback(now);
+    // While overlay mode is on, sweep for materials created since it was
+    // enabled — after the frame callbacks, because that is where the embedded
+    // voxel lane stages new content; a WeakSet early-out keeps repeats cheap.
+    if (this.overlayDesaturation.enabled) this.overlayDesaturation.patchObject(this.scene);
     this.renderer.render(this.scene, this.camera);
     for (const callback of this.afterFrameCallbacks) {
       try {
@@ -467,6 +489,9 @@ export class CityScene {
     (this.scene.background as Color).copy(horizon);
     this.sky.material.uniforms.horizonColor.value.copy(horizon);
     this.sky.material.uniforms.topColor.value.copy(PALETTE.skyTopNight).lerp(PALETTE.skyTopDay, daylight);
+    // The clear color is the one atmospheric color no shader epilogue touches;
+    // fog and the sky dome grey themselves in-shader during overlay mode.
+    if (this.overlayDesaturation.enabled) desaturateToLuminance(this.scene.background as Color);
     return daylight;
   }
 

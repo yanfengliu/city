@@ -5,6 +5,7 @@ import {
   MeshBasicMaterial,
   NearestFilter,
   RGBAFormat,
+  SRGBColorSpace,
 } from 'three';
 import { NETWORK_OVERLAY_Y } from './constants';
 import { buildDrapedPlaneGeometry } from './surface-geometry';
@@ -45,6 +46,9 @@ export class NetworkOverlayView {
     this.texture.magFilter = NearestFilter;
     this.texture.minFilter = NearestFilter;
     this.texture.flipY = false;
+    // Colors are authored as sRGB (like the field overlay's ramp texture);
+    // without the tag they render linear → washed out.
+    this.texture.colorSpace = SRGBColorSpace;
     this.mesh = new Mesh(
       buildDrapedPlaneGeometry(gridWidth, gridHeight, this.surface, NETWORK_OVERLAY_Y, 0),
       new MeshBasicMaterial({
@@ -52,6 +56,8 @@ export class NetworkOverlayView {
         transparent: true,
         depthWrite: false,
         side: DoubleSide,
+        // Overlays are information, not world: distance haze must not wash them.
+        fog: false,
       }),
     );
     // The draped geometry flips V so DataTexture row 0 lands at world z=0.
