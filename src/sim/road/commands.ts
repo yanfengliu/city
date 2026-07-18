@@ -7,12 +7,20 @@ import {
 } from '../constants/economy';
 import { bulldozeGrowableBuildings } from '../demolition';
 import { purchaseAllowed } from '../economy';
-import { cellIndex, inBounds, lPathCells } from '../grid';
+import { cellIndex, lPathCells } from '../grid';
+import {
+  anchorsRejection,
+  cellLabel,
+  deny,
+  occupantLabel,
+  refuse,
+  spanLabel,
+} from '../rejection';
 import { bulldozeStructures } from '../services';
 import { writeCongestionMirror } from '../traffic/congestion';
 import { captureEdgeKeys, edgeKey, remapVehiclesAfterTopologyChange } from '../traffic/topology';
 import { bulldozeUtilities } from '../utilities';
-import { dezoneCells, rectCells, validRect } from '../zoning';
+import { dezoneCells, rectCells } from '../zoning';
 import { buildRoadGraph } from './road-graph';
 import type { CitySim } from '../city';
 import type { CityWorld, RoadEndpoints } from '../types';
@@ -24,6 +32,14 @@ function treasury(w: CityWorld): number {
 
 function roadPath(data: RoadEndpoints) {
   return lPathCells({ x: data.ax, y: data.ay }, { x: data.bx, y: data.by });
+}
+
+/** Shared by both bulldoze validators when the selection is all highway. */
+function highwayOnlyReason(where: string): string {
+  return (
+    `${where} covers only the outside highway connection, which is permanent — ` +
+    'the city may never be cut off from the outside world'
+  );
 }
 
 /** Per-cell road cost: water cells build as bridges at the premium rate. */
@@ -50,24 +66,35 @@ function placeableRoadCells(
   data: RoadEndpoints,
 ): { cells: Array<{ x: number; y: number }>; cost: number } | null {
   const newCells = roadPath(data).filter((c) => !sim.roadCells.has(cellIndex(c.x, c.y)));
-  if (newCells.length === 0) return null;
+  if (newCells.length === 0) {
+    return refuse(
+      sim,
+      `every cell of the path from ${spanLabel(data)} is already road — nothing to build`,
+    );
+  }
   for (const c of newCells) {
     const i = cellIndex(c.x, c.y);
     // Water is buildable as a bridge (at a premium). Power lines are thin
     // overlays that never own a cell, so roads cross them freely; any real
     // occupant (building, service, plant, pump) blocks.
-    if (sim.occupiedCells.has(i)) return null;
+    const occupant = sim.occupiedCells.get(i);
+    if (occupant !== undefined) {
+      return refuse(
+        sim,
+        `${cellLabel(i)} is occupied by ${occupantLabel(sim.world, occupant)} — ` +
+          'bulldoze it before paving',
+      );
+    }
   }
   const cost = roadCellsCost(sim, newCells);
-  if (!purchaseAllowed(sim.world, cost, false)) return null;
+  if (!purchaseAllowed(sim.world, cost, false)) {
+    return refuse(
+      sim,
+      `${newCells.length} new road cell${newCells.length === 1 ? '' : 's'} cost $${cost} ` +
+        `but the treasury holds $${Math.floor(treasury(sim.world))}`,
+    );
+  }
   return { cells: newCells, cost };
-}
-
-function validEndpoints(data: RoadEndpoints): boolean {
-  return (
-    inBounds(data.ax, data.ay, GRID_WIDTH, GRID_HEIGHT) &&
-    inBounds(data.bx, data.by, GRID_WIDTH, GRID_HEIGHT)
-  );
 }
 
 /**
@@ -110,7 +137,9 @@ export function registerRoadCommands(sim: CitySim): void {
   const { world } = sim;
 
   world.registerValidator('placeRoad', (data) => {
-    return validEndpoints(data) && placeableRoadCells(sim, data) !== null;
+    const offMap = anchorsRejection(data, 'road', 'endpoint');
+    if (offMap) return deny(sim, offMap);
+    return placeableRoadCells(sim, data) !== null;
   });
 
   world.registerHandler('placeRoad', (data, w) => {
@@ -136,8 +165,20 @@ export function registerRoadCommands(sim: CitySim): void {
   });
 
   world.registerValidator('bulldozeRoad', (data) => {
-    if (!validEndpoints(data)) return false;
-    return roadPath(data).some((c) => sim.roadCells.has(cellIndex(c.x, c.y)));
+    const offMap = anchorsRejection(data, 'road', 'endpoint');
+    if (offMap) return deny(sim, offMap);
+    const cells = roadPath(data).map((c) => cellIndex(c.x, c.y));
+    // Highway cells are road but never removable, so a path of only highway
+    // used to be accepted and then quietly remove nothing. Refuse it instead
+    // and say why — the handler's removed > 0 guard already made it a no-op.
+    if (cells.some((i) => sim.roadCells.has(i) && !HIGHWAY_CELL_SET.has(i))) return true;
+    if (cells.some((i) => sim.roadCells.has(i))) {
+      return deny(sim, highwayOnlyReason(`the path from ${spanLabel(data)}`));
+    }
+    return deny(
+      sim,
+      `no cell of the path from ${spanLabel(data)} is a road — nothing to bulldoze`,
+    );
   });
 
   world.registerHandler('bulldozeRoad', (data, w) => {
@@ -202,16 +243,25 @@ export function registerBulldozeRect(sim: CitySim): void {
   const { world } = sim;
 
   world.registerValidator('bulldozeRect', (data) => {
-    if (!validRect(data)) return false;
-    return rectCells(data).some((c) => {
+    const offMap = anchorsRejection(data, 'bulldoze area', 'corner');
+    if (offMap) return deny(sim, offMap);
+    let sawHighway = false;
+    for (const c of rectCells(data)) {
       const i = cellIndex(c.x, c.y);
-      return (
-        sim.roadCells.has(i) ||
-        sim.occupiedCells.has(i) ||
-        sim.powerLineCells.has(i) ||
-        sim.pipeCells.has(i)
-      );
-    });
+      if (sim.occupiedCells.has(i) || sim.powerLineCells.has(i) || sim.pipeCells.has(i)) {
+        return true;
+      }
+      if (!sim.roadCells.has(i)) continue;
+      // See the bulldozeRoad validator: highway-only used to be a silent no-op.
+      if (HIGHWAY_CELL_SET.has(i)) sawHighway = true;
+      else return true;
+    }
+    if (sawHighway) return deny(sim, highwayOnlyReason(`the area ${spanLabel(data)}`));
+    return deny(
+      sim,
+      `nothing to bulldoze in the area ${spanLabel(data)} — it holds no road, building, ` +
+        'service, power line, or pipe',
+    );
   });
 
   world.registerHandler('bulldozeRect', (data, w) => {

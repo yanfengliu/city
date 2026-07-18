@@ -28,7 +28,10 @@ if (loop.exitCode !== 0) {
 
 const runDir = await newestRunDir(outRoot, startedAtMs);
 if (!runDir) {
-  console.error('[recursive] no run directory produced by playtest:llm');
+  console.error(
+    `[recursive] playtest:llm exited 0 but left no run directory under ${outRoot} newer than `
+    + `${startedAt} — it likely failed before writing its artifacts`,
+  );
   await finish(null, 'run-failed', 1);
 }
 

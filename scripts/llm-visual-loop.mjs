@@ -197,7 +197,12 @@ function externalCommandAgent(command) {
       const payload = JSON.stringify({ step, promptParts, controls: observation.controls ?? [] });
       const stdout = await runJsonCommand(command, payload);
       const decision = JSON.parse(stdout);
-      if (!decision || (typeof decision !== 'object')) throw new Error('provider returned a non-object decision');
+      if (!decision || (typeof decision !== 'object')) {
+        throw new Error(
+          `provider returned ${decision === null ? 'null' : typeof decision} where a decision `
+          + `object was expected; stdout began: ${stdout.slice(0, 200)}`,
+        );
+      }
       return decision;
     },
   };

@@ -308,7 +308,13 @@ function buildDistrict(sim: CitySim, zone: ZoneType, origin: { x: number; y: num
 }
 
 function submitOrThrow<K extends keyof CityCommands>(sim: CitySim, name: K, data: CityCommands[K]): void {
-  if (!sim.world.submit(name, data)) throw new Error(`dogfood setup command rejected: ${String(name)}`);
+  if (sim.world.submit(name, data)) return;
+  // Every validator records why it refused, so quote it rather than making the
+  // reader re-derive the cause from the command name alone.
+  throw new Error(
+    `dogfood setup command ${String(name)} ${JSON.stringify(data)} was rejected: ` +
+      `${sim.lastRejection ?? 'no reason recorded'}`,
+  );
 }
 
 function step(sim: CitySim, ticks: number): void {

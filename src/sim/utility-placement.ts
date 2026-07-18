@@ -1,19 +1,34 @@
 import { footprintCells } from './buildings';
 import { GRID_HEIGHT, GRID_WIDTH } from './constants/map';
 import {
+  PIPE_COST_PER_CELL,
+  POWER_LINE_COST_PER_CELL,
   POWER_PLANT_COST,
   POWER_PLANT_FOOTPRINT,
   WATER_PUMP_COST,
 } from './constants/utilities';
 import { scanFootprint } from './demolition';
 import { purchaseAllowed } from './economy';
-import { cellIndex, inBounds } from './grid';
+import { cellIndex, inBounds, lPathCells } from './grid';
+import { anchorsRejection, cellLabel, refuse, spanLabel } from './rejection';
 import type { CitySim } from './city';
-import type { CityWorld, PlacePowerPlantCommand, PlaceWaterPumpCommand } from './types';
+import type {
+  CityWorld,
+  PlacePowerPlantCommand,
+  PlaceWaterPumpCommand,
+  RoadEndpoints,
+} from './types';
 
 export interface UtilityPlacementPlan {
   cells: number[];
   buildingIds: number[];
+}
+
+/** Cell indices of the L-path between a command's two endpoints. */
+export function pathIndices(data: RoadEndpoints): number[] {
+  return lPathCells({ x: data.ax, y: data.ay }, { x: data.bx, y: data.by }).map((c) =>
+    cellIndex(c.x, c.y),
+  );
 }
 
 function orthAdjacentToWater(sim: CitySim, x: number, y: number): boolean {
@@ -30,14 +45,8 @@ function orthAdjacentToWater(sim: CitySim, x: number, y: number): boolean {
   return false;
 }
 
-/** Records why a placement failed, then reports the failure to the engine. */
-function refuse(sim: CitySim, reason: string): null {
-  sim.lastRejection = reason;
-  return null;
-}
-
 /** Utilities may be bought into debt, so an unaffordable one is truly broke. */
-function fundsReason(label: string, cost: number): string {
+export function fundsReason(label: string, cost: number): string {
   return `${label} costs $${cost} and the treasury is already in debt`;
 }
 
@@ -93,4 +102,57 @@ export function waterPumpPlacementPlan(
     return refuse(sim, fundsReason('a water pump', WATER_PUMP_COST));
   }
   return { cells, buildingIds: scan.buildingIds };
+}
+
+/**
+ * Cells a new power line would add, or null with a recorded reason. A line is
+ * a thin overhead overlay: it crosses roads, buildings and anything else on
+ * land freely — only water refuses it (unlike an underground pipe).
+ */
+export function powerLinePlacementPlan(
+  sim: CitySim,
+  w: CityWorld,
+  data: RoadEndpoints,
+): number[] | null {
+  const offMap = anchorsRejection(data, 'power line', 'endpoint');
+  if (offMap) return refuse(sim, offMap);
+  const newCells = pathIndices(data).filter((i) => !sim.powerLineCells.has(i));
+  if (newCells.length === 0) {
+    return refuse(
+      sim,
+      `every cell of the path from ${spanLabel(data)} already carries a power line`,
+    );
+  }
+  for (const i of newCells) {
+    if (sim.terrain.water[i] === 1) {
+      return refuse(sim, `${cellLabel(i)} is water — power lines cannot cross it`);
+    }
+  }
+  const cost = newCells.length * POWER_LINE_COST_PER_CELL;
+  if (!purchaseAllowed(w, cost, true)) {
+    return refuse(sim, fundsReason(`a ${newCells.length}-cell power line`, cost));
+  }
+  return newCells;
+}
+
+/**
+ * Cells a new pipe would add, or null with a recorded reason. Pipes run
+ * underground, so they may cross terrain, water, roads and occupied cells.
+ */
+export function pipePlacementPlan(
+  sim: CitySim,
+  w: CityWorld,
+  data: RoadEndpoints,
+): number[] | null {
+  const offMap = anchorsRejection(data, 'pipe', 'endpoint');
+  if (offMap) return refuse(sim, offMap);
+  const newCells = pathIndices(data).filter((i) => !sim.pipeCells.has(i));
+  if (newCells.length === 0) {
+    return refuse(sim, `every cell of the path from ${spanLabel(data)} already has a pipe`);
+  }
+  const cost = newCells.length * PIPE_COST_PER_CELL;
+  if (!purchaseAllowed(w, cost, true)) {
+    return refuse(sim, fundsReason(`a ${newCells.length}-cell pipe`, cost));
+  }
+  return newCells;
 }

@@ -12,8 +12,11 @@ for (let index = 2; index < process.argv.length; index += 2) {
 const output = resolve(args.get('output') ?? 'benchmarks/fixtures/performance-city-save.json');
 const seed = Number(args.get('seed') ?? 12345);
 const ticks = Number(args.get('ticks') ?? 1200);
-if (!Number.isSafeInteger(seed) || !Number.isSafeInteger(ticks) || ticks < 1) {
-  throw new Error('seed and ticks must be safe integers; ticks must be positive');
+if (!Number.isSafeInteger(seed)) {
+  throw new Error(`--seed must be a safe integer; received "${args.get('seed')}"`);
+}
+if (!Number.isSafeInteger(ticks) || ticks < 1) {
+  throw new Error(`--ticks must be a safe integer above 0; received "${args.get('ticks')}"`);
 }
 
 const vite = await createServer({

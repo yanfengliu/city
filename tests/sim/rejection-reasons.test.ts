@@ -1,37 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { createCitySim, type CitySim } from '../../src/sim/city';
+import { createCitySim } from '../../src/sim/city';
 import { cellIndex } from '../../src/sim/grid';
-import { findLandBlock } from './helpers';
+import { expectRejection as reject, roadedSite } from './helpers';
 
 /**
  * A rejected command must say which input failed which rule (AGENTS.md: error
  * messages are a product surface). These contracts pin the *content* of the
  * reason, not just its presence — a generic string would pass a mere
  * "is non-empty" assertion and teach the player nothing.
+ *
+ * rejection-reasons-commands.test.ts carries the same contracts for the road,
+ * zoning, tax and utility-network validators.
  */
-
-/** Land block with a road along its top row, so placements can be road-fed. */
-function roadedSite(sim: CitySim): { x: number; y: number } {
-  const base = findLandBlock(sim, 12, 8);
-  expect(
-    sim.world.submit('placeRoad', {
-      ax: base.x,
-      ay: base.y,
-      bx: base.x + 10,
-      by: base.y,
-    }),
-  ).toBe(true);
-  sim.world.step();
-  return base;
-}
-
-function reject(sim: CitySim, name: 'placeService', data: unknown): string {
-  const accepted = sim.world.submit(name, data as never);
-  expect(accepted).toBe(false);
-  const reason = sim.lastRejection;
-  if (reason === null) throw new Error(`${name} rejected without recording a reason`);
-  return reason;
-}
 
 describe('placement rejection reasons', () => {
   /**

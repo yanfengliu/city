@@ -25,7 +25,13 @@ export interface HarnessApi {
   state(): Record<string, unknown>;
   /** Step the sim forward by wall-clock-equivalent ms at 1x. */
   advance(ms: number): void;
-  /** Submit any sim command by name. */
+  /**
+   * Submit any sim command by name. Fire-and-forget: the worker answers
+   * asynchronously, so a refusal surfaces on the next observation rather than
+   * here. Read `state().lastCommandSubmission` for `{accepted, message, tick}`
+   * — `message` carries the specific reason (AGENTS.md: error messages are a
+   * product surface), e.g. `(45, 31) is water — build on dry land`.
+   */
   command<K extends CommandName>(name: K, data: CityCommands[K]): void;
   /** Record a standardized recursive-loop finding as a marker at the current tick. */
   annotate(finding: Partial<CityImprovementFindingInput>): void;

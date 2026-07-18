@@ -51,7 +51,9 @@ export function maximumConsecutiveAbove(values, threshold) {
 
 export function terminateProcessTree(child, options = {}) {
   const pid = child.pid;
-  if (!Number.isInteger(pid) || pid <= 0) throw new Error('cannot terminate a child without a PID');
+  if (!Number.isInteger(pid) || pid <= 0) {
+    throw new Error(`cannot terminate a child: PID ${String(pid)} is not a positive integer`);
+  }
   const targetPlatform = options.platform ?? process.platform;
   if (targetPlatform === 'win32') {
     const runTaskkill = options.taskkill ?? ((ownedPid) => spawnSync(
@@ -167,7 +169,9 @@ export async function runCleanupTasks(tasks, label) {
 }
 
 export function assertStableTree(before, after, message) {
-  if (before !== after) throw new Error(message);
+  // Callers pass a static "what changed" label; without the two fingerprints
+  // you learn that the tree moved but never which side of the run saw what.
+  if (before !== after) throw new Error(`${message} — fingerprint was ${before}, now ${after}`);
 }
 
 export function assertFreshBuildOutput(shouldBuild, distDirectory, defaultDistDirectory) {

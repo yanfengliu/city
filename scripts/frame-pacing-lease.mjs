@@ -15,7 +15,10 @@ async function readLeaseOwner(host, port, timeoutMs) {
       try {
         resolve(JSON.parse(body));
       } catch (error) {
-        reject(new Error('lease owner returned invalid metadata', { cause: error }));
+        reject(new Error(
+          `lease owner at ${host}:${port} returned unparseable metadata: ${JSON.stringify(body.slice(0, 200))}`,
+          { cause: error },
+        ));
       }
     });
   });

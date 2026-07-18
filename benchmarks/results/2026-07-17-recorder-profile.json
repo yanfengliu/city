@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-07-18T17:45:11.728Z",
+  "capturedAt": "2026-07-18T18:08:16.301Z",
   "profileTicks": 3000,
   "runOrder": [
     "recorded",
@@ -11,7 +11,7 @@
   "scope": "Controlled headless sim-loop proxy: one protocol-like no-op diff listener in both modes; SessionRecorder + MemorySink only in recorded mode.",
   "sourceRef": null,
   "source": {
-    "treeSha256": "52a4894c8fb8724c653e3e7478a74ecd1be1be92e095796b78d68e5082974903",
+    "treeSha256": "c74f2f741711225d9372a557318574b44cee9e5614b6d08b067eae8cdd79948a",
     "files": [
       {
         "path": "node_modules/civ-engine/dist/ai-contract.js",
@@ -570,13 +570,13 @@
       },
       {
         "path": "src/sim/demolition.ts",
-        "bytes": 3635,
-        "sha256": "1f29a78eafbe50d5bce35cac6f0e80435b6f2c52f2b3a16b2c6ad96e10aaf658"
+        "bytes": 2871,
+        "sha256": "58c05043d4f3c4549bfb92ac99c4597bfae72faae1a817b17b88b4aa2704f8a6"
       },
       {
         "path": "src/sim/economy.ts",
-        "bytes": 4639,
-        "sha256": "594a8a80a8fa6971e963825a7f9661c7b8400800033d5f104d31fbf4c779b780"
+        "bytes": 5144,
+        "sha256": "4bbe503c6ac2fdb5f6017282aa7a021db8cac2e8681bcf2a675d2d5a6f0ddc10"
       },
       {
         "path": "src/sim/employment.ts",
@@ -594,9 +594,14 @@
         "sha256": "21f543741d822a1d731c3ced61ff031973ec9008a6eed192435fbccc266c881f"
       },
       {
+        "path": "src/sim/rejection.ts",
+        "bytes": 3352,
+        "sha256": "cb20a71cb9d3e64b06fb562d650ba878d440e22780308e40c7f3fc679d70a19b"
+      },
+      {
         "path": "src/sim/road/commands.ts",
-        "bytes": 9295,
-        "sha256": "9b4eff202d02bbab15494e2c9eb4b42a0521521c11f695afcc9e811041c31fe9"
+        "bytes": 11298,
+        "sha256": "0f63cbf01ad975fb3048184265b222a74e285adeaaf8e117cdb6c41786878d70"
       },
       {
         "path": "src/sim/road/road-graph.ts",
@@ -605,8 +610,8 @@
       },
       {
         "path": "src/sim/services.ts",
-        "bytes": 7881,
-        "sha256": "89fc85726c756c0754c2aa2b933817ea153400a9c055a8abf937963f0cff9cdb"
+        "bytes": 7738,
+        "sha256": "2bbc53a19c0bc87b38d0350ed0f560bc13bb1d547f895771974252df15e143c1"
       },
       {
         "path": "src/sim/summary.ts",
@@ -655,18 +660,18 @@
       },
       {
         "path": "src/sim/utilities.ts",
-        "bytes": 18588,
-        "sha256": "4f64636db4a25d0f25c387467450d88995d615d8de286e8a375110d1daf3984f"
+        "bytes": 17510,
+        "sha256": "f2cb9fe957762368827ee013de89e3c4107de300d4f12ea55ebffdaac3b2e37c"
       },
       {
         "path": "src/sim/utility-placement.ts",
-        "bytes": 3140,
-        "sha256": "8ac9eba78cf62a7545bfe7a22a7703986c68852a60c0d1d07d99decb9720d0d5"
+        "bytes": 5221,
+        "sha256": "867b86843f84199a4c1312fc1065a7591ef12891d04fe64dec396d627c52299b"
       },
       {
         "path": "src/sim/zoning.ts",
-        "bytes": 4535,
-        "sha256": "4cfbe138760584564e7f412f52aeeaa7fa3706ce0793425919d3fb5506162c84"
+        "bytes": 6541,
+        "sha256": "443ac9b5d8f3417386afc93cc51e8ff1215ffcf19b718844a93647463fdac700"
       }
     ]
   },
@@ -679,27 +684,27 @@
   "aggregate": {
     "recorded": {
       "runs": 2,
-      "meanWallMs": 6557.446550000001,
-      "meanTicksPerSecond": 457.5475826929337,
-      "meanBundleJsonBytes": 102668799
+      "meanWallMs": 6391.269400000001,
+      "meanTicksPerSecond": 469.40621234938294,
+      "meanBundleJsonBytes": 102669338.5
     },
     "lean": {
       "runs": 2,
-      "meanWallMs": 2744.3733499999994,
-      "meanTicksPerSecond": 1093.1529630629916,
+      "meanWallMs": 2736.6965,
+      "meanTicksPerSecond": 1096.2347848143677,
       "meanBundleJsonBytes": 0
     },
-    "wallMsReduction": 3813.073200000001,
-    "wallMsReductionPct": 58.148749988667475,
-    "throughputGain": 2.3891568973638773
+    "wallMsReduction": 3654.572900000001,
+    "wallMsReductionPct": 57.18070497857594,
+    "throughputGain": 2.3353648843454824
   },
   "runs": [
     {
       "label": "recorded",
       "sequence": 1,
-      "wallMs": 6487.2504,
-      "ticksPerSecond": 462.4455377890146,
-      "bundleJsonBytes": 102665672,
+      "wallMs": 6354.0831,
+      "ticksPerSecond": 472.1373568438222,
+      "bundleJsonBytes": 102666052,
       "final": {
         "tick": 3002,
         "buildingCount": 560,
@@ -712,8 +717,8 @@
     {
       "label": "lean",
       "sequence": 2,
-      "wallMs": 2737.3124,
-      "ticksPerSecond": 1095.9655171254842,
+      "wallMs": 2724.2656000000006,
+      "ticksPerSecond": 1101.214213474633,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -727,8 +732,8 @@
     {
       "label": "lean",
       "sequence": 3,
-      "wallMs": 2751.434299999999,
-      "ticksPerSecond": 1090.3404090004988,
+      "wallMs": 2749.1273999999994,
+      "ticksPerSecond": 1091.2553561541022,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -742,9 +747,9 @@
     {
       "label": "recorded",
       "sequence": 4,
-      "wallMs": 6627.6427,
-      "ticksPerSecond": 452.6496275968528,
-      "bundleJsonBytes": 102671926,
+      "wallMs": 6428.455700000002,
+      "ticksPerSecond": 466.6750678549436,
+      "bundleJsonBytes": 102672625,
       "final": {
         "tick": 3002,
         "buildingCount": 560,

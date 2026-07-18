@@ -13,28 +13,20 @@ import {
 } from './constants/utilities';
 import { footprintCells } from './buildings';
 import { bulldozeGrowableBuildings } from './demolition';
-import { purchaseAllowed } from './economy';
-import { cellFromIndex, cellIndex, inBounds, lPathCells } from './grid';
-import { powerPlantPlacementPlan, waterPumpPlacementPlan } from './utility-placement';
+import { cellFromIndex, cellIndex, inBounds } from './grid';
+import {
+  pathIndices,
+  pipePlacementPlan,
+  powerLinePlacementPlan,
+  powerPlantPlacementPlan,
+  waterPumpPlacementPlan,
+} from './utility-placement';
 import type { CitySim } from './city';
-import type { CityWorld, RoadEndpoints } from './types';
+import type { CityWorld } from './types';
 
 /** Local copy of city.ts getTreasury — avoids a runtime import cycle city ⇄ utilities. */
 function treasury(w: CityWorld): number {
   return (w.getState('treasury') as number | undefined) ?? 0;
-}
-
-function endpointsInBounds(data: RoadEndpoints): boolean {
-  return (
-    inBounds(data.ax, data.ay, GRID_WIDTH, GRID_HEIGHT) &&
-    inBounds(data.bx, data.by, GRID_WIDTH, GRID_HEIGHT)
-  );
-}
-
-function pathIndices(data: RoadEndpoints): number[] {
-  return lPathCells({ x: data.ax, y: data.ay }, { x: data.bx, y: data.by }).map((c) =>
-    cellIndex(c.x, c.y),
-  );
 }
 
 /**
@@ -108,17 +100,10 @@ export function registerUtilityCommands(sim: CitySim): void {
     w.emit('utilitiesChanged', {});
   });
 
-  world.registerValidator('placePowerLine', (data) => {
-    if (!endpointsInBounds(data)) return false;
-    const newCells = pathIndices(data).filter((i) => !sim.powerLineCells.has(i));
-    if (newCells.length === 0) return false;
-    // A line is a thin overhead overlay. Unlike an underground pipe, water
-    // rejects it; roads, buildings, and anything else on land do not.
-    for (const i of newCells) {
-      if (sim.terrain.water[i] === 1) return false;
-    }
-    return purchaseAllowed(world, newCells.length * POWER_LINE_COST_PER_CELL, true);
-  });
+  world.registerValidator(
+    'placePowerLine',
+    (data) => powerLinePlacementPlan(sim, world, data) !== null,
+  );
 
   world.registerHandler('placePowerLine', (data, w) => {
     const newCells = pathIndices(data).filter((i) => !sim.powerLineCells.has(i));
@@ -134,13 +119,7 @@ export function registerUtilityCommands(sim: CitySim): void {
     w.emit('utilitiesChanged', {});
   });
 
-  world.registerValidator('placePipe', (data) => {
-    if (!endpointsInBounds(data)) return false;
-    const newCells = pathIndices(data).filter((i) => !sim.pipeCells.has(i));
-    if (newCells.length === 0) return false;
-    // Underground pipes may cross terrain, water, roads, and occupied cells.
-    return purchaseAllowed(world, newCells.length * PIPE_COST_PER_CELL, true);
-  });
+  world.registerValidator('placePipe', (data) => pipePlacementPlan(sim, world, data) !== null);
 
   world.registerHandler('placePipe', (data, w) => {
     const newCells = pathIndices(data).filter((i) => !sim.pipeCells.has(i));

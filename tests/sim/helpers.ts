@@ -1,7 +1,33 @@
 import { expect } from 'vitest';
 import type { CitySim } from '../../src/sim/city';
 import { cellIndex, lPathCells } from '../../src/sim/grid';
-import type { ZoneType } from '../../src/sim/types';
+import type { CityCommands, ZoneType } from '../../src/sim/types';
+
+/**
+ * Submits a command that must be refused, and returns the reason it recorded.
+ * Fails loudly when the command was accepted, or refused without a reason —
+ * AGENTS.md: a rejection must say what happened and which input caused it.
+ */
+export function expectRejection(
+  sim: CitySim,
+  name: keyof CityCommands,
+  data: unknown,
+): string {
+  expect(sim.world.submit(name, data as never)).toBe(false);
+  const reason = sim.lastRejection;
+  if (reason === null) throw new Error(`${name} was refused without recording a reason`);
+  return reason;
+}
+
+/** Land block with a road along its top row, so placements can be road-fed. */
+export function roadedSite(sim: CitySim): { x: number; y: number } {
+  const base = findLandBlock(sim, 12, 8);
+  expect(
+    sim.world.submit('placeRoad', { ax: base.x, ay: base.y, bx: base.x + 10, by: base.y }),
+  ).toBe(true);
+  sim.world.step();
+  return base;
+}
 
 /** Finds an all-land w×h region and returns its top-left cell. */
 export function findLandBlock(sim: CitySim, w: number, h: number): { x: number; y: number } {

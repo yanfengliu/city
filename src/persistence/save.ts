@@ -8,25 +8,58 @@ export interface SaveFile {
   snapshot: unknown;
 }
 
+/**
+ * Save/load answer their callers with a boolean or null because the HUD only
+ * needs "did it work". The reason a save failed or a stored city was rejected
+ * still has to be recoverable though (AGENTS.md: error messages are a product
+ * surface), so each distinct failure names itself on the console — the one
+ * diagnostic channel this module has without reaching into the UI.
+ */
+function saveProblem(what: string): void {
+  console.warn(`[save] ${what}`);
+}
+
 export function writeSave(file: SaveFile): boolean {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(file));
     return true;
-  } catch {
-    return false; // quota or privacy mode
+  } catch (error) {
+    saveProblem(
+      `localStorage rejected the city (usually a full quota or private browsing): ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    );
+    return false;
   }
 }
 
 export function readSave(): SaveFile | null {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
+    raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null; // no save yet — not a problem worth reporting
     const parsed = JSON.parse(raw) as SaveFile;
-    if (!parsed || typeof parsed !== 'object' || parsed.meta?.saveVersion !== 1) return null;
+    if (!parsed || typeof parsed !== 'object') {
+      saveProblem(`the save at "${SAVE_KEY}" is ${JSON.stringify(parsed)}, not an object`);
+      return null;
+    }
+    if (parsed.meta?.saveVersion !== 1) {
+      saveProblem(
+        `the save at "${SAVE_KEY}" is version ${String(parsed.meta?.saveVersion)}; ` +
+          'this build only loads version 1',
+      );
+      return null;
+    }
     // A tampered/corrupt seed would rebuild the sim over NaN-seeded terrain.
-    if (!Number.isFinite(parsed.meta.seed)) return null;
+    if (!Number.isFinite(parsed.meta.seed)) {
+      saveProblem(`the save at "${SAVE_KEY}" has seed ${String(parsed.meta.seed)}, not a number`);
+      return null;
+    }
     return parsed;
-  } catch {
+  } catch (error) {
+    saveProblem(
+      `the save at "${SAVE_KEY}" (${raw?.length ?? 0} chars) could not be read: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    );
     return null;
   }
 }

@@ -11,6 +11,7 @@ import {
 import { SERVICE_UPKEEP } from './constants/services';
 import { POWER_PLANT_UPKEEP, WATER_PUMP_UPKEEP } from './constants/utilities';
 import { DEFAULT_TAX_RATE } from './constants/zoning';
+import { deny } from './rejection';
 import type { CitySim } from './city';
 import type { CityWorld, TaxRates, ZoneType } from './types';
 
@@ -52,8 +53,23 @@ export function registerEconomyCommands(sim: CitySim): void {
   const { world } = sim;
 
   world.registerValidator('setTaxRate', (data) => {
-    if (data.zone !== 'R' && data.zone !== 'C' && data.zone !== 'I') return false;
-    return Number.isInteger(data.rate) && data.rate >= MIN_TAX_RATE && data.rate <= MAX_TAX_RATE;
+    if (data.zone !== 'R' && data.zone !== 'C' && data.zone !== 'I') {
+      return deny(sim, `setTaxRate zone "${data.zone}" is not a zone — use R, C, or I`);
+    }
+    if (!Number.isInteger(data.rate)) {
+      return deny(
+        sim,
+        `setTaxRate rate ${data.rate} is not a whole percent — use an integer from ` +
+          `${MIN_TAX_RATE} to ${MAX_TAX_RATE}`,
+      );
+    }
+    if (data.rate < MIN_TAX_RATE || data.rate > MAX_TAX_RATE) {
+      return deny(
+        sim,
+        `setTaxRate rate ${data.rate} is out of range — use ${MIN_TAX_RATE} to ${MAX_TAX_RATE}`,
+      );
+    }
+    return true;
   });
 
   world.registerHandler('setTaxRate', (data, w) => {

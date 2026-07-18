@@ -12,6 +12,7 @@ import { bulldozeGrowableBuildings, scanFootprint } from './demolition';
 import { purchaseAllowed } from './economy';
 import { coverageMirrorState } from './fields';
 import { cellIndex, inBounds } from './grid';
+import { refuse } from './rejection';
 import type { Layer } from 'civ-engine';
 import type { CitySim } from './city';
 import type {
@@ -109,12 +110,6 @@ function touchesRoad(sim: CitySim, cells: number[]): boolean {
 interface ServicePlacementPlan {
   cells: number[];
   buildingIds: number[];
-}
-
-/** Records why a placement failed, then reports the failure to the engine. */
-function refuse(sim: CitySim, reason: string): null {
-  sim.lastRejection = reason;
-  return null;
 }
 
 function servicePlacementPlan(

@@ -28,7 +28,7 @@ export interface PlayerInput {
   dragAt(sx1: number, sy1: number, sx2: number, sy2: number, button?: number): void;
   /** Press a keyboard key (tool shortcut, W/A/S/D pan, Escape). */
   key(k: string): void;
-  /** Click a HUD button by visible label ("Road", "Zone R", "Coal ⚡", "2×", "Pollution", "💰 Budget"…). Returns whether one matched. */
+  /** Click a HUD button by visible label ("Road", "Zone R", "Coal ⚡", "2×", "Pollution", "💰 Budget"…). Returns whether one matched; a miss warns to the console with every label that was on screen. */
   hud(label: string): boolean;
 }
 
@@ -110,10 +110,20 @@ export function createPlayerInput(scene: CityScene): PlayerInput {
       }
     },
     hud: (label) => {
-      const button = [...document.querySelectorAll('button')].find((b) =>
-        (b.textContent ?? '').includes(label),
-      );
-      if (!button) return false;
+      const buttons = [...document.querySelectorAll('button')];
+      const button = buttons.find((b) => (b.textContent ?? '').includes(label));
+      if (!button) {
+        // A bare false leaves an agent guessing whether the label was wrong or
+        // the panel was closed, so name the label and what was actually there.
+        const available = buttons
+          .map((b) => (b.textContent ?? '').trim())
+          .filter((text) => text.length > 0);
+        console.warn(
+          `[harness] no HUD button label contains "${label}" — ` +
+            `${available.length} button(s) on screen: ${available.join(' | ')}`,
+        );
+        return false;
+      }
       button.click();
       return true;
     },

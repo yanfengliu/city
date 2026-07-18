@@ -1,6 +1,7 @@
 import { GRID_HEIGHT, GRID_WIDTH } from './constants/map';
 import { ZONE_MAX_ROAD_DISTANCE } from './constants/zoning';
 import { cellIndex, inBounds } from './grid';
+import { anchorsRejection, cellLabel, deny, occupantLabel, spanLabel } from './rejection';
 import type { CitySim } from './city';
 import type { CityWorld, RectArea, ZoneType } from './types';
 
@@ -14,13 +15,6 @@ export function rectCells(area: RectArea): Array<{ x: number; y: number }> {
     for (let x = x0; x <= x1; x++) cells.push({ x, y });
   }
   return cells;
-}
-
-export function validRect(area: RectArea): boolean {
-  return (
-    inBounds(area.ax, area.ay, GRID_WIDTH, GRID_HEIGHT) &&
-    inBounds(area.bx, area.by, GRID_WIDTH, GRID_HEIGHT)
-  );
 }
 
 export function nearRoad(sim: CitySim, x: number, y: number): boolean {
@@ -44,6 +38,24 @@ export function zoneEligible(sim: CitySim, x: number, y: number): boolean {
     !sim.zoneCells.has(i) &&
     nearRoad(sim, x, y)
   );
+}
+
+/**
+ * Why one cell cannot be zoned. Kept separate from the cheap zoneEligible
+ * predicate and called only for the single cell a refusal names, so painting a
+ * large area never builds a string per cell.
+ */
+function zoneRejection(sim: CitySim, x: number, y: number): string {
+  const i = cellIndex(x, y);
+  if (sim.terrain.water[i] === 1) return `${cellLabel(i)} is water — zone dry land`;
+  if (sim.roadCells.has(i)) return `${cellLabel(i)} is a road`;
+  const occupant = sim.occupiedCells.get(i);
+  if (occupant !== undefined) {
+    return `${cellLabel(i)} is occupied by ${occupantLabel(sim.world, occupant)} — bulldoze it first`;
+  }
+  const zone = sim.zoneCells.get(i);
+  if (zone !== undefined) return `${cellLabel(i)} is already zoned ${zone} — dezone it first`;
+  return `${cellLabel(i)} is more than ${ZONE_MAX_ROAD_DISTANCE} cells from a road`;
 }
 
 /** Recomputes the zone-cell map from zoneCell entities. */
@@ -82,8 +94,17 @@ export function registerZoneCommands(sim: CitySim): void {
   const { world } = sim;
 
   world.registerValidator('zone', (data) => {
-    if (!validRect(data)) return false;
-    return rectCells(data).some((c) => zoneEligible(sim, c.x, c.y));
+    const offMap = anchorsRejection(data, 'zoning area', 'corner');
+    if (offMap) return deny(sim, offMap);
+    const cells = rectCells(data);
+    if (cells.some((c) => zoneEligible(sim, c.x, c.y))) return true;
+    // Nothing was eligible, so cells[0] IS the first offending cell.
+    // Colon, not a dash: the cell reason carries its own "— do this" clause.
+    return deny(
+      sim,
+      `no cell of the area ${spanLabel(data)} can be zoned: ` +
+        zoneRejection(sim, cells[0].x, cells[0].y),
+    );
   });
 
   world.registerHandler('zone', (data, w) => {
@@ -100,11 +121,26 @@ export function registerZoneCommands(sim: CitySim): void {
   });
 
   world.registerValidator('dezone', (data) => {
-    if (!validRect(data)) return false;
-    return rectCells(data).some((c) => {
+    const offMap = anchorsRejection(data, 'dezoning area', 'corner');
+    if (offMap) return deny(sim, offMap);
+    // "Nothing is zoned here" and "it is all built on" need different fixes,
+    // so the first built-on cell is remembered while scanning for a free one.
+    let built: { cell: number; occupant: number } | null = null;
+    for (const c of rectCells(data)) {
       const i = cellIndex(c.x, c.y);
-      return sim.zoneCells.has(i) && !sim.occupiedCells.has(i);
-    });
+      if (!sim.zoneCells.has(i)) continue;
+      const occupant = sim.occupiedCells.get(i);
+      if (occupant === undefined) return true;
+      if (built === null) built = { cell: i, occupant };
+    }
+    if (built !== null) {
+      return deny(
+        sim,
+        `every zoned cell in the area ${spanLabel(data)} is built on — ${cellLabel(built.cell)} ` +
+          `holds ${occupantLabel(sim.world, built.occupant)}; bulldoze it before dezoning`,
+      );
+    }
+    return deny(sim, `no cell of the area ${spanLabel(data)} is zoned — nothing to clear`);
   });
 
   world.registerHandler('dezone', (data, w) => {

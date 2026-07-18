@@ -1,8 +1,7 @@
 import { evictCitizens, footprintCells } from './buildings';
 import { REGROWTH_COOLDOWN_TICKS } from './constants/zoning';
-import { SERVICE_LABELS } from './constants/services';
 import { unassignWorkers } from './employment';
-import { cellFromIndex } from './grid';
+import { cellLabel, occupantLabel } from './rejection';
 import type { CitySim } from './city';
 import type { CityWorld } from './types';
 
@@ -10,22 +9,6 @@ import type { CityWorld } from './types';
 export type FootprintScan =
   | { ok: true; buildingIds: number[] }
   | { ok: false; reason: string };
-
-/** "(x, y)" for a cell index — every rejection names the cell that blocked it. */
-export function cellLabel(cell: number): string {
-  const { x, y } = cellFromIndex(cell);
-  return `(${x}, ${y})`;
-}
-
-/** Human name for whatever already owns a cell, for rejection messages. */
-function occupantLabel(w: CityWorld, occupant: number): string {
-  const structure = w.getComponent(occupant, 'structure');
-  if (structure) return SERVICE_LABELS[structure.type] ?? 'a service building';
-  const plant = w.getComponent(occupant, 'powerPlant');
-  if (plant) return plant.kind === 'wind' ? 'a wind turbine' : 'a coal power plant';
-  if (w.getComponent(occupant, 'waterPump')) return 'a water pump';
-  return 'another structure';
-}
 
 /**
  * Plans a footprint placement without mutating the world. Empty cells and
