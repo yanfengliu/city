@@ -12,7 +12,6 @@ import {
   PUMP_COLOR,
   ROAD_COLOR,
   SHORE_DETAIL_COLOR,
-  STRUCTURE_WALL_COLORS,
   TREE_CANOPY_COLOR,
   TREE_CANOPY_HIGHLIGHT_COLOR,
   TREE_TRUNK_COLOR,
@@ -21,6 +20,7 @@ import {
   WATER_MID_COLOR,
   WATER_SHALLOW_COLOR,
 } from '../../src/rendering/constants';
+import { SERVICE_WALL_COLORS } from '../../src/rendering/structure-style';
 
 const luminance = (hex: number): number => {
   const color = new Color(hex);
@@ -92,7 +92,7 @@ describe('friendly game palette', () => {
   });
 
   it('avoids near-black civic service walls', () => {
-    const colors = Object.values(STRUCTURE_WALL_COLORS);
+    const colors = Object.values(SERVICE_WALL_COLORS);
     for (const color of colors) {
       expect(luminance(color)).toBeGreaterThanOrEqual(0.18);
       expect(saturation(color)).toBeGreaterThanOrEqual(0.4);

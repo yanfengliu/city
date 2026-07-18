@@ -1,26 +1,8 @@
-import {
-  BoxGeometry,
-  DynamicDrawUsage,
-  Group,
-  InstancedMesh,
-  Matrix4,
-  MeshLambertMaterial,
-} from 'three';
-import type { BufferGeometry, Material } from 'three';
-import {
-  STRUCTURE_DETAIL_COLORS,
-  STRUCTURE_DETAIL_HEIGHT,
-  STRUCTURE_DETAIL_LENGTH,
-  STRUCTURE_DETAIL_WIDTH,
-  STRUCTURE_FOOTPRINT_MARGIN,
-  STRUCTURE_ROOF_COLORS,
-  STRUCTURE_ROOF_HEIGHT,
-  STRUCTURE_START_CAPACITY,
-  STRUCTURE_WALL_COLORS,
-  STRUCTURE_WALL_HEIGHT,
-  type ServiceKind,
-} from './constants';
+import { BufferGeometry, Group, Mesh, MeshLambertMaterial } from 'three';
+import { GeometryBuilder } from './geometry-builder';
+import { addServiceStructure } from './service-structures';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
+import type { ServiceKind } from './constants';
 
 /** Plain-data service structure view (structurally mirrors the protocol StructureView). */
 export interface StructureRenderView {
@@ -33,185 +15,87 @@ export interface StructureRenderView {
   service: ServiceKind;
 }
 
-interface Archetype {
-  walls: InstancedMesh;
-  roofs: InstancedMesh;
-  details: InstancedMesh;
-  /** Structure id per instance slot (parallel to the instance buffers). */
-  ids: number[];
-  capacity: number;
-}
-
 const SERVICE_KINDS: readonly ServiceKind[] = ['fireStation', 'police', 'clinic', 'school'];
-const MATRIX = new Matrix4();
 
 /**
- * Player-placed service buildings as instanced walls + roofs + roof details,
- * one archetype per service type (distinct palettes so they read against RCI
- * buildings; taller than a level-1 growable). Same slot layout / swap-remove
- * bookkeeping as BuildingsView, minus per-instance colors — the type's
- * materials carry the palette.
+ * Player-placed service buildings as one merged low-poly model mesh per
+ * service kind (fire station, police station, clinic, school), built from the
+ * shared GeometryBuilder like the utility structures. A kind's mesh rebuilds
+ * whenever any structure of that kind changes; rebuilds iterate views sorted
+ * by id, so output is byte-identical for identical inputs regardless of
+ * upsert order. Shadow-map invalidation stays with the existing
+ * occupancy-flush path in the app layer — no calls from here.
  */
 export class StructuresView {
   readonly group = new Group();
-  private readonly archetypes: Record<ServiceKind, Archetype>;
-  private readonly slots = new Map<number, { service: ServiceKind; slot: number }>();
+  private readonly material = new MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+  private readonly meshes: Record<ServiceKind, Mesh>;
   private readonly views = new Map<number, StructureRenderView>();
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
-  private readonly unitBox: BufferGeometry;
-  private readonly detailBox: BufferGeometry;
 
   constructor() {
     this.group.name = 'structures';
-    // Base at y=0; per-instance matrices scale to footprint * margin and fixed heights.
-    this.unitBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-    this.detailBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-    this.archetypes = Object.fromEntries(
-      SERVICE_KINDS.map((kind) => [kind, this.makeArchetype(kind)]),
-    ) as Record<ServiceKind, Archetype>;
+    this.meshes = Object.fromEntries(
+      SERVICE_KINDS.map((kind) => [kind, this.makeMesh(kind)]),
+    ) as Record<ServiceKind, Mesh>;
   }
 
   get count(): number {
-    return this.slots.size;
+    return this.views.size;
   }
 
   setTerrainSurface(surface: TerrainSurfaceView): void {
     this.surface = surface;
-    for (const view of this.views.values()) {
-      const entry = this.slots.get(view.id);
-      if (entry) this.writeInstance(this.archetypes[entry.service], entry.slot, view);
-    }
+    this.rebuild(SERVICE_KINDS);
   }
 
   upsert(view: StructureRenderView): void {
-    const existing = this.slots.get(view.id);
-    if (existing && existing.service !== view.service) this.remove(view.id); // defensive: type never changes
+    const previous = this.views.get(view.id);
     this.views.set(view.id, view);
-    const current = this.slots.get(view.id);
-    const archetype = this.archetypes[view.service];
-    if (current) {
-      this.writeInstance(archetype, current.slot, view);
-      return;
-    }
-    if (archetype.ids.length === archetype.capacity) this.grow(archetype);
-    const slot = archetype.ids.length;
-    archetype.ids.push(view.id);
-    this.slots.set(view.id, { service: view.service, slot });
-    archetype.walls.count = archetype.ids.length;
-    archetype.roofs.count = archetype.ids.length;
-    archetype.details.count = archetype.ids.length;
-    this.writeInstance(archetype, slot, view);
+    // Defensive: a structure's service never changes, but if it did, the old
+    // kind's mesh must drop it too.
+    this.rebuild(
+      previous && previous.service !== view.service
+        ? [previous.service, view.service]
+        : [view.service],
+    );
   }
 
   /** Tolerates unknown ids during defensive rebuild or full-sync reconciliation. */
   remove(id: number): void {
-    const entry = this.slots.get(id);
-    if (!entry) return;
+    const previous = this.views.get(id);
+    if (!previous) return;
     this.views.delete(id);
-    this.slots.delete(id);
-    const archetype = this.archetypes[entry.service];
-    const last = archetype.ids.length - 1;
-    if (entry.slot !== last) {
-      const movedId = archetype.ids[last];
-      for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
-        mesh.getMatrixAt(last, MATRIX);
-        mesh.setMatrixAt(entry.slot, MATRIX);
-        mesh.instanceMatrix.needsUpdate = true;
-      }
-      archetype.ids[entry.slot] = movedId;
-      this.slots.set(movedId, { service: entry.service, slot: entry.slot });
-    }
-    archetype.ids.pop();
-    archetype.walls.count = archetype.ids.length;
-    archetype.roofs.count = archetype.ids.length;
-    archetype.details.count = archetype.ids.length;
+    this.rebuild([previous.service]);
   }
 
-  private makeArchetype(kind: ServiceKind): Archetype {
-    return {
-      walls: this.makeMesh(
-        `${kind}-walls`,
-        this.unitBox,
-        new MeshLambertMaterial({ color: STRUCTURE_WALL_COLORS[kind] }),
-      ),
-      roofs: this.makeMesh(
-        `${kind}-roofs`,
-        this.unitBox,
-        new MeshLambertMaterial({ color: STRUCTURE_ROOF_COLORS[kind] }),
-      ),
-      details: this.makeMesh(
-        `${kind}-details`,
-        this.detailBox,
-        new MeshLambertMaterial({ color: STRUCTURE_DETAIL_COLORS[kind] }),
-      ),
-      ids: [],
-      capacity: STRUCTURE_START_CAPACITY,
-    };
-  }
-
-  private makeMesh(
-    name: string,
-    geometry: BufferGeometry,
-    material: Material,
-    capacity = STRUCTURE_START_CAPACITY,
-  ): InstancedMesh {
-    const mesh = new InstancedMesh(geometry, material, capacity);
-    mesh.name = name;
-    mesh.count = 0;
-    mesh.frustumCulled = false;
+  /** Empty merged mesh for one service kind; geometry swaps in on rebuild. */
+  private makeMesh(kind: ServiceKind): Mesh {
+    const mesh = new Mesh(new BufferGeometry(), this.material);
+    mesh.name = `${kind}-model`;
+    mesh.visible = false;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.group.add(mesh);
     return mesh;
   }
 
-  private grow(archetype: Archetype): void {
-    archetype.capacity *= 2;
-    archetype.walls = this.replaceMesh(archetype.walls, archetype.capacity);
-    archetype.roofs = this.replaceMesh(archetype.roofs, archetype.capacity);
-    archetype.details = this.replaceMesh(archetype.details, archetype.capacity);
-  }
-
-  private replaceMesh(old: InstancedMesh, capacity: number): InstancedMesh {
-    const next = this.makeMesh(old.name, old.geometry, old.material as Material, capacity);
-    (next.instanceMatrix.array as Float32Array).set(old.instanceMatrix.array as Float32Array);
-    next.count = old.count;
-    next.instanceMatrix.needsUpdate = true;
-    this.group.remove(old);
-    old.dispose();
-    return next;
-  }
-
-  private writeInstance(archetype: Archetype, slot: number, view: StructureRenderView): void {
-    const cx = view.x + view.w / 2;
-    const cz = view.y + view.h / 2;
-    const sx = view.w * STRUCTURE_FOOTPRINT_MARGIN;
-    const sz = view.h * STRUCTURE_FOOTPRINT_MARGIN;
-    const foundation = this.surface.footprintRange(view.x, view.y, view.w, view.h);
-    const baseY = foundation.max;
-    MATRIX.makeScale(sx, STRUCTURE_WALL_HEIGHT + baseY - foundation.min, sz).setPosition(
-      cx,
-      foundation.min,
-      cz,
-    );
-    archetype.walls.setMatrixAt(slot, MATRIX);
-    MATRIX.makeScale(sx, STRUCTURE_ROOF_HEIGHT, sz).setPosition(
-      cx,
-      baseY + STRUCTURE_WALL_HEIGHT,
-      cz,
-    );
-    archetype.roofs.setMatrixAt(slot, MATRIX);
-    const detailLength = Math.min(STRUCTURE_DETAIL_LENGTH, sx * 0.55);
-    const detailWidth = Math.min(STRUCTURE_DETAIL_WIDTH, sz * 0.35);
-    MATRIX.makeScale(detailLength, STRUCTURE_DETAIL_HEIGHT, detailWidth).setPosition(
-      cx,
-      baseY + STRUCTURE_WALL_HEIGHT + STRUCTURE_ROOF_HEIGHT,
-      cz,
-    );
-    archetype.details.setMatrixAt(slot, MATRIX);
-    for (const mesh of [archetype.walls, archetype.roofs, archetype.details]) {
-      mesh.instanceMatrix.needsUpdate = true;
+  private rebuild(kinds: readonly ServiceKind[]): void {
+    for (const kind of kinds) {
+      const builder = new GeometryBuilder();
+      const views = [...this.views.values()]
+        .filter((view) => view.service === kind)
+        .sort((a, b) => a.id - b.id);
+      for (const view of views) addServiceStructure(builder, this.surface, view);
+      this.swapGeometry(this.meshes[kind], builder.build());
     }
+  }
+
+  private swapGeometry(mesh: Mesh, geometry: BufferGeometry): void {
+    const old = mesh.geometry;
+    mesh.geometry = geometry;
+    old.dispose();
+    const positions = geometry.getAttribute('position');
+    mesh.visible = positions !== undefined && positions.count > 0;
   }
 }
