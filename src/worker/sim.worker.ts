@@ -428,7 +428,11 @@ addEventListener('message', (event) => {
       const result = world.submitWithResult(message.name, message.data as never);
       post({
         type: 'commandSubmissionResult', id: message.id ?? 0, name: message.name,
-        accepted: result.accepted, message: result.message, tick: world.tick,
+        // Prefer the game's specific reason over the engine's generic
+        // "Validation failed" (AGENTS.md: error messages are a product surface).
+        accepted: result.accepted,
+        message: result.accepted ? result.message : sim.lastRejection ?? result.message,
+        tick: world.tick,
       });
       break;
     }

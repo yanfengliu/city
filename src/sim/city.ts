@@ -134,6 +134,13 @@ export interface CitySim {
   pathCache: Map<string, { version: number; nodes: number[] | null }>;
   pedestrianPathCache: Map<string, { version: number; cells: number[] | null }>;
   adjacencyCache: { version: number; map: Map<number, AdjacencyList> } | null;
+  /**
+   * Why the most recent command validator refused, in player-facing words
+   * (AGENTS.md: error messages are a product surface). Diagnostic only —
+   * never read by simulation logic, never serialized, and cleared by every
+   * submit, so it can never influence determinism or replay.
+   */
+  lastRejection: string | null;
 }
 
 type AdjacencyList = Array<{ to: number; edge: number; cost: number }>;
@@ -253,7 +260,20 @@ export function createCitySim(config: CitySimConfig): CitySim {
     pathCache: new Map(),
     pedestrianPathCache: new Map(),
     adjacencyCache: null,
+    lastRejection: null,
   };
+  // Every submit starts with a clean slate, so a reported reason always
+  // belongs to the command just refused and an accepted one leaves none.
+  const submit = world.submit.bind(world);
+  world.submit = ((name: never, data: never) => {
+    sim.lastRejection = null;
+    return submit(name, data);
+  }) as typeof world.submit;
+  const submitWithResult = world.submitWithResult.bind(world);
+  world.submitWithResult = ((name: never, data: never) => {
+    sim.lastRejection = null;
+    return submitWithResult(name, data);
+  }) as typeof world.submitWithResult;
   // Phase 4: real field-driven desirability inputs replace the neutral seam.
   if (config.fieldsEnabled) sim.scoreInputs = fieldScoreInputs(sim);
   // Phase 5: powered/watered read the flags the flood-fill systems maintain.

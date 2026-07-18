@@ -8,6 +8,14 @@ export const SERVICE_TYPES: readonly ServiceType[] = [
   'school',
 ];
 
+/** Player-facing names, used in rejection messages and occupancy reports. */
+export const SERVICE_LABELS: Record<ServiceType, string> = {
+  fireStation: 'a fire station',
+  police: 'a police station',
+  clinic: 'a clinic',
+  school: 'a school',
+};
+
 /** Services occupy a square footprint of this side, anchored top-left. */
 export const SERVICE_FOOTPRINT = 2;
 

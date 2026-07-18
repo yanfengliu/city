@@ -3,11 +3,12 @@ import {
   COVERAGE_BLOCK_SIZE,
   SERVICE_COST,
   SERVICE_FOOTPRINT,
+  SERVICE_LABELS,
   SERVICE_RADIUS,
   SERVICE_TYPES,
 } from './constants/services';
 import { footprintCells } from './buildings';
-import { bulldozeGrowableBuildings, replacementBuildingIds } from './demolition';
+import { bulldozeGrowableBuildings, scanFootprint } from './demolition';
 import { purchaseAllowed } from './economy';
 import { coverageMirrorState } from './fields';
 import { cellIndex, inBounds } from './grid';
@@ -91,24 +92,53 @@ interface ServicePlacementPlan {
   buildingIds: number[];
 }
 
+/** Records why a placement failed, then reports the failure to the engine. */
+function refuse(sim: CitySim, reason: string): null {
+  sim.lastRejection = reason;
+  return null;
+}
+
 function servicePlacementPlan(
   sim: CitySim,
   w: CityWorld,
   data: PlaceServiceCommand,
 ): ServicePlacementPlan | null {
-  if (!SERVICE_TYPES.includes(data.service)) return null;
+  if (!SERVICE_TYPES.includes(data.service)) {
+    return refuse(
+      sim,
+      `unknown service "${data.service}" — expected one of ${SERVICE_TYPES.join(', ')}`,
+    );
+  }
   const max = SERVICE_FOOTPRINT - 1;
   if (
     !inBounds(data.x, data.y, GRID_WIDTH, GRID_HEIGHT) ||
     !inBounds(data.x + max, data.y + max, GRID_WIDTH, GRID_HEIGHT)
   ) {
-    return null;
+    return refuse(
+      sim,
+      `a ${SERVICE_FOOTPRINT}x${SERVICE_FOOTPRINT} service anchored at (${data.x}, ${data.y}) ` +
+        `falls outside the ${GRID_WIDTH}x${GRID_HEIGHT} map`,
+    );
   }
   const cells = footprintCells(data.x, data.y, SERVICE_FOOTPRINT, SERVICE_FOOTPRINT);
-  const buildingIds = replacementBuildingIds(sim, w, cells);
-  if (buildingIds === null || !touchesRoad(sim, cells)) return null;
-  if (!purchaseAllowed(w, SERVICE_COST[data.service], false)) return null;
-  return { cells, buildingIds };
+  const scan = scanFootprint(sim, w, cells);
+  if (!scan.ok) return refuse(sim, scan.reason);
+  if (!touchesRoad(sim, cells)) {
+    return refuse(
+      sim,
+      `no cell of the footprint at (${data.x}, ${data.y}) touches a road — ` +
+        'services must sit beside one',
+    );
+  }
+  const cost = SERVICE_COST[data.service];
+  if (!purchaseAllowed(w, cost, false)) {
+    return refuse(
+      sim,
+      `${SERVICE_LABELS[data.service]} costs $${cost} but the treasury holds ` +
+        `$${Math.floor(treasury(w))}`,
+    );
+  }
+  return { cells, buildingIds: scan.buildingIds };
 }
 
 export function registerServiceCommands(sim: CitySim): void {
