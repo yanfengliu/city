@@ -8,11 +8,14 @@ import {
   HUD_NEGATIVE_TEXT,
   HUD_PANEL_CHROME_CSS,
   HUD_POSITIVE_TEXT,
+  HUD_TOP_BAR_LAYOUT_CSS,
   hudButtonCss,
   hudKeyBadgeCss,
+  hudStatSlotCss,
   hudToastCss,
   hudWarningBadgeCss,
 } from './hud-style';
+import { OverlayLegendView } from './overlay-legend';
 
 /** Map overlay selection; field names mirror the protocol FieldName literals. */
 export type OverlayName =
@@ -23,54 +26,6 @@ export type OverlayName =
   | 'traffic'
   | 'power'
   | 'water';
-
-type OverlayLegendItem = { color: string; label: string };
-interface OverlayLegend {
-  title: string;
-  /** Gradient overlays (fields): a low→high colour bar with end labels. */
-  gradient?: [string, string];
-  lowLabel?: string;
-  highLabel?: string;
-  /** Discrete overlays (traffic/power/water): labelled colour swatches. */
-  items?: OverlayLegendItem[];
-}
-
-/**
- * Colour key shown while a map overlay is active, so the heatmap has a scale.
- * Colours mirror the canonical ramps in rendering/constants.ts (FIELD_RAMPS,
- * TRAFFIC_BUCKET_COLORS) and network-overlay.ts — duplicated here as hex strings
- * so the UI layer needn't import from rendering. Keep in sync if those change.
- */
-const OVERLAY_LEGENDS: Partial<Record<OverlayName, OverlayLegend>> = {
-  pollution: { title: 'Pollution', gradient: ['#46a34a', '#5f4726'], lowLabel: 'Clean', highLabel: 'Heavy' },
-  noise: { title: 'Noise', gradient: ['#46a34a', '#7a3fae'], lowLabel: 'Quiet', highLabel: 'Loud' },
-  landValue: { title: 'Land value', gradient: ['#d9483f', '#3fae4a'], lowLabel: 'Low', highLabel: 'High' },
-  traffic: {
-    title: 'Traffic',
-    items: [
-      { color: '#69a869', label: 'Flowing' },
-      { color: '#e3cf4a', label: 'Busy' },
-      { color: '#f2953b', label: 'Heavy' },
-      { color: '#e0453a', label: 'Jammed' },
-    ],
-  },
-  power: {
-    title: 'Power',
-    items: [
-      { color: '#ffdc50', label: 'Network' },
-      { color: '#78d278', label: 'Powered' },
-      { color: '#eb3c32', label: 'No power' },
-    ],
-  },
-  water: {
-    title: 'Water',
-    items: [
-      { color: '#5ab4ff', label: 'Pipes' },
-      { color: '#78c8dc', label: 'Watered' },
-      { color: '#eb3c32', label: 'No water' },
-    ],
-  },
-};
 
 export interface HudState<TTool extends string> {
   /** In-game day number (player-facing time; raw tick/fps stay in the automation state only). */
@@ -139,6 +94,32 @@ const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
 const TOAST_DURATION_MS = 4000;
 const MAX_TOASTS = 4;
 
+/**
+ * Reserved widths (in ch) for the bar's live values, sized to their on-screen
+ * maxima — "$9,999,999", "9,999,999" people, "Metropolis", "99,999" vehicles,
+ * "999,999" utility units, "Day 9999" — plus one extra ch of sub-pixel safety
+ * margin (browser-measured at 13px system-ui: the maxima land within half a
+ * pixel of their exact ch width, and any overflow would move wrap points).
+ * Values render inside fixed slots (hudStatSlotCss) so a changing number or
+ * rank can never move its neighbours or re-flow the bar's wrap points
+ * (tests/ui/hud-layout.test.ts pins the floors; verified live at 1280×800).
+ */
+export const STAT_SLOT_CH = {
+  treasury: 11,
+  population: 10,
+  cityTitle: 11,
+  traffic: 7,
+  utility: 7,
+  day: 9,
+} as const;
+
+/**
+ * Slots are born holding a no-break space, never empty: an empty inline-block
+ * aligns by its box bottom instead of the text baseline, so the first real
+ * value would change the row's line box and nudge the whole bar by a pixel.
+ */
+const SLOT_PLACEHOLDER = '\u00a0';
+
 const DEMAND_BAR_HEIGHT_PX = 20;
 const DEMAND_BARS: { key: 'r' | 'c' | 'i'; label: string; color: string }[] = [
   { key: 'r', label: 'R', color: '#58c15c' },
@@ -150,18 +131,30 @@ function formatTreasury(value: number): string {
   return `$${Math.round(value).toLocaleString('en-US')}`;
 }
 
+/** The "⚡ demand/supply" meter: both numbers live in fixed slots either side of a static slash. */
+interface UtilityMeterEls {
+  root: HTMLSpanElement;
+  demand: HTMLSpanElement;
+  supply: HTMLSpanElement;
+  /** Tooltip wording: the utility noun and what to build when over capacity. */
+  noun: string;
+  source: string;
+}
+
 /** Minimal DOM HUD. Reads pushed state; dispatches via callbacks only — never mutates game state. */
 export class Hud<TTool extends string> {
   private readonly root: HTMLDivElement;
   private readonly treasuryEl: HTMLSpanElement;
-  private readonly populationEl: HTMLSpanElement;
-  private readonly vehiclesEl: HTMLSpanElement;
-  private readonly powerEl: HTMLSpanElement;
-  private readonly waterEl: HTMLSpanElement;
+  private readonly popCountEl: HTMLSpanElement;
+  private readonly cityTitleEl: HTMLSpanElement;
+  private readonly vehicleCountEl: HTMLSpanElement;
+  private readonly pedestrianCountEl: HTMLSpanElement;
+  private readonly powerMeter: UtilityMeterEls;
+  private readonly waterMeter: UtilityMeterEls;
   private readonly warningEl: HTMLSpanElement;
   private readonly statsEl: HTMLSpanElement;
   /** Colour-key panel for the active map overlay (bottom-left, above the camera hint). */
-  private readonly legendEl: HTMLDivElement;
+  private readonly legend: OverlayLegendView;
   private readonly toastArea: HTMLDivElement;
   private readonly milestoneEl: HTMLDivElement;
   private milestoneTimer: number | undefined;
@@ -179,27 +172,29 @@ export class Hud<TTool extends string> {
     callbacks: HudCallbacks<TTool>,
   ) {
     this.root = document.createElement('div');
-    this.root.style.cssText =
-      'position:absolute;top:8px;left:8px;padding:8px 12px;font-size:13px;display:flex;' +
-      'gap:12px;align-items:center;flex-wrap:wrap;max-width:calc(100vw - 32px);' +
-      `user-select:none;z-index:10;${HUD_PANEL_CHROME_CSS}`;
+    this.root.style.cssText = `${HUD_TOP_BAR_LAYOUT_CSS}${HUD_PANEL_CHROME_CSS}`;
 
-    this.treasuryEl = document.createElement('span');
-    this.treasuryEl.style.cssText = `color:${HUD_POSITIVE_TEXT};font-weight:bold`;
+    this.treasuryEl = this.makeStatSlot(STAT_SLOT_CH.treasury);
+    this.treasuryEl.style.color = HUD_POSITIVE_TEXT;
+    this.treasuryEl.style.fontWeight = 'bold';
     this.root.appendChild(this.treasuryEl);
 
-    this.populationEl = document.createElement('span');
-    this.populationEl.style.cssText = 'font-weight:bold';
-    this.root.appendChild(this.populationEl);
+    const populationEl = document.createElement('span');
+    populationEl.style.cssText = 'font-weight:bold';
+    this.popCountEl = this.makeStatSlot(STAT_SLOT_CH.population);
+    this.cityTitleEl = this.makeStatSlot(STAT_SLOT_CH.cityTitle);
+    populationEl.append('👤 ', this.popCountEl, ' · ', this.cityTitleEl);
+    this.root.appendChild(populationEl);
 
-    this.vehiclesEl = document.createElement('span');
-    this.vehiclesEl.title = 'Vehicles and pedestrians on the street';
-    this.root.appendChild(this.vehiclesEl);
+    const vehiclesEl = document.createElement('span');
+    vehiclesEl.title = 'Vehicles and pedestrians on the street';
+    this.vehicleCountEl = this.makeStatSlot(STAT_SLOT_CH.traffic);
+    this.pedestrianCountEl = this.makeStatSlot(STAT_SLOT_CH.traffic);
+    vehiclesEl.append('🚗 ', this.vehicleCountEl, ' · 🚶 ', this.pedestrianCountEl);
+    this.root.appendChild(vehiclesEl);
 
-    this.powerEl = document.createElement('span');
-    this.root.appendChild(this.powerEl);
-    this.waterEl = document.createElement('span');
-    this.root.appendChild(this.waterEl);
+    this.powerMeter = this.makeUtilityMeter('⚡', 'Power', 'plant');
+    this.waterMeter = this.makeUtilityMeter('💧', 'Water', 'pump');
 
     this.warningEl = document.createElement('span');
     this.warningEl.style.cssText = hudWarningBadgeCss();
@@ -207,7 +202,7 @@ export class Hud<TTool extends string> {
 
     this.root.appendChild(this.makeDemandBars());
 
-    this.statsEl = document.createElement('span');
+    this.statsEl = this.makeStatSlot(STAT_SLOT_CH.day);
     this.root.appendChild(this.statsEl);
 
     for (const speed of SPEEDS) {
@@ -274,52 +269,7 @@ export class Hud<TTool extends string> {
       `user-select:none;pointer-events:none;z-index:9;opacity:.78;${HUD_COMPACT_PANEL_CHROME_CSS}`;
     container.appendChild(controlsHint);
 
-    this.legendEl = document.createElement('div');
-    this.legendEl.style.cssText =
-      'position:absolute;bottom:36px;left:12px;min-width:104px;font-size:12px;padding:7px 10px;' +
-      `user-select:none;pointer-events:none;z-index:9;display:none;${HUD_COMPACT_PANEL_CHROME_CSS}`;
-    container.appendChild(this.legendEl);
-  }
-
-  /** Shows a colour key for the active overlay (or hides it for 'none'). The
-   * legend sits just above the camera hint, but hops above the inspect panel
-   * when one is open (both share the bottom-left corner). */
-  private renderOverlayLegend(overlay: OverlayName, inspectOpen: boolean): void {
-    const spec = OVERLAY_LEGENDS[overlay];
-    if (!spec) {
-      this.legendEl.style.display = 'none';
-      return;
-    }
-    this.legendEl.replaceChildren();
-    this.legendEl.style.bottom = inspectOpen ? '180px' : '36px';
-    this.legendEl.style.display = 'block';
-    const title = document.createElement('div');
-    title.textContent = spec.title;
-    title.style.cssText = 'font-weight:bold;margin-bottom:5px';
-    this.legendEl.appendChild(title);
-    if (spec.gradient) {
-      const bar = document.createElement('div');
-      bar.style.cssText = `height:10px;border-radius:2px;background:linear-gradient(to right, ${spec.gradient[0]}, ${spec.gradient[1]})`;
-      const ends = document.createElement('div');
-      ends.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;opacity:.8;margin-top:3px';
-      const lo = document.createElement('span');
-      lo.textContent = spec.lowLabel ?? '';
-      const hi = document.createElement('span');
-      hi.textContent = spec.highLabel ?? '';
-      ends.append(lo, hi);
-      this.legendEl.append(bar, ends);
-    } else if (spec.items) {
-      for (const item of spec.items) {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:7px;line-height:1.5';
-        const swatch = document.createElement('span');
-        swatch.style.cssText = `width:12px;height:12px;border-radius:2px;flex:none;background:${item.color}`;
-        const label = document.createElement('span');
-        label.textContent = item.label;
-        row.append(swatch, label);
-        this.legendEl.appendChild(row);
-      }
-    }
+    this.legend = new OverlayLegendView(container);
   }
 
   /** A one-off, self-fading celebration banner (population milestones). */
@@ -423,10 +373,12 @@ export class Hud<TTool extends string> {
 
   update(state: HudState<TTool>): void {
     this.treasuryEl.textContent = formatTreasury(state.treasury);
-    this.populationEl.textContent = `👤 ${state.populationPeople.toLocaleString('en-US')} · ${state.cityTitle}`;
-    this.vehiclesEl.textContent = `🚗 ${state.vehicles.toLocaleString('en-US')} · 🚶 ${state.pedestrians.toLocaleString('en-US')}`;
-    this.renderUtilityMeter(this.powerEl, '⚡', 'Power', state.power);
-    this.renderUtilityMeter(this.waterEl, '💧', 'Water', state.water);
+    this.popCountEl.textContent = state.populationPeople.toLocaleString('en-US');
+    this.cityTitleEl.textContent = state.cityTitle;
+    this.vehicleCountEl.textContent = state.vehicles.toLocaleString('en-US');
+    this.pedestrianCountEl.textContent = state.pedestrians.toLocaleString('en-US');
+    this.renderUtilityMeter(this.powerMeter, state.power);
+    this.renderUtilityMeter(this.waterMeter, state.water);
     const warnings: string[] = [];
     const tips: string[] = [];
     if (state.treasury < 0) {
@@ -460,29 +412,50 @@ export class Hud<TTool extends string> {
     for (const [overlay, button] of this.overlayButtons) {
       button.style.cssText = hudButtonCss(overlay === state.activeOverlay);
     }
-    this.renderOverlayLegend(state.activeOverlay, state.inspectOpen);
+    this.legend.render(state.activeOverlay, state.inspectOpen);
+  }
+
+  /** Builds a "⚡ demand/supply" meter whose slot is reserved from day one:
+   * it hides via visibility (never display), so appearing when the first
+   * plant/pump lands cannot re-flow the bar. */
+  private makeUtilityMeter(icon: string, noun: string, source: string): UtilityMeterEls {
+    const root = document.createElement('span');
+    root.style.visibility = 'hidden';
+    const demand = this.makeStatSlot(STAT_SLOT_CH.utility, 'right');
+    const supply = this.makeStatSlot(STAT_SLOT_CH.utility);
+    root.append(`${icon} `, demand, '/', supply);
+    this.root.appendChild(root);
+    return { root, demand, supply, noun, source };
+  }
+
+  /** A fixed-width value slot (hudStatSlotCss). Born holding SLOT_PLACEHOLDER —
+   * never empty — so its baseline geometry is identical before and after the
+   * first real value lands (an empty inline-block aligns by box bottom and
+   * would nudge the whole row). */
+  private makeStatSlot(minWidthCh: number, align: 'left' | 'right' = 'left'): HTMLSpanElement {
+    const slot = document.createElement('span');
+    slot.style.cssText = hudStatSlotCss(minWidthCh, align);
+    slot.textContent = SLOT_PLACEHOLDER;
+    return slot;
   }
 
   /** ⚡/💧 meter: "icon load/capacity", green when capacity covers the load,
    * warm when the network is over capacity (build another plant/pump). Hidden
-   * until the city has buildings drawing or a source installed. */
-  private renderUtilityMeter(
-    el: HTMLSpanElement,
-    icon: string,
-    noun: string,
-    t: { supply: number; demand: number },
-  ): void {
+   * (but still occupying its reserved slot) until the city has buildings
+   * drawing or a source installed. */
+  private renderUtilityMeter(meter: UtilityMeterEls, t: { supply: number; demand: number }): void {
     if (t.supply === 0 && t.demand === 0) {
-      el.style.display = 'none';
+      meter.root.style.visibility = 'hidden';
       return;
     }
-    el.style.display = 'inline';
-    el.textContent = `${icon} ${t.demand.toLocaleString('en-US')}/${t.supply.toLocaleString('en-US')}`;
+    meter.root.style.visibility = 'visible';
+    meter.demand.textContent = t.demand.toLocaleString('en-US');
+    meter.supply.textContent = t.supply.toLocaleString('en-US');
     const covered = t.supply >= t.demand;
-    el.style.color = covered ? HUD_POSITIVE_TEXT : HUD_NEGATIVE_TEXT;
-    el.title = covered
-      ? `${noun}: ${t.demand} used of ${t.supply} capacity`
-      : `${noun} over capacity (${t.demand} needed / ${t.supply}) — build another ${noun === 'Power' ? 'plant' : 'pump'}`;
+    meter.root.style.color = covered ? HUD_POSITIVE_TEXT : HUD_NEGATIVE_TEXT;
+    meter.root.title = covered
+      ? `${meter.noun}: ${t.demand} used of ${t.supply} capacity`
+      : `${meter.noun} over capacity (${t.demand} needed / ${t.supply}) — build another ${meter.source}`;
   }
 
   /** Transient toast, e.g. "Command rejected: not enough money". */

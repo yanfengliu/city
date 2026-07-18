@@ -18,6 +18,51 @@ export const HUD_PANEL_CHROME_CSS = css([
   'box-shadow:inset 0 1px 0 rgba(255,255,255,.72),0 8px 22px rgba(35,72,80,.22)',
 ]);
 
+/**
+ * Layout half of the top HUD bar (skin comes from HUD_PANEL_CHROME_CSS).
+ * Stability contract (tests/ui/hud-layout.test.ts): the bar must never shift,
+ * grow, or re-flow at runtime. Its intrinsic single-row width (~2,280px)
+ * exceeds every target viewport, so flex wrapping stays enabled — immovability
+ * comes from every child having a constant width (see hudStatSlotCss), which
+ * freezes the wrap points for any given window size. tabular-nums keeps digit
+ * advances equal in every font of the page's fallback stack, and nowrap stops
+ * any child's text from soft-wrapping and changing row heights.
+ */
+export const HUD_TOP_BAR_LAYOUT_CSS = css([
+  'position:absolute',
+  'top:8px',
+  'left:8px',
+  'padding:8px 12px',
+  'font-size:13px',
+  'display:flex',
+  'gap:12px',
+  'align-items:center',
+  'flex-wrap:wrap',
+  'max-width:calc(100vw - 32px)',
+  'white-space:nowrap',
+  'font-variant-numeric:tabular-nums',
+  'user-select:none',
+  'z-index:10',
+]);
+
+/**
+ * A fixed-width inline slot for one live value (number or rank text): reserves
+ * its on-screen maximum up front via min-width so value changes can never move
+ * siblings or re-flow the bar's wrap points. Anchor the stable side: 'left'
+ * lets the value grow rightwards into its own reserve, 'right' pins the value's
+ * end (used for the numerator of the utility "demand/supply" pairs so the
+ * slash never moves).
+ */
+export function hudStatSlotCss(minWidthCh: number, align: 'left' | 'right' = 'left'): string {
+  return css([
+    'display:inline-block',
+    `min-width:${minWidthCh}ch`,
+    `text-align:${align}`,
+    'font-variant-numeric:tabular-nums',
+    'white-space:nowrap',
+  ]);
+}
+
 export const HUD_COMPACT_PANEL_CHROME_CSS = css([
   `color:${HUD_TEXT}`,
   'background:linear-gradient(180deg,rgba(238,248,247,.94),rgba(213,232,234,.92))',
@@ -80,8 +125,18 @@ export function hudKeyBadgeCss(): string {
   ]);
 }
 
+/**
+ * Intermittent "⚠ BROKE" / disconnected-trips badge. Absolutely positioned
+ * below the bar's left corner (its containing block is the bar) so appearing,
+ * growing, or vanishing can never displace the bar's in-flow children —
+ * part of the layout-stability contract in tests/ui/hud-layout.test.ts.
+ */
 export function hudWarningBadgeCss(): string {
   return css([
+    'position:absolute',
+    'top:calc(100% + 6px)',
+    'left:0',
+    'white-space:nowrap',
     'color:#071116',
     'background:linear-gradient(180deg,#ffd95b,#ff9e35)',
     'font-weight:bold',
