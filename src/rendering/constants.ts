@@ -331,10 +331,6 @@ export const VEHICLE_BODY_WIDTH = 0.3;
 export const VEHICLE_ROOF_LENGTH = 0.26;
 export const VEHICLE_ROOF_HEIGHT = 0.1;
 export const VEHICLE_ROOF_WIDTH = 0.24;
-/** Instance tint by the vehicle's edge congestion bucket (speed proxy): white → orange → red. */
-export const VEHICLE_BUCKET_COLORS: readonly [number, number, number, number] = [
-  0xffffff, 0xffd27d, 0xff8c3a, 0xe0453a,
-];
 /** Renderer-side lerp window between vehicle messages (one sim tick ≈ 50 ms at 1x). */
 export const VEHICLE_LERP_DEFAULT_MS = 50;
 export const VEHICLE_LERP_MIN_MS = 15;
@@ -369,34 +365,10 @@ export const FIELD_RAMPS: Record<FieldKind, { low: number; high: number }> = {
   landValue: { low: 0xd9483f, high: 0x3fae4a },
 };
 
-// Service structures (player-placed 2x2 buildings; taller than level-1 RCI so they read).
+// Service structures (player-placed 2x2 buildings). Model dimensions and
+// palette live in structure-style.ts alongside the service-structures builders.
 /** Service kind used across rendering (plain literal type; mirrors protocol ServiceType). */
 export type ServiceKind = 'fireStation' | 'police' | 'clinic' | 'school';
-export const STRUCTURE_START_CAPACITY = 64;
-export const STRUCTURE_FOOTPRINT_MARGIN = 0.9;
-export const STRUCTURE_WALL_HEIGHT = 1.2;
-export const STRUCTURE_ROOF_HEIGHT = 0.22;
-export const STRUCTURE_DETAIL_HEIGHT = 0.36;
-export const STRUCTURE_DETAIL_LENGTH = 0.86;
-export const STRUCTURE_DETAIL_WIDTH = 0.34;
-export const STRUCTURE_WALL_COLORS: Record<ServiceKind, number> = {
-  fireStation: 0xe36152,
-  police: 0x5f7fbd,
-  clinic: 0xf8f5ea,
-  school: 0xe5bc55,
-};
-export const STRUCTURE_ROOF_COLORS: Record<ServiceKind, number> = {
-  fireStation: 0xfff8ed,
-  police: 0xc1d4eb,
-  clinic: 0xe36152,
-  school: 0xa87549,
-};
-export const STRUCTURE_DETAIL_COLORS: Record<ServiceKind, number> = {
-  fireStation: 0xa93630,
-  police: 0xf8f5ea,
-  clinic: 0xa94343,
-  school: 0x765337,
-};
 
 /** Day/night endpoints consumed by CityScene. Kept as raw hex constants so
  * the palette contract can be tested without constructing a WebGL renderer. */

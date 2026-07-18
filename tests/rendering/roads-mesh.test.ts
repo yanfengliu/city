@@ -23,8 +23,6 @@ import { RoadsView } from '../../src/rendering/roads-mesh';
 import {
   SIDEWALK_WIDTH,
   SIDEWALK_Y,
-  TRAFFIC_SIGNAL_ACTIVE_GREEN,
-  TRAFFIC_SIGNAL_ACTIVE_RED,
   TRAFFIC_SIGNAL_CORNER_INSET,
   TRAFFIC_SIGNAL_HOUSING_BOTTOM,
   TRAFFIC_SIGNAL_HOUSING_COLOR,
@@ -192,19 +190,19 @@ describe('RoadsView', () => {
     crossing.setWater(new Uint8Array(100));
     crossing.update([21, 30, 31, 32, 41]);
     const signals = mesh(crossing, 'road-traffic-signals');
-    const colors = signals.geometry.getAttribute('color').array as Float32Array;
-    const encoded = new Set(
-      Array.from({ length: colors.length / 3 }, (_, i) =>
-        new Color().setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]).getHex(),
-      ),
-    );
 
     expect(crossing.signalizedIntersectionCount).toBe(1);
     expect(crossing.sidewalkPatchCount).toBe(16);
     expect(crossing.trafficSignalAssemblyCount).toBe(4);
     expect(signals.visible).toBe(true);
-    expect(encoded).toContain(TRAFFIC_SIGNAL_ACTIVE_RED);
-    expect(encoded).toContain(TRAFFIC_SIGNAL_ACTIVE_GREEN);
+    // Lens faces are live instances (SignalLensesView), not baked geometry:
+    // the merged mesh keeps only pole + housing, and every assembly emits a
+    // red/amber/green descriptor stack keyed to the junction node.
+    expect(crossing.signalLensDescriptors).toHaveLength(12);
+    expect(new Set(crossing.signalLensDescriptors.map((lens) => lens.node))).toEqual(new Set([31]));
+    expect(new Set(crossing.signalLensDescriptors.map((lens) => lens.axis))).toEqual(
+      new Set(['ns', 'ew']),
+    );
     const laneFromEdge = 0.5 - PEDESTRIAN_CURB_OFFSET;
     const maxPedestrianHalfWidth = Math.max(
       (PEDESTRIAN_BODY.width * PEDESTRIAN_MAX_WIDTH_SCALE) / 2,

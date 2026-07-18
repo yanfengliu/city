@@ -6,13 +6,13 @@ import {
   InstancedMesh,
   Matrix4,
   MeshLambertMaterial,
+  Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   VEHICLE_BODY_HEIGHT,
   VEHICLE_BODY_LENGTH,
   VEHICLE_BODY_WIDTH,
-  VEHICLE_BUCKET_COLORS,
   VEHICLE_CAPACITY,
   VEHICLE_LERP_DEFAULT_MS,
   VEHICLE_LERP_MAX_MS,
@@ -23,6 +23,11 @@ import {
   VEHICLE_Y,
 } from './constants';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
+import {
+  VEHICLE_LANE_OFFSET,
+  vehicleAppearance,
+  type VehicleAppearance,
+} from './vehicle-style';
 import {
   retargetVehicleMotion,
   sampleVehicleMotionInto,
@@ -47,14 +52,15 @@ export interface RoadEdgeView {
 }
 
 interface VehicleState {
-  edge: number;
   generation: number;
   motion: VehicleMotionSegment;
+  appearance: VehicleAppearance;
 }
 
 const MATRIX = new Matrix4();
 const MOTION_POSE = { x: 0, z: 0, yaw: 0 };
 const COLOR = new Color();
+const SCALE = new Vector3();
 
 /**
  * Vehicles as one InstancedMesh of low-poly cars (body + roof). The sim sends
@@ -73,7 +79,6 @@ export class VehiclesView {
   private states = new Map<number, VehicleState>();
   /** Vehicles message that arrived before its topologyVersion's roads message. */
   private pending: { version: number; list: VehicleRenderView[] } | null = null;
-  private buckets: ReadonlyMap<number, number> = new Map();
   private lastMessageAt: number | null = null;
   private messageIntervalMs = VEHICLE_LERP_DEFAULT_MS;
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
@@ -134,12 +139,6 @@ export class VehiclesView {
     this.apply(topologyVersion, list);
   }
 
-  /** Congestion buckets by edge id; recolors live instances immediately. */
-  setTraffic(buckets: ReadonlyMap<number, number>): void {
-    this.buckets = buckets;
-    this.applyColors();
-  }
-
   /** Per-render-frame smoothing: lerp each car from its previous to newest sampled position. */
   updateFrame(now: number): void {
     if (this.states.size === 0) return;
@@ -150,7 +149,10 @@ export class VehiclesView {
     let slot = 0;
     for (const state of this.states.values()) {
       const { x, z, yaw } = sampleVehicleMotionInto(state.motion, alpha, MOTION_POSE);
-      MATRIX.makeRotationY(yaw).setPosition(x, this.surface.heightAt(x, z) + VEHICLE_Y, z);
+      const look = state.appearance;
+      MATRIX.makeRotationY(yaw)
+        .scale(SCALE.set(look.widthScale, look.heightScale, look.lengthScale))
+        .setPosition(x, this.surface.heightAt(x, z) + VEHICLE_Y, z);
       this.mesh.setMatrixAt(slot++, MATRIX);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -182,9 +184,9 @@ export class VehiclesView {
         ? previous
         : undefined;
       next.set(vehicle.id, {
-        edge: vehicle.edge,
         generation: vehicle.generation,
         motion: retargetVehicleMotion(continuing?.motion, previousAlpha, { x, z, yaw }),
+        appearance: continuing?.appearance ?? vehicleAppearance(vehicle.id, vehicle.generation),
       });
     }
     this.states = next;
@@ -198,9 +200,11 @@ export class VehiclesView {
   }
 
   /**
-   * World position + heading at fractional progress t along the edge polyline.
-   * Segments are unit-length (grid cells), so reverse traversal samples the
-   * polyline at (1 - t) with the direction negated.
+   * World position + heading at fractional progress t along the edge polyline,
+   * shifted onto the right-hand lane of the travel direction so opposing
+   * flows occupy separate carriageways. Segments are unit-length (grid
+   * cells), so reverse traversal samples the polyline at (1 - t) with the
+   * direction negated.
    */
   private samplePolyline(
     cells: readonly number[],
@@ -219,18 +223,20 @@ export class VehiclesView {
     const bx = centerX(cells[i + 1]);
     const bz = centerZ(cells[i + 1]);
     const sign = reverse ? -1 : 1;
+    // Unit travel direction; its clockwise perpendicular is travel-right.
+    const dx = (bx - ax) * sign;
+    const dz = (bz - az) * sign;
     return {
-      x: ax + (bx - ax) * f,
-      z: az + (bz - az) * f,
-      yaw: Math.atan2((bx - ax) * sign, (bz - az) * sign),
+      x: ax + (bx - ax) * f - dz * VEHICLE_LANE_OFFSET,
+      z: az + (bz - az) * f + dx * VEHICLE_LANE_OFFSET,
+      yaw: Math.atan2(dx, dz),
     };
   }
 
   private applyColors(): void {
     let slot = 0;
     for (const state of this.states.values()) {
-      const bucket = Math.min(this.buckets.get(state.edge) ?? 0, VEHICLE_BUCKET_COLORS.length - 1);
-      this.mesh.setColorAt(slot++, COLOR.setHex(VEHICLE_BUCKET_COLORS[bucket]));
+      this.mesh.setColorAt(slot++, COLOR.setHex(state.appearance.paint));
     }
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }

@@ -1,21 +1,14 @@
 import { Color } from 'three';
-import { cellHash01 } from './constants';
 import {
   SIDEWALK_WIDTH,
   SIDEWALK_Y,
-  TRAFFIC_SIGNAL_ACTIVE_GREEN,
-  TRAFFIC_SIGNAL_ACTIVE_RED,
   TRAFFIC_SIGNAL_CORNER_INSET,
-  TRAFFIC_SIGNAL_DIM_AMBER,
   TRAFFIC_SIGNAL_HOUSING_BOTTOM,
   TRAFFIC_SIGNAL_HOUSING_COLOR,
   TRAFFIC_SIGNAL_HOUSING_DEPTH,
   TRAFFIC_SIGNAL_HOUSING_TOP,
   TRAFFIC_SIGNAL_HOUSING_WIDTH,
-  TRAFFIC_SIGNAL_INACTIVE_GREEN,
-  TRAFFIC_SIGNAL_INACTIVE_RED,
   TRAFFIC_SIGNAL_LENS_DEPTH,
-  TRAFFIC_SIGNAL_LENS_HALF_SIZE,
   TRAFFIC_SIGNAL_LENS_HEIGHTS,
   TRAFFIC_SIGNAL_POLE_COLOR,
   TRAFFIC_SIGNAL_POLE_HALF_WIDTH,
@@ -123,6 +116,27 @@ export function addSidewalks(
   return 4;
 }
 
+/**
+ * One live signal lens: a small light face on a junction fixture, colored per
+ * frame from `signalPhase(tick, node)` by SignalLensesView. The streetscape
+ * bakes only the static pole + housing; lens positions are emitted as data so
+ * the light state never forces a road-geometry rebuild.
+ */
+export interface SignalLensDescriptor {
+  /** Junction node cell index — the signalPhase key. */
+  node: number;
+  /** Axis served by this head: w/e arms face east–west traffic. */
+  axis: 'ns' | 'ew';
+  /** Stack slot: 0 red, 1 amber, 2 green. */
+  slot: number;
+  /** Lens box center. */
+  x: number;
+  y: number;
+  z: number;
+  /** Which arm the head hangs on (orients the box thickness). */
+  arm: RoadArm;
+}
+
 export function addTrafficSignals(
   builder: StreetscapeGeometryBuilder,
   surface: TerrainSurfaceView,
@@ -130,12 +144,12 @@ export function addTrafficSignals(
   index: number,
   x: number,
   z: number,
+  lenses: SignalLensDescriptor[],
 ): number {
   const arms = (Object.keys(neighbors) as RoadArm[]).filter((arm) => neighbors[arm]);
   if (arms.length < 3) return 0;
-  const horizontalGreen = cellHash01(index) >= 0.5;
   for (const arm of arms) {
-    addTrafficSignal(builder, surface, arm, horizontalGreen, x, z);
+    addTrafficSignal(builder, surface, arm, index, x, z, lenses);
   }
   return arms.length;
 }
@@ -144,9 +158,10 @@ function addTrafficSignal(
   builder: StreetscapeGeometryBuilder,
   surface: TerrainSurfaceView,
   arm: RoadArm,
-  horizontalGreen: boolean,
+  index: number,
   x: number,
   z: number,
+  lenses: SignalLensDescriptor[],
 ): void {
   const inset = TRAFFIC_SIGNAL_CORNER_INSET;
   const [px, pz] = arm === 'w'
@@ -184,55 +199,16 @@ function addTrafficSignal(
     new Color(TRAFFIC_SIGNAL_HOUSING_COLOR),
   );
 
-  const green = horizontal === horizontalGreen;
-  const lensColors = [
-    green ? TRAFFIC_SIGNAL_INACTIVE_RED : TRAFFIC_SIGNAL_ACTIVE_RED,
-    TRAFFIC_SIGNAL_DIM_AMBER,
-    green ? TRAFFIC_SIGNAL_ACTIVE_GREEN : TRAFFIC_SIGNAL_INACTIVE_GREEN,
-  ];
-  for (let lens = 0; lens < lensColors.length; lens++) {
-    addSignalLens(
-      builder,
-      arm,
-      px,
-      fixtureBase + TRAFFIC_SIGNAL_LENS_HEIGHTS[lens],
-      pz,
-      new Color(lensColors[lens]),
-    );
-  }
-}
-
-function addSignalLens(
-  builder: StreetscapeGeometryBuilder,
-  arm: RoadArm,
-  x: number,
-  y: number,
-  z: number,
-  color: Color,
-): void {
-  const half = TRAFFIC_SIGNAL_LENS_HALF_SIZE;
   const depth = TRAFFIC_SIGNAL_HOUSING_DEPTH / 2 + TRAFFIC_SIGNAL_LENS_DEPTH;
-  if (arm === 'w' || arm === 'e') {
-    const face = x + (arm === 'w' ? -depth : depth);
-    builder.coloredBox(
-      face - TRAFFIC_SIGNAL_LENS_DEPTH,
-      y - half,
-      z - half,
-      face + TRAFFIC_SIGNAL_LENS_DEPTH,
-      y + half,
-      z + half,
-      color,
-    );
-    return;
+  for (let slot = 0; slot < TRAFFIC_SIGNAL_LENS_HEIGHTS.length; slot++) {
+    lenses.push({
+      node: index,
+      axis: horizontal ? 'ew' : 'ns',
+      slot,
+      x: horizontal ? px + (arm === 'w' ? -depth : depth) : px,
+      y: fixtureBase + TRAFFIC_SIGNAL_LENS_HEIGHTS[slot],
+      z: horizontal ? pz : pz + (arm === 'n' ? -depth : depth),
+      arm,
+    });
   }
-  const face = z + (arm === 'n' ? -depth : depth);
-  builder.coloredBox(
-    x - half,
-    y - half,
-    face - TRAFFIC_SIGNAL_LENS_DEPTH,
-    x + half,
-    y + half,
-    face + TRAFFIC_SIGNAL_LENS_DEPTH,
-    color,
-  );
 }

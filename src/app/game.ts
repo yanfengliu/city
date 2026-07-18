@@ -1,6 +1,7 @@
 import { BuildingsView } from '../rendering/buildings-mesh';
 import { VoxelWallsHost } from '../rendering/voxel-walls-host';
 import { ZONE_COLORS } from '../rendering/constants';
+import { markOverlayKeepColor } from '../rendering/desaturation';
 import { CityScene } from '../rendering/scene';
 import { GhostView } from '../rendering/ghost';
 import { FieldOverlayView, TrafficOverlayView } from '../rendering/overlay';
@@ -11,6 +12,7 @@ import { RadiusIndicator } from '../rendering/radius-indicator';
 import { LevelUpFx } from '../rendering/levelup-fx';
 import { UtilityIconsFx } from '../rendering/utility-icons-fx';
 import { RoadsView } from '../rendering/roads-mesh';
+import { SignalLensesView } from '../rendering/signal-lenses';
 import { HighwayView } from '../rendering/highway-mesh';
 import { StructuresView } from '../rendering/structures-mesh';
 import { buildTerrainMesh } from '../rendering/terrain-mesh';
@@ -118,6 +120,7 @@ export class Game {
   private readonly tools: Tools;
   private readonly ghost: GhostView;
   private readonly roadsView: RoadsView;
+  private readonly signalLenses: SignalLensesView;
   private readonly zonesView: ZonesView;
   private readonly buildingsView: BuildingsView;
   private readonly voxelWalls: VoxelWallsHost | null;
@@ -234,6 +237,8 @@ export class Game {
 
     this.ghost = new GhostView();
     this.roadsView = new RoadsView(GRID_WIDTH, HIGHWAY_CELL_SET);
+    this.signalLenses = new SignalLensesView();
+    this.roadsView.onSignalLenses = (lenses) => this.signalLenses.setLenses(lenses);
     this.zonesView = new ZonesView(GRID_WIDTH);
     this.buildingsView = new BuildingsView();
     // The Voxel wall lane replaces City's wall meshes rather than adding to
@@ -255,10 +260,23 @@ export class Game {
     this.trafficOverlay = new TrafficOverlayView(GRID_WIDTH);
     this.networksView = new NetworksView(GRID_WIDTH);
     this.networkOverlay = new NetworkOverlayView(GRID_WIDTH, GRID_HEIGHT);
+    // Informational surfaces stay colored while overlay mode greys the world.
+    markOverlayKeepColor(
+      this.ghost.mesh,
+      this.fieldOverlay.mesh,
+      this.trafficOverlay.mesh,
+      this.networkOverlay.mesh,
+      this.focusMarker.group,
+      this.radiusIndicator.group,
+      this.inspectCoverage.group,
+      this.levelUpFx.group,
+      this.utilityIconsFx.group,
+    );
     this.scene.add(
       this.ghost.mesh,
       new HighwayView({ column: HIGHWAY_COLUMN, length: HIGHWAY_LENGTH }).group,
       this.roadsView.group,
+      this.signalLenses.group,
       this.zonesView.group,
       this.buildingsView.group,
       this.vehiclesView.mesh,
@@ -278,6 +296,8 @@ export class Game {
       this.flushDirtyViews();
       this.vehiclesView.updateFrame(now);
       this.pedestriansView.updateFrame(now);
+      // Fixture faces follow the same pure phase function the sim obeys.
+      this.signalLenses.updateTick(this.tick);
       this.networksView.updateFrame(now);
       this.levelUpFx.updateFrame(now);
       this.utilityIconsFx.updateFrame(now, this.scene.camera.quaternion);
@@ -464,9 +484,10 @@ export class Game {
         for (const pedestrian of message.list) this.pedestrianPurposes[pedestrian.purpose]++;
         break;
       case 'traffic': {
+        // Congestion feeds the traffic overlay and text state only — car
+        // paint is identity-based (vehicle-style.ts), never a load readout.
         const buckets = new Map(message.edges.map((edge) => [edge.id, edge.bucket]));
         this.congestionBuckets = buckets;
-        this.vehiclesView.setTraffic(buckets);
         this.trafficOverlay.setBuckets(buckets);
         break;
       }
@@ -534,6 +555,8 @@ export class Game {
     this.trafficOverlay.setActive(overlay === 'traffic');
     this.networksView.setWaterOverlayActive(overlay === 'water');
     this.refreshNetworkOverlay();
+    // Any overlay greys the world so the overlay is the only color on screen.
+    this.scene.setOverlayDesaturation(overlay !== 'none');
     this.refreshHud();
   }
 
@@ -947,6 +970,7 @@ export class Game {
       demand: { r: round2(this.demand.r), c: round2(this.demand.c), i: round2(this.demand.i) },
       activeTool: this.tools.activeTool,
       activeOverlay: this.activeOverlay,
+      overlayDesaturated: this.scene.getOverlayDesaturation(),
       // Includes the 10 seeded highway cells (they are real road cells);
       // subtract HIGHWAY_CELLS.length for a player-built-road baseline.
       roadCellCount: this.roadsView.cellCount,

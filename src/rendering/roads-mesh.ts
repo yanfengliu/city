@@ -26,6 +26,7 @@ import {
   addSidewalks,
   addTrafficSignals,
   type RoadNeighbors,
+  type SignalLensDescriptor,
 } from './road-streetscape';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
@@ -70,6 +71,10 @@ export class RoadsView {
   signalizedIntersectionCount = 0;
   /** One traffic-light assembly per connected approach at a signalized junction. */
   trafficSignalAssemblyCount = 0;
+  /** Live lens layout from the last rebuild (consumed by SignalLensesView). */
+  signalLensDescriptors: readonly SignalLensDescriptor[] = [];
+  /** Invoked after every rebuild with the fresh lens layout. */
+  onSignalLenses: ((lenses: readonly SignalLensDescriptor[]) => void) | null = null;
 
   constructor(gridWidth: number, highwayCells: ReadonlySet<number> = new Set()) {
     this.gridWidth = gridWidth;
@@ -149,6 +154,7 @@ export class RoadsView {
     const roadLanes = new GeometryBuilder();
     const sidewalks = new GeometryBuilder();
     const trafficSignals = new GeometryBuilder();
+    const lenses: SignalLensDescriptor[] = [];
     this.sidewalkPatchCount = 0;
     this.signalizedIntersectionCount = 0;
     this.trafficSignalAssemblyCount = 0;
@@ -182,6 +188,7 @@ export class RoadsView {
         index,
         x,
         z,
+        lenses,
       );
       if (signalAssemblies > 0) this.signalizedIntersectionCount++;
       this.trafficSignalAssemblyCount += signalAssemblies;
@@ -198,6 +205,8 @@ export class RoadsView {
       this.trafficSignalAssemblyCount > 0,
     );
     this.swapGeometry(this.bridgeMesh, this.buildBridges(bridges, roadCellSet), bridges.length > 0);
+    this.signalLensDescriptors = lenses;
+    this.onSignalLenses?.(lenses);
   }
 
   private neighbors(
