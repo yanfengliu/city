@@ -255,11 +255,12 @@ export class NetworksView {
     for (const entry of this.tintables) {
       const { material, utility, original, vertexColors } = entry;
       // A merged structure carries its palette in vertex colours, which a
-      // material colour can only multiply — never neutralise. So the greyed
-      // case switches vertex colours off and paints one flat grey; otherwise a
-      // "de-emphasised" pump would still read bright blue on the power map.
+      // material colour can only multiply — never neutralise. A "de-emphasised"
+      // pump would still read bright blue, and a saturated model tinted blue
+      // comes out muddy. So any tinted state paints one flat tone and leans on
+      // Lambert shading to keep the silhouette; StructuresView does the same.
       const greyed = mode !== null && utility !== mode;
-      const wantVertexColors = vertexColors && !greyed;
+      const wantVertexColors = vertexColors && mode === null;
       if (material.vertexColors !== wantVertexColors) {
         material.vertexColors = wantVertexColors;
         material.needsUpdate = true;

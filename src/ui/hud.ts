@@ -80,7 +80,8 @@ const SPEEDS: GameSpeed[] = [0, 1, 2, 4];
 const SPEED_LABELS: Record<GameSpeed, string> = { 0: '⏸', 1: '1×', 2: '2×', 4: '4×' };
 /** Coverage raises land value where it reaches; its absence never abandons a
  * building, so these overlays stay green/grey and never escalate to red. */
-const COVERAGE_TITLE = 'Green: covered (raises land value) · grey: not covered';
+const COVERAGE_TITLE =
+  'Blue: the service building · green: covered (raises land value) · grey: not covered';
 
 const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   { id: 'none', label: 'None' },
@@ -91,12 +92,12 @@ const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   {
     id: 'power',
     label: 'Power ⚡',
-    title: `Green: plants, lines & powered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · yellow: no power · red: near abandonment`,
+    title: `Blue: plants & lines · green: powered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · yellow: no power · red: near abandonment`,
   },
   {
     id: 'water',
     label: 'Water 💧',
-    title: `Green: pumps, pipes & watered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · yellow: no water · red: near abandonment`,
+    title: `Blue: pumps & pipes · green: watered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · yellow: no water · red: near abandonment`,
   },
   { id: 'fireCoverage', label: 'Fire 🚒', title: COVERAGE_TITLE },
   { id: 'policeCoverage', label: 'Police 🚓', title: COVERAGE_TITLE },

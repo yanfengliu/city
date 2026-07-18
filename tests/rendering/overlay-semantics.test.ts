@@ -17,13 +17,23 @@ function isGreenFamily(rgba: readonly number[]): boolean {
 }
 
 describe('overlay status palette', () => {
-  it('paints every provided-status shade from one green family', () => {
-    for (const status of ['source', 'provided', 'reach'] as const) {
+  it('paints what the system delivers from one green family', () => {
+    for (const status of ['provided', 'reach'] as const) {
       expect(isGreenFamily(OVERLAY_STATUS_RGBA[status])).toBe(true);
     }
   });
 
-  it('orders the provided shades source > provided > reach by opacity', () => {
+  it('paints the infrastructure itself a deep blue, distinct from what it serves', () => {
+    const source = OVERLAY_STATUS_RGBA.source;
+    const [r, g, b] = source;
+    // Blue dominant, and clearly blue rather than merely blue-ish green.
+    expect(b).toBeGreaterThan(g + 60);
+    expect(b).toBeGreaterThan(r + 60);
+    // Deep: darker than the green it feeds, so the source reads as the anchor.
+    expect(luminance(source)).toBeLessThan(luminance(OVERLAY_STATUS_RGBA.provided));
+  });
+
+  it('orders the delivery shades provided > reach by opacity, with source solid', () => {
     const alpha = (s: OverlayStatus) => OVERLAY_STATUS_RGBA[s][3];
     expect(alpha('source')).toBeGreaterThan(alpha('provided'));
     expect(alpha('provided')).toBeGreaterThan(alpha('reach'));

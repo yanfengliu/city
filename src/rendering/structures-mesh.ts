@@ -1,7 +1,8 @@
-import { BufferGeometry, Group, Mesh, MeshLambertMaterial } from 'three';
+import { BufferGeometry, Color, Group, Mesh, MeshLambertMaterial } from 'three';
 import { GeometryBuilder } from './geometry-builder';
 import { addServiceStructure } from './service-structures';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
+import { OVERLAY_STATUS_RGBA } from './overlay-semantics';
 import type { ServiceKind } from './constants';
 
 /** Plain-data service structure view (structurally mirrors the protocol StructureView). */
@@ -17,6 +18,9 @@ export interface StructureRenderView {
 
 const SERVICE_KINDS: readonly ServiceKind[] = ['fireStation', 'police', 'clinic', 'school'];
 
+/** Flat tone for services the active coverage overlay is not about. */
+const INACTIVE_SERVICE_GREY = new Color(0x9aa0a4);
+
 /**
  * Player-placed service buildings as one merged low-poly model mesh per
  * service kind (fire station, police station, clinic, school), built from the
@@ -28,16 +32,50 @@ const SERVICE_KINDS: readonly ServiceKind[] = ['fireStation', 'police', 'clinic'
  */
 export class StructuresView {
   readonly group = new Group();
-  private readonly material = new MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+  /** One material per kind so a coverage overlay can light just its own service. */
+  private readonly materials: Record<ServiceKind, MeshLambertMaterial>;
   private readonly meshes: Record<ServiceKind, Mesh>;
   private readonly views = new Map<number, StructureRenderView>();
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
 
   constructor() {
     this.group.name = 'structures';
+    this.materials = Object.fromEntries(
+      SERVICE_KINDS.map((kind) => [
+        kind,
+        new MeshLambertMaterial({ color: 0xffffff, vertexColors: true }),
+      ]),
+    ) as Record<ServiceKind, MeshLambertMaterial>;
     this.meshes = Object.fromEntries(
       SERVICE_KINDS.map((kind) => [kind, this.makeMesh(kind)]),
     ) as Record<ServiceKind, Mesh>;
+  }
+
+  /**
+   * Tints service buildings for the active coverage overlay: the service being
+   * inspected takes the deep infrastructure blue (it is the thing providing the
+   * coverage), every other service greys out, and `null` restores their own
+   * colours.
+   *
+   * These models carry their palette in vertex colours, which a material colour
+   * can only multiply — a fire station's red roof times blue is muddy maroon,
+   * not infrastructure. So any tinted state switches vertex colours off and
+   * paints one flat tone; Lambert shading still separates roof from wall, so
+   * the silhouette survives. NetworksView follows the same rule.
+   */
+  setOverlayTint(active: ServiceKind | 'grey' | null): void {
+    const [r, g, b] = OVERLAY_STATUS_RGBA.source;
+    for (const kind of SERVICE_KINDS) {
+      const material = this.materials[kind];
+      const wantVertexColors = active === null;
+      if (material.vertexColors !== wantVertexColors) {
+        material.vertexColors = wantVertexColors;
+        material.needsUpdate = true;
+      }
+      if (active === null) material.color.setHex(0xffffff);
+      else if (active === kind) material.color.setRGB(r / 255, g / 255, b / 255);
+      else material.color.copy(INACTIVE_SERVICE_GREY);
+    }
   }
 
   get count(): number {
@@ -71,7 +109,7 @@ export class StructuresView {
 
   /** Empty merged mesh for one service kind; geometry swaps in on rebuild. */
   private makeMesh(kind: ServiceKind): Mesh {
-    const mesh = new Mesh(new BufferGeometry(), this.material);
+    const mesh = new Mesh(new BufferGeometry(), this.materials[kind]);
     mesh.name = `${kind}-model`;
     mesh.visible = false;
     mesh.castShadow = true;

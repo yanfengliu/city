@@ -40,10 +40,11 @@ function utilityLegend(
 }
 
 /** Coverage overlays never alarm — absence costs land value, nothing more. */
-function coverageLegend(title: string): OverlayLegend {
+function coverageLegend(title: string, building: string): OverlayLegend {
   return {
     title,
     items: [
+      { color: SOURCE, label: building },
       { color: PROVIDED, label: 'Covered' },
       { color: NEUTRAL, label: 'Not covered' },
     ],
@@ -54,9 +55,9 @@ function coverageLegend(title: string): OverlayLegend {
  * Colour key shown while a map overlay is active. Swatches come from the
  * shared status palette (rendering/overlay-semantics.ts), so the key cannot
  * drift from what is actually drawn — the whole point of one colour language:
- * grey is "nothing to report", green "provided", yellow "under-served", red
- * "failing". Traffic keeps its own four-step congestion ramp, which already
- * runs green→red in the same spirit.
+ * grey is "nothing to report", blue the infrastructure itself, green what it
+ * delivers, yellow "under-served", red "failing". Traffic keeps its own
+ * four-step congestion ramp, which already runs green→red in the same spirit.
  */
 const OVERLAY_LEGENDS: Partial<Record<OverlayName, OverlayLegend>> = {
   pollution: {
@@ -94,10 +95,10 @@ const OVERLAY_LEGENDS: Partial<Record<OverlayName, OverlayLegend>> = {
   },
   power: utilityLegend('Power', 'Plants & lines', 'Powered', 'No power'),
   water: utilityLegend('Water', 'Pumps & pipes', 'Watered', 'No water'),
-  fireCoverage: coverageLegend('Fire cover'),
-  policeCoverage: coverageLegend('Police cover'),
-  healthCoverage: coverageLegend('Health cover'),
-  educationCoverage: coverageLegend('Education'),
+  fireCoverage: coverageLegend('Fire cover', 'Fire station'),
+  policeCoverage: coverageLegend('Police cover', 'Police station'),
+  healthCoverage: coverageLegend('Health cover', 'Clinic'),
+  educationCoverage: coverageLegend('Education', 'School'),
 };
 
 /**

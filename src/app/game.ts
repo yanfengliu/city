@@ -102,6 +102,14 @@ const SERVICE_LABELS: Record<ServiceType, string> = {
   clinic: 'Clinic',
   school: 'School',
 };
+/** Coverage overlay → the service that provides it (blank for every other overlay). */
+const COVERAGE_OVERLAY_SERVICE: Partial<Record<OverlayName, ServiceType>> = {
+  fireCoverage: 'fireStation',
+  policeCoverage: 'police',
+  healthCoverage: 'clinic',
+  educationCoverage: 'school',
+};
+
 /** Overlays backed by a subscribable sim layer (fields and service coverage). */
 const FIELD_OVERLAYS: readonly OverlayName[] = [
   'pollution',
@@ -297,8 +305,10 @@ export class Game {
       // they carry the active system's status colour, and grey their own
       // "nothing to report" cases, so the scene shader must not re-grey them.
       this.buildingsView.group,
-      // Same contract for utility hardware (NetworksView.setOverlayTint).
+      // Same contract for utility hardware (NetworksView.setOverlayTint) and
+      // service buildings (StructuresView.setOverlayTint).
       this.networksView.group,
+      this.structuresView.group,
     );
     this.scene.add(
       this.ghost.mesh,
@@ -612,6 +622,12 @@ export class Game {
     } else {
       this.networksView.setOverlayTint(overlay === 'none' ? null : 'grey');
     }
+    // Same rule for service buildings: on a coverage overlay the service
+    // providing that coverage is the infrastructure, so it takes the blue.
+    const coveredService = COVERAGE_OVERLAY_SERVICE[overlay];
+    this.structuresView.setOverlayTint(
+      coveredService ?? (overlay === 'none' ? null : 'grey'),
+    );
     this.refreshNetworkOverlay();
     this.refreshBuildingOverlayStatuses();
     // Any overlay greys the world so the overlay is the only color on screen.
