@@ -1,3 +1,4 @@
+import { overlayStatusCss } from '../rendering/overlay-semantics';
 import type { OverlayName } from './hud';
 import { HUD_COMPACT_PANEL_CHROME_CSS } from './hud-style';
 
@@ -12,16 +13,76 @@ interface OverlayLegend {
   items?: OverlayLegendItem[];
 }
 
+const NEUTRAL = overlayStatusCss('neutral');
+const REACH = overlayStatusCss('reach');
+const PROVIDED = overlayStatusCss('provided');
+const SOURCE = overlayStatusCss('source');
+const WARN = overlayStatusCss('warn');
+const SEVERE = overlayStatusCss('severe');
+
+/** Every utility overlay reads the same way, so its key is built the same way. */
+function utilityLegend(
+  title: string,
+  network: string,
+  served: string,
+  missing: string,
+): OverlayLegend {
+  return {
+    title,
+    items: [
+      { color: SOURCE, label: network },
+      { color: PROVIDED, label: served },
+      { color: REACH, label: 'In reach' },
+      { color: WARN, label: missing },
+      { color: SEVERE, label: 'Failing' },
+    ],
+  };
+}
+
+/** Coverage overlays never alarm — absence costs land value, nothing more. */
+function coverageLegend(title: string): OverlayLegend {
+  return {
+    title,
+    items: [
+      { color: PROVIDED, label: 'Covered' },
+      { color: NEUTRAL, label: 'Not covered' },
+    ],
+  };
+}
+
 /**
- * Colour key shown while a map overlay is active, so the heatmap has a scale.
- * Colours mirror the canonical ramps in rendering/constants.ts (FIELD_RAMPS,
- * TRAFFIC_BUCKET_COLORS) and network-overlay.ts — duplicated here as hex strings
- * so the UI layer needn't import from rendering. Keep in sync if those change.
+ * Colour key shown while a map overlay is active. Swatches come from the
+ * shared status palette (rendering/overlay-semantics.ts), so the key cannot
+ * drift from what is actually drawn — the whole point of one colour language:
+ * grey is "nothing to report", green "provided", yellow "under-served", red
+ * "failing". Traffic keeps its own four-step congestion ramp, which already
+ * runs green→red in the same spirit.
  */
 const OVERLAY_LEGENDS: Partial<Record<OverlayName, OverlayLegend>> = {
-  pollution: { title: 'Pollution', gradient: ['#46a34a', '#5f4726'], lowLabel: 'Clean', highLabel: 'Heavy' },
-  noise: { title: 'Noise', gradient: ['#46a34a', '#7a3fae'], lowLabel: 'Quiet', highLabel: 'Loud' },
-  landValue: { title: 'Land value', gradient: ['#d9483f', '#3fae4a'], lowLabel: 'Low', highLabel: 'High' },
+  pollution: {
+    title: 'Pollution',
+    items: [
+      { color: NEUTRAL, label: 'Clean' },
+      { color: WARN, label: 'Polluted' },
+      { color: SEVERE, label: 'Choking' },
+    ],
+  },
+  noise: {
+    title: 'Noise',
+    items: [
+      { color: NEUTRAL, label: 'Quiet' },
+      { color: WARN, label: 'Noisy' },
+      { color: SEVERE, label: 'Deafening' },
+    ],
+  },
+  landValue: {
+    title: 'Land value',
+    items: [
+      { color: PROVIDED, label: 'High' },
+      { color: WARN, label: 'Fair' },
+      { color: SEVERE, label: 'Low' },
+    ],
+  },
   traffic: {
     title: 'Traffic',
     items: [
@@ -31,22 +92,12 @@ const OVERLAY_LEGENDS: Partial<Record<OverlayName, OverlayLegend>> = {
       { color: '#e0453a', label: 'Jammed' },
     ],
   },
-  power: {
-    title: 'Power',
-    items: [
-      { color: '#ffdc50', label: 'Network' },
-      { color: '#78d278', label: 'Powered' },
-      { color: '#eb3c32', label: 'No power' },
-    ],
-  },
-  water: {
-    title: 'Water',
-    items: [
-      { color: '#5ab4ff', label: 'Pipes' },
-      { color: '#78c8dc', label: 'Watered' },
-      { color: '#eb3c32', label: 'No water' },
-    ],
-  },
+  power: utilityLegend('Power', 'Plants & lines', 'Powered', 'No power'),
+  water: utilityLegend('Water', 'Pumps & pipes', 'Watered', 'No water'),
+  fireCoverage: coverageLegend('Fire cover'),
+  policeCoverage: coverageLegend('Police cover'),
+  healthCoverage: coverageLegend('Health cover'),
+  educationCoverage: coverageLegend('Education'),
 };
 
 /**

@@ -2,7 +2,7 @@ import type {
   BudgetReport,
   CityCommands,
   DemandState,
-  FieldName,
+  OverlayFieldName,
   PedestrianPurpose,
   PowerPlantKind,
   ServiceType,
@@ -38,7 +38,7 @@ export type ClientToWorker =
   /** Rebuilds the sim from a saved snapshot, then re-runs the full boot sync. */
   | { type: 'loadSnapshot'; snapshot: unknown; meta: SaveMeta }
   /** Replaces the set of field overlays the client wants pushed on recompute. */
-  | { type: 'setFieldSubscriptions'; fields: FieldName[] }
+  | { type: 'setFieldSubscriptions'; fields: OverlayFieldName[] }
   /** Playtest harness (see docs/harness.md): record a finding as a marker at
    * the current tick. */
   | { type: 'annotate'; finding: CityImprovementFindingInput }
@@ -119,6 +119,12 @@ export interface BuildingView {
   /** Utility connectivity (phase 5) — false drives the ⚡/💧 problem icons. */
   powered: boolean;
   watered: boolean;
+  /**
+   * Progress toward utility abandonment in 0-1 (`badUtilityEvals` over its
+   * threshold). Lets the utility overlays separate "just lost power" from
+   * "about to be abandoned" without shipping sim constants to the renderer.
+   */
+  utilityDistress: number;
 }
 
 export interface StructureView {
@@ -201,7 +207,7 @@ export type WorkerToClient =
    */
   | {
       type: 'field';
-      name: FieldName;
+      name: OverlayFieldName;
       blockSize: number;
       width: number;
       height: number;

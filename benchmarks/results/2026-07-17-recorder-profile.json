@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-07-18T17:10:39.043Z",
+  "capturedAt": "2026-07-18T17:33:10.723Z",
   "profileTicks": 3000,
   "runOrder": [
     "recorded",
@@ -11,7 +11,7 @@
   "scope": "Controlled headless sim-loop proxy: one protocol-like no-op diff listener in both modes; SessionRecorder + MemorySink only in recorded mode.",
   "sourceRef": null,
   "source": {
-    "treeSha256": "4a8fe2d7744bdc9a2a45169abafc84b8a42e5cb8c6ffb5429ab41d2a05acaa78",
+    "treeSha256": "52a4894c8fb8724c653e3e7478a74ecd1be1be92e095796b78d68e5082974903",
     "files": [
       {
         "path": "node_modules/civ-engine/dist/ai-contract.js",
@@ -605,8 +605,8 @@
       },
       {
         "path": "src/sim/services.ts",
-        "bytes": 7507,
-        "sha256": "1af3fd3315f2ef9f99eb50f64089a82d35a39a7ef3a863f94ec00fe249dbf932"
+        "bytes": 7881,
+        "sha256": "89fc85726c756c0754c2aa2b933817ea153400a9c055a8abf937963f0cff9cdb"
       },
       {
         "path": "src/sim/summary.ts",
@@ -650,8 +650,8 @@
       },
       {
         "path": "src/sim/types.ts",
-        "bytes": 8481,
-        "sha256": "db6778ab3bf2db9bd500b3bcab11505b8b4f16761c23c5e7cf7a3c0c47fea04d"
+        "bytes": 8872,
+        "sha256": "3aa9a11493d1a4193379a2c1e4987c65bc265f8d2efe51e49a79e74efac41b82"
       },
       {
         "path": "src/sim/utilities.ts",
@@ -679,27 +679,27 @@
   "aggregate": {
     "recorded": {
       "runs": 2,
-      "meanWallMs": 6653.7402,
-      "meanTicksPerSecond": 450.9411518435567,
-      "meanBundleJsonBytes": 102668840.5
+      "meanWallMs": 6552.2059500000005,
+      "meanTicksPerSecond": 457.8998670799134,
+      "meanBundleJsonBytes": 102668345.5
     },
     "lean": {
       "runs": 2,
-      "meanWallMs": 2817.5489000000002,
-      "meanTicksPerSecond": 1064.7761398231507,
+      "meanWallMs": 2838.625,
+      "meanTicksPerSecond": 1056.8743400157575,
       "meanBundleJsonBytes": 0
     },
-    "wallMsReduction": 3836.1913,
-    "wallMsReductionPct": 57.65466015640346,
-    "throughputGain": 2.3612308068804273
+    "wallMsReduction": 3713.5809500000005,
+    "wallMsReductionPct": 56.6768043974564,
+    "throughputGain": 2.3080905149756465
   },
   "runs": [
     {
       "label": "recorded",
       "sequence": 1,
-      "wallMs": 6572.6843,
-      "ticksPerSecond": 456.4345194550117,
-      "bundleJsonBytes": 102666074,
+      "wallMs": 6491.891,
+      "ticksPerSecond": 462.1149677343628,
+      "bundleJsonBytes": 102665597,
       "final": {
         "tick": 3002,
         "buildingCount": 560,
@@ -712,8 +712,8 @@
     {
       "label": "lean",
       "sequence": 2,
-      "wallMs": 2805.0708000000004,
-      "ticksPerSecond": 1069.4917219201739,
+      "wallMs": 2824.9208,
+      "ticksPerSecond": 1061.9766755938786,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -727,8 +727,8 @@
     {
       "label": "lean",
       "sequence": 3,
-      "wallMs": 2830.027,
-      "ticksPerSecond": 1060.0605577261276,
+      "wallMs": 2852.3292,
+      "ticksPerSecond": 1051.7720044376365,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -742,9 +742,9 @@
     {
       "label": "recorded",
       "sequence": 4,
-      "wallMs": 6734.7961,
-      "ticksPerSecond": 445.44778423210175,
-      "bundleJsonBytes": 102671607,
+      "wallMs": 6612.520900000001,
+      "ticksPerSecond": 453.68476642546403,
+      "bundleJsonBytes": 102671094,
       "final": {
         "tick": 3002,
         "buildingCount": 560,

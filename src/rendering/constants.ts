@@ -353,17 +353,19 @@ export const TRAFFIC_BUCKET_COLORS: readonly [number, number, number, number] = 
 
 // Field overlays (translucent DataTexture plane over the terrain).
 export const FIELD_OVERLAY_Y = 0.05;
-export const FIELD_OVERLAY_OPACITY = 0.45;
 /** Field values are clamped to [0, FIELD_OVERLAY_VALUE_MAX] by the sim. */
 export const FIELD_OVERLAY_VALUE_MAX = 100;
-/** Field kind used across rendering (plain literal type; mirrors protocol FieldName). */
-export type FieldKind = 'pollution' | 'noise' | 'landValue';
-/** Two-stop color ramps, lerped by value/FIELD_OVERLAY_VALUE_MAX. */
-export const FIELD_RAMPS: Record<FieldKind, { low: number; high: number }> = {
-  pollution: { low: 0x46a34a, high: 0x5f4726 },
-  noise: { low: 0x46a34a, high: 0x7a3fae },
-  landValue: { low: 0xd9483f, high: 0x3fae4a },
-};
+/** Field kind used across rendering (plain literal type; mirrors protocol OverlayFieldName).
+ * Colours come from the shared status palette in overlay-semantics.ts — there
+ * is deliberately no per-field ramp, so every overlay speaks one language. */
+export type FieldKind =
+  | 'pollution'
+  | 'noise'
+  | 'landValue'
+  | 'fireCoverage'
+  | 'policeCoverage'
+  | 'healthCoverage'
+  | 'educationCoverage';
 
 // Service structures (player-placed 2x2 buildings). Model dimensions and
 // palette live in structure-style.ts alongside the service-structures builders.

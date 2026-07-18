@@ -10,14 +10,17 @@ import {
   SRGBColorSpace,
 } from 'three';
 import {
-  FIELD_OVERLAY_OPACITY,
   FIELD_OVERLAY_VALUE_MAX,
   FIELD_OVERLAY_Y,
-  FIELD_RAMPS,
   TRAFFIC_BUCKET_COLORS,
   TRAFFIC_OVERLAY_Y,
   type FieldKind,
 } from './constants';
+import {
+  OVERLAY_STATUS_RGBA,
+  fieldStatus,
+  fieldStatusIntensity,
+} from './overlay-semantics';
 import { buildDrapedPlaneGeometry, writeSurfaceQuad } from './surface-geometry';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
@@ -49,9 +52,11 @@ export class FieldOverlayView {
     private readonly gridWidth: number,
     private readonly gridHeight: number,
   ) {
+    // Per-texel alpha carries the status weight (overlay-semantics.ts), so the
+    // material stays at full opacity and lets the shared palette decide what
+    // shows and how strongly.
     this.material = new MeshBasicMaterial({
       transparent: true,
-      opacity: FIELD_OVERLAY_OPACITY,
       depthWrite: false,
       // Overlays are information, not world: distance haze must not wash them.
       fog: false,
@@ -82,17 +87,19 @@ export class FieldOverlayView {
     old.dispose();
   }
 
-  /** Fills the texture from a field snapshot and shows the plane. */
+  /**
+   * Fills the texture from a field snapshot and shows the plane. Every cell is
+   * graded through the shared status language (overlay-semantics.ts) rather
+   * than a per-field colour ramp, so grey/green/yellow/red mean the same thing
+   * here as they do on the utility overlays. Alpha ramps within a status band
+   * so intensity still reads without inventing a second colour vocabulary.
+   */
   setField(data: FieldOverlayData): void {
     const texture = this.ensureTexture(data.width, data.height);
     const values = new Float32Array(data.width * data.height).fill(data.defaultValue);
     for (const [index, value] of data.cells) {
       if (index >= 0 && index < values.length) values[index] = value;
     }
-    const ramp = FIELD_RAMPS[data.name];
-    const low = new Color(ramp.low);
-    const high = new Color(ramp.high);
-    const texel = new Color();
     const pixels = texture.image.data as Uint8ClampedArray;
     for (let y = 0; y < data.height; y++) {
       // Layer row 0 is world z=0, which sits at texture v=1 — flip rows.
@@ -100,12 +107,12 @@ export class FieldOverlayView {
       for (let x = 0; x < data.width; x++) {
         const value = values[y * data.width + x];
         const mix = Math.min(Math.max(value / FIELD_OVERLAY_VALUE_MAX, 0), 1);
-        texel.copy(low).lerp(high, mix);
+        const [r, g, b, a] = OVERLAY_STATUS_RGBA[fieldStatus(data.name, mix)];
         const offset = (destRow * data.width + x) * 4;
-        pixels[offset] = Math.round(texel.r * 255);
-        pixels[offset + 1] = Math.round(texel.g * 255);
-        pixels[offset + 2] = Math.round(texel.b * 255);
-        pixels[offset + 3] = 255;
+        pixels[offset] = r;
+        pixels[offset + 1] = g;
+        pixels[offset + 2] = b;
+        pixels[offset + 3] = Math.round(a * fieldStatusIntensity(data.name, mix));
       }
     }
     texture.needsUpdate = true;

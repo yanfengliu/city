@@ -8,24 +8,22 @@ import {
   SRGBColorSpace,
 } from 'three';
 import { NETWORK_OVERLAY_Y } from './constants';
+import { OVERLAY_STATUS_RGBA, type OverlayStatus } from './overlay-semantics';
 import { buildDrapedPlaneGeometry } from './surface-geometry';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 export interface NetworkOverlayData {
-  /** Infrastructure cells (plants+lines / pumps+pipes) — drawn brightest. */
+  /** Infrastructure cells (plants+lines / pumps+pipes) — the brightest green. */
   infrastructure: ReadonlySet<number>;
-  /** Cells within connection reach of the network — the "you can build here" halo. */
+  /** Cells within connection reach of the network — the faintest green halo. */
   reach: ReadonlySet<number>;
-  /** Footprint cells of supplied buildings. */
+  /** Footprint cells of supplied buildings — mid green. */
   supplied: ReadonlySet<number>;
-  /** Footprint cells of live buildings LACKING the utility — drawn red. */
-  problems: ReadonlySet<number>;
+  /** Live buildings missing the utility but still coping — yellow. */
+  warn: ReadonlySet<number>;
+  /** Buildings near abandonment over it, or already abandoned — red. */
+  severe: ReadonlySet<number>;
 }
-
-const COLOR_BY_MODE = {
-  power: { infra: [255, 220, 80], supplied: [120, 210, 120] },
-  water: { infra: [90, 180, 255], supplied: [120, 200, 220] },
-} as const;
 
 /**
  * Client-computed utility overlay: shows the conduction network, its
@@ -78,20 +76,28 @@ export class NetworkOverlayView {
     old.dispose();
   }
 
-  update(mode: 'power' | 'water', overlay: NetworkOverlayData): void {
-    const colors = COLOR_BY_MODE[mode];
+  /**
+   * Paints least-to-most urgent, so an escalation always wins the cell: the
+   * reach halo yields to a served building, which yields to the infrastructure
+   * itself, which yields to a warning, which yields to a failure.
+   */
+  update(overlay: NetworkOverlayData): void {
     this.data.fill(0);
-    const paint = (cell: number, r: number, g: number, b: number, a: number) => {
-      const o = cell * 4;
-      this.data[o] = r;
-      this.data[o + 1] = g;
-      this.data[o + 2] = b;
-      this.data[o + 3] = a;
+    const paint = (cells: Iterable<number>, status: OverlayStatus) => {
+      const [r, g, b, a] = OVERLAY_STATUS_RGBA[status];
+      for (const cell of cells) {
+        const o = cell * 4;
+        this.data[o] = r;
+        this.data[o + 1] = g;
+        this.data[o + 2] = b;
+        this.data[o + 3] = a;
+      }
     };
-    for (const cell of overlay.reach) paint(cell, colors.infra[0], colors.infra[1], colors.infra[2], 45);
-    for (const cell of overlay.supplied) paint(cell, colors.supplied[0], colors.supplied[1], colors.supplied[2], 110);
-    for (const cell of overlay.infrastructure) paint(cell, colors.infra[0], colors.infra[1], colors.infra[2], 200);
-    for (const cell of overlay.problems) paint(cell, 235, 60, 50, 220);
+    paint(overlay.reach, 'reach');
+    paint(overlay.supplied, 'provided');
+    paint(overlay.infrastructure, 'source');
+    paint(overlay.warn, 'warn');
+    paint(overlay.severe, 'severe');
     this.texture.needsUpdate = true;
     this.mesh.visible = true;
   }

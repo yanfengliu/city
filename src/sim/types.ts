@@ -11,8 +11,26 @@ export type ServiceType = 'fireStation' | 'police' | 'clinic' | 'school';
 
 export type PowerPlantKind = 'coal' | 'wind';
 
-/** Overlay-subscribable field layers (coverage is separate — rebuilt on structure changes). */
+/** Tick-recomputed field layers (coverage is rebuilt on structure changes instead). */
 export type FieldName = 'pollution' | 'noise' | 'landValue';
+
+/** Per-service coverage layers, subscribable as overlays like any other field. */
+export type CoverageFieldName =
+  | 'fireCoverage'
+  | 'policeCoverage'
+  | 'healthCoverage'
+  | 'educationCoverage';
+
+/** Everything the overlay layer can subscribe to. */
+export type OverlayFieldName = FieldName | CoverageFieldName;
+
+/** Coverage overlay name → the service whose layer backs it. */
+export const COVERAGE_FIELD_SERVICE: Record<CoverageFieldName, ServiceType> = {
+  fireCoverage: 'fireStation',
+  policeCoverage: 'police',
+  healthCoverage: 'clinic',
+  educationCoverage: 'school',
+};
 
 /** Both road commands take an L-path between two cells (dominant axis first). */
 export interface RoadEndpoints {
@@ -231,7 +249,7 @@ export type CityEvents = {
   trafficChanged: Record<string, never>;
   structuresChanged: Record<string, never>;
   /** A field layer's recompute produced new values (drives overlay pushes). */
-  fieldChanged: { field: FieldName };
+  fieldChanged: { field: OverlayFieldName };
   /** Any plant/turbine/line/pump/pipe was placed or bulldozed. */
   utilitiesChanged: Record<string, never>;
   /** One budget interval settled (income and expenses already applied). */

@@ -14,7 +14,12 @@ import { coverageMirrorState } from './fields';
 import { cellIndex, inBounds } from './grid';
 import type { Layer } from 'civ-engine';
 import type { CitySim } from './city';
-import type { CityWorld, PlaceServiceCommand, ServiceType } from './types';
+import type {
+  CityWorld,
+  CoverageFieldName,
+  PlaceServiceCommand,
+  ServiceType,
+} from './types';
 
 /** Local copy of city.ts getTreasury — avoids a runtime import cycle city ⇄ services. */
 function treasury(w: CityWorld): number {
@@ -36,7 +41,20 @@ function markCoverage(layer: Layer<number>, x: number, y: number, radius: number
   }
 }
 
-/** Recomputes one service's coverage layer from its structure entities. */
+/** Service → the overlay field name its coverage layer is published under. */
+const COVERAGE_FIELD_OF: Record<ServiceType, CoverageFieldName> = {
+  fireStation: 'fireCoverage',
+  police: 'policeCoverage',
+  clinic: 'healthCoverage',
+  school: 'educationCoverage',
+};
+
+/**
+ * Recomputes one service's coverage layer from its structure entities, then
+ * announces it so a subscribed coverage overlay repaints. Coverage is rebuilt
+ * on structure changes rather than on a tick cadence, so this is the only
+ * place the change can be observed.
+ */
 export function rebuildCoverage(sim: CitySim, service: ServiceType): void {
   const layer = sim.fields.coverage[service];
   layer.fill(0);
@@ -46,6 +64,7 @@ export function rebuildCoverage(sim: CitySim, service: ServiceType): void {
     if (!structure || !position || structure.type !== service) continue;
     markCoverage(layer, position.x, position.y, SERVICE_RADIUS[service]);
   }
+  sim.world.emit('fieldChanged', { field: COVERAGE_FIELD_OF[service] });
 }
 
 /** Persists all four coverage layers — written only when structures change. */

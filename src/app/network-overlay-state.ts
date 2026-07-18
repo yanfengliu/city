@@ -1,5 +1,6 @@
 import type { BuildingView, StructureView, WorkerToClient } from '../protocol/messages';
 import type { NetworkOverlayData } from '../rendering/network-overlay';
+import { utilityStatus } from '../rendering/overlay-semantics';
 import { cellIndex } from '../sim/grid';
 
 interface NetworkOverlayStateOptions {
@@ -39,14 +40,20 @@ export function computeNetworkOverlayState(
 ): NetworkOverlayData {
   const { mode, infrastructure, gridWidth, gridHeight, radius } = options;
   const supplied = new Set<number>();
-  const problems = new Set<number>();
+  const warn = new Set<number>();
+  const severe = new Set<number>();
   const conductorFootprints: number[][] = [];
 
   for (const view of options.buildings) {
     if (view.abandoned) continue;
     const cells = footprintCells(view, gridWidth);
-    const ok = mode === 'power' ? view.powered : view.watered;
-    for (const cell of cells) (ok ? supplied : problems).add(cell);
+    // One shared grading function, so overlay colour and the legend can never
+    // drift from each other (rendering/overlay-semantics.ts).
+    const bucket =
+      { provided: supplied, warn, severe }[
+        utilityStatus(mode, view) as 'provided' | 'warn' | 'severe'
+      ] ?? supplied;
+    for (const cell of cells) bucket.add(cell);
     conductorFootprints.push(cells);
   }
   for (const view of options.structures) {
@@ -83,7 +90,7 @@ export function computeNetworkOverlayState(
     }
   }
 
-  return { infrastructure, reach, supplied, problems };
+  return { infrastructure, reach, supplied, warn, severe };
 }
 
 /** Worker messages whose payload changes a client-computed utility overlay. */

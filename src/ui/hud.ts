@@ -25,7 +25,11 @@ export type OverlayName =
   | 'landValue'
   | 'traffic'
   | 'power'
-  | 'water';
+  | 'water'
+  | 'fireCoverage'
+  | 'policeCoverage'
+  | 'healthCoverage'
+  | 'educationCoverage';
 
 export interface HudState<TTool extends string> {
   /** In-game day number (player-facing time; raw tick/fps stay in the automation state only). */
@@ -74,6 +78,10 @@ export interface HudCallbacks<TTool extends string> {
 
 const SPEEDS: GameSpeed[] = [0, 1, 2, 4];
 const SPEED_LABELS: Record<GameSpeed, string> = { 0: '⏸', 1: '1×', 2: '2×', 4: '4×' };
+/** Coverage raises land value where it reaches; its absence never abandons a
+ * building, so these overlays stay green/grey and never escalate to red. */
+const COVERAGE_TITLE = 'Green: covered (raises land value) · grey: not covered';
+
 const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   { id: 'none', label: 'None' },
   { id: 'pollution', label: 'Pollution' },
@@ -83,13 +91,17 @@ const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   {
     id: 'power',
     label: 'Power ⚡',
-    title: `Yellow: plants & lines · green: powered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · red: no power`,
+    title: `Green: plants, lines & powered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · yellow: no power · red: near abandonment`,
   },
   {
     id: 'water',
     label: 'Water 💧',
-    title: `Blue: pumps & pipes · teal: watered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · red: no water`,
+    title: `Green: pumps, pipes & watered buildings · faint halo: connection reach (${UTILITY_BRIDGE_RADIUS} cells) · yellow: no water · red: near abandonment`,
   },
+  { id: 'fireCoverage', label: 'Fire 🚒', title: COVERAGE_TITLE },
+  { id: 'policeCoverage', label: 'Police 🚓', title: COVERAGE_TITLE },
+  { id: 'healthCoverage', label: 'Health 🏥', title: COVERAGE_TITLE },
+  { id: 'educationCoverage', label: 'Education 🎓', title: COVERAGE_TITLE },
 ];
 const TOAST_DURATION_MS = 4000;
 const MAX_TOASTS = 4;

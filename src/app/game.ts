@@ -70,7 +70,7 @@ import type {
   BudgetReport,
   CityCommands,
   DemandState,
-  FieldName,
+  OverlayFieldName,
   ServiceType,
   TaxRates,
   ZoneType,
@@ -97,7 +97,16 @@ const SERVICE_LABELS: Record<ServiceType, string> = {
   clinic: 'Clinic',
   school: 'School',
 };
-const FIELD_OVERLAYS: readonly OverlayName[] = ['pollution', 'noise', 'landValue'];
+/** Overlays backed by a subscribable sim layer (fields and service coverage). */
+const FIELD_OVERLAYS: readonly OverlayName[] = [
+  'pollution',
+  'noise',
+  'landValue',
+  'fireCoverage',
+  'policeCoverage',
+  'healthCoverage',
+  'educationCoverage',
+];
 
 /** A clicked map object: a grown RCI building or a player-placed service structure. */
 type Inspected = { kind: 'building' | 'structure'; id: number };
@@ -549,7 +558,7 @@ export class Game {
   private setOverlay(overlay: OverlayName): void {
     if (overlay === this.activeOverlay) return;
     this.activeOverlay = overlay;
-    const field = FIELD_OVERLAYS.includes(overlay) ? (overlay as FieldName) : null;
+    const field = FIELD_OVERLAYS.includes(overlay) ? (overlay as OverlayFieldName) : null;
     this.send({ type: 'setFieldSubscriptions', fields: field ? [field] : [] });
     this.fieldOverlay.hide();
     this.trafficOverlay.setActive(overlay === 'traffic');
@@ -573,7 +582,6 @@ export class Game {
         : [...this.waterInfraCells],
     );
     this.networkOverlay.update(
-      mode,
       computeNetworkOverlayState({
         mode,
         infrastructure,

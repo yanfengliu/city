@@ -29,6 +29,7 @@ function building(
     jobsFilled: 0,
     powered: false,
     watered: false,
+    utilityDistress: 0,
     ...options,
   };
 }
@@ -57,13 +58,13 @@ describe('network overlay state', () => {
     // Infrastructure reaches the brownout at x=10; that live growable still
     // conducts to the service at x=15, whose 2-wide footprint reaches x=21.
     expect(state.reach.has(cellIndex(21, Y, WIDTH))).toBe(true);
-    expect(state.problems.has(cellIndex(10, Y, WIDTH))).toBe(true);
-    expect(state.problems.has(cellIndex(30, Y, WIDTH))).toBe(true);
+    expect(state.warn.has(cellIndex(10, Y, WIDTH))).toBe(true);
+    expect(state.warn.has(cellIndex(30, Y, WIDTH))).toBe(true);
 
     // The abandoned x=21 building and disconnected island do not extend reach.
     expect(state.reach.has(cellIndex(26, Y, WIDTH))).toBe(false);
     expect(state.reach.has(cellIndex(35, Y, WIDTH))).toBe(false);
-    expect(state.problems.has(cellIndex(21, Y, WIDTH))).toBe(false);
+    expect(state.warn.has(cellIndex(21, Y, WIDTH))).toBe(false);
   });
 
   it('uses the selected utility flag for supplied/problem coloring', () => {
@@ -80,7 +81,33 @@ describe('network overlay state', () => {
     });
 
     expect(water.supplied.size).toBe(0);
-    expect(water.problems.has(cellIndex(5, Y, WIDTH))).toBe(true);
+    expect(water.warn.has(cellIndex(5, Y, WIDTH))).toBe(true);
+  });
+
+  it('escalates a long-starved building from warn to severe', () => {
+    const infrastructure = new Set([cellIndex(5, Y, WIDTH)]);
+    const grade = (utilityDistress: number, abandoned = false) =>
+      computeNetworkOverlayState({
+        mode: 'power',
+        infrastructure,
+        buildings: [building(1, 5, { powered: false, utilityDistress, abandoned })],
+        structures: [],
+        gridWidth: WIDTH,
+        gridHeight: HEIGHT,
+        radius: 5,
+      });
+    const cell = cellIndex(5, Y, WIDTH);
+
+    // Freshly unpowered: a warning, not yet a crisis.
+    expect(grade(0.1).warn.has(cell)).toBe(true);
+    expect(grade(0.1).severe.has(cell)).toBe(false);
+
+    // Starved most of the way to abandonment: red.
+    expect(grade(0.8).severe.has(cell)).toBe(true);
+    expect(grade(0.8).warn.has(cell)).toBe(false);
+
+    // Already abandoned buildings never extend reach, so they are not graded.
+    expect(grade(1, true).warn.has(cell)).toBe(false);
   });
 
   it('refreshes for every worker payload that changes the overlay closure', () => {
@@ -104,7 +131,7 @@ describe('network overlay state', () => {
     });
 
     expect(state.reach.has(cellIndex(35, Y, WIDTH))).toBe(true);
-    expect(state.problems.has(cellIndex(35, Y, WIDTH))).toBe(true);
+    expect(state.warn.has(cellIndex(35, Y, WIDTH))).toBe(true);
     expect(state.supplied.size).toBe(0);
   });
 });

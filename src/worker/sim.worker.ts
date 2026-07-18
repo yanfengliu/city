@@ -8,7 +8,7 @@ import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
 import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
 import { utilityTotals } from '../sim/utilities';
-import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
+import { DEFAULT_TAX_RATE, UTILITY_ABANDON_EVALS } from '../sim/constants/zoning';
 import { cellIndex } from '../sim/grid';
 import { projectRenderComponentRemovals } from './diff-projection';
 import { MovingAgentMessageSync } from './pedestrian-projection';
@@ -19,13 +19,16 @@ import type {
   StructureView,
   WorkerToClient,
 } from '../protocol/messages';
+import { COVERAGE_FIELD_SERVICE } from '../sim/types';
 import type {
   BudgetReport,
   BuildingComponent,
   CityCommands,
   CityEvents,
+  CoverageFieldName,
   DemandState,
   FieldName,
+  OverlayFieldName,
   StructureComponent,
   TaxRates,
 } from '../sim/types';
@@ -102,8 +105,8 @@ let trafficDirty = false;
 let networksDirty = true;
 let lastBudget: BudgetReport = { income: 0, expenses: 0, retailIncome: 0 };
 const movingAgentMessages = new MovingAgentMessageSync();
-const subscribedFields = new Set<FieldName>();
-const dirtyFields = new Set<FieldName>();
+const subscribedFields = new Set<OverlayFieldName>();
+const dirtyFields = new Set<OverlayFieldName>();
 const knownStructures = new Set<number>();
 const EMPLOYED_STAT_INTERVAL = 8;
 let cachedEmployed = -1;
@@ -131,8 +134,13 @@ function attachWorldListeners(): void {
   world.onDiff(onTickDiff);
 }
 
-function postField(name: FieldName): void {
-  const layer = sim.fields[name];
+function postField(name: OverlayFieldName): void {
+  // Coverage overlays read the per-service layers; every other field is a
+  // tick-recomputed layer held directly on sim.fields.
+  const layer =
+    name in COVERAGE_FIELD_SERVICE
+      ? sim.fields.coverage[COVERAGE_FIELD_SERVICE[name as CoverageFieldName]]
+      : sim.fields[name as FieldName];
   const state = layer.getState();
   post({
     type: 'field',
@@ -231,6 +239,9 @@ function buildingView(id: number, data: BuildingComponent): BuildingView | null 
     jobsFilled: data.jobsFilled,
     powered: data.powered,
     watered: data.watered,
+    // Normalised so the renderer needs no sim constants to tell a building
+    // that just lost power from one about to be abandoned over it.
+    utilityDistress: Math.min(1, data.badUtilityEvals / UTILITY_ABANDON_EVALS),
   };
 }
 
