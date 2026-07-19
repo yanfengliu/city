@@ -6,12 +6,13 @@ import {
   TRIP_RETRY_TICKS,
 } from '../constants/traffic';
 import { GRID_WIDTH } from '../constants/map';
-import { LEISURE_NEAREST_CHOICES } from '../constants/activities';
+import { LEISURE_NEAREST_CHOICES, LEISURE_PARK_MAX_CELLS } from '../constants/activities';
 import { restUntil } from '../activities';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type { CityWorld, PedestrianPurpose, VehicleLeg } from '../types';
 import {
+  accessCell,
   buildingAccessCell,
   buildingAccessNode,
   findNodePath,
@@ -148,58 +149,109 @@ export function shopCandidates(sim: CitySim): number[] {
   return shops;
 }
 
+/** Every road-reachable park, by id — where an evening out would rather go. */
+export function parkCandidates(sim: CitySim): number[] {
+  const parks: number[] = [];
+  for (const id of [...sim.world.query('structure')].sort((a, b) => a - b)) {
+    if (sim.world.getComponent(id, 'structure')?.type !== 'park') continue;
+    if (accessCell(sim, id) !== null) parks.push(id);
+  }
+  return parks;
+}
+
+/** Everywhere a free-time outing can end, gathered once per trip-system run. */
+export interface OutingVenues {
+  shops: number[];
+  parks: number[];
+}
+
+export function outingVenues(sim: CitySim): OutingVenues {
+  return { shops: shopCandidates(sim), parks: parkCandidates(sim) };
+}
+
 /**
- * The `limit` shops closest to a home that share its road component, ascending
- * by (distance, entity id). Bounded insertion rather than a full sort: `limit`
- * is a handful, so a city with hundreds of shops still costs O(shops x limit)
- * and allocates nothing proportional to its commerce.
+ * The `limit` venues closest to a home that share its road component and lie
+ * within `maxCells` (Manhattan, between road access cells), ascending by
+ * (distance, entity id). Bounded insertion rather than a full sort: `limit` is a
+ * handful, so a city with hundreds of venues still costs O(venues x limit) and
+ * allocates nothing proportional to its commerce.
  */
-function nearestShops(sim: CitySim, home: number, shops: number[], limit: number): number[] {
-  const homeCell = buildingAccessCell(sim, home);
+function nearestVenues(
+  sim: CitySim,
+  home: number,
+  venues: number[],
+  limit: number,
+  maxCells = Number.POSITIVE_INFINITY,
+): number[] {
+  const homeCell = accessCell(sim, home);
   if (homeCell === null || limit <= 0) return [];
   const component = sim.roadGraph.cellComponent.get(homeCell);
   if (component === undefined) return [];
   const homeX = homeCell % GRID_WIDTH;
   const homeY = Math.floor(homeCell / GRID_WIDTH);
 
-  const best: Array<{ shop: number; distance: number }> = [];
-  for (const shop of shops) {
-    const cell = buildingAccessCell(sim, shop);
+  const best: Array<{ venue: number; distance: number }> = [];
+  for (const venue of venues) {
+    const cell = accessCell(sim, venue);
     if (cell === null || sim.roadGraph.cellComponent.get(cell) !== component) continue;
     const distance =
       Math.abs((cell % GRID_WIDTH) - homeX) + Math.abs(Math.floor(cell / GRID_WIDTH) - homeY);
+    if (distance > maxCells) continue;
     let at = best.length;
     while (
       at > 0 &&
       (best[at - 1].distance > distance ||
-        (best[at - 1].distance === distance && best[at - 1].shop > shop))
+        (best[at - 1].distance === distance && best[at - 1].venue > venue))
     ) {
       at--;
     }
     if (at >= limit) continue;
-    best.splice(at, 0, { shop, distance });
+    best.splice(at, 0, { venue, distance });
     if (best.length > limit) best.pop();
   }
-  return best.map((entry) => entry.shop);
+  return best.map((entry) => entry.venue);
 }
 
-/**
- * Where a household goes on its free-time outing: a shopping run takes the
- * nearest shop, an evening out takes one of the nearest few at random — so
- * "going out" reads differently from "popping to the shops" on the map.
- */
-export function chooseOutingShop(
-  sim: CitySim,
-  w: CityWorld,
-  home: number,
-  shops: number[],
-  activity: 'shop' | 'leisure',
-): number | null {
-  const limit = activity === 'leisure' ? LEISURE_NEAREST_CHOICES : 1;
-  const ranked = nearestShops(sim, home, shops, limit);
+/** Uniform draw over a ranked list. Consumes no RNG for zero or one candidate. */
+function pickVenue(w: CityWorld, ranked: number[]): number | null {
   if (ranked.length === 0) return null;
   if (ranked.length === 1) return ranked[0];
   return ranked[Math.floor(w.random() * ranked.length)];
+}
+
+/**
+ * Where a household goes on its free-time outing. A shopping run is an errand:
+ * it takes the single nearest shop. An evening out is a choice: it goes to a
+ * park within walking distance if the city has built one — that is what a park
+ * is for — and otherwise settles for one of the nearest few shops, picking at
+ * random among them either way so "going out" reads differently from "popping
+ * to the shops" on the map.
+ *
+ * Exactly one `world.random()` call, and only when the chosen kind of venue
+ * offers a real choice — a city with no park in reach draws precisely the
+ * sequence it drew before parks existed.
+ */
+export function chooseOutingDestination(
+  sim: CitySim,
+  w: CityWorld,
+  home: number,
+  venues: OutingVenues,
+  activity: 'shop' | 'leisure',
+): number | null {
+  if (activity === 'leisure') {
+    const parks = nearestVenues(
+      sim,
+      home,
+      venues.parks,
+      LEISURE_NEAREST_CHOICES,
+      LEISURE_PARK_MAX_CELLS,
+    );
+    if (parks.length > 0) return pickVenue(w, parks);
+  }
+  return pickVenue(
+    w,
+    nearestVenues(sim, home, venues.shops, activity === 'leisure' ? LEISURE_NEAREST_CHOICES : 1),
+  );
 }
 
 function retryLater(w: CityWorld, citizen: number): void {
@@ -267,12 +319,17 @@ function startWorkLeg(
   capacity.vehicles++;
 }
 
-function startShoppingLeg(
+/**
+ * One leg of a free-time outing — out to a shop or a park, or back home. Both
+ * kinds walk and both park their destination in `citizen.shop`, so the return
+ * leg, the cancel path, and the detail panel need no second vocabulary.
+ */
+function startOutingLeg(
   sim: CitySim,
   w: CityWorld,
   citizenId: number,
   outbound: boolean,
-  shops: number[],
+  venues: OutingVenues,
   capacity: { walkers: number; vehicles: number },
 ): void {
   if (capacity.walkers >= MAX_PEDESTRIANS) return;
@@ -282,7 +339,7 @@ function startShoppingLeg(
     // `nextActivity` holds the outing in progress, so the return leg and the
     // detail panel can still tell an evening out from a shopping run.
     const activity = citizen.nextActivity === 'leisure' ? 'leisure' : 'shop';
-    const shop = chooseOutingShop(sim, w, citizen.home, shops, activity);
+    const shop = chooseOutingDestination(sim, w, citizen.home, venues, activity);
     const cells = shop === null ? null : findRoadCellPath(sim, citizen.home, shop);
     if (shop === null || !cells) {
       w.patchComponent(citizenId, 'citizen', (data) => {
@@ -329,7 +386,7 @@ function startShoppingLeg(
 }
 
 /**
- * Starts bounded, rotating work and shopping legs for employed households.
+ * Starts bounded, rotating work and free-time legs for employed households.
  * Transitional phases are excluded, so each citizen owns at most one agent.
  */
 export function tripSystem(sim: CitySim): (w: CityWorld) => void {
@@ -350,7 +407,7 @@ export function tripSystem(sim: CitySim): (w: CityWorld) => void {
     }
     if (eligible.length === 0) return;
 
-    const shops = shopCandidates(sim);
+    const venues = outingVenues(sim);
     const cursor = ((w.getState('tripCursor') as number | undefined) ?? 0) % eligible.length;
     const considered = Math.min(TRIPS_PER_RUN, eligible.length);
     for (let n = 0; n < considered; n++) {
@@ -361,11 +418,11 @@ export function tripSystem(sim: CitySim): (w: CityWorld) => void {
       if (citizen.phase === 'atWork') {
         startWorkLeg(sim, w, id, citizen.work, citizen.home, false, capacity);
       } else if (citizen.phase === 'atShop') {
-        startShoppingLeg(sim, w, id, false, shops, capacity);
+        startOutingLeg(sim, w, id, false, venues, capacity);
       } else if (activity === 'rest') {
         restAtHome(w, id);
       } else if (activity === 'shop' || activity === 'leisure') {
-        startShoppingLeg(sim, w, id, true, shops, capacity);
+        startOutingLeg(sim, w, id, true, venues, capacity);
       } else {
         startWorkLeg(sim, w, id, citizen.home, citizen.work, true, capacity);
       }

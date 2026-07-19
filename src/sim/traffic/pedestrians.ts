@@ -34,6 +34,17 @@ export function validShop(w: CityWorld, id: number, generation?: number): boolea
   );
 }
 
+/**
+ * A park is open whenever it still stands: it has no staff to lose, no power to
+ * cut, and nothing to abandon — the one thing that ends a visit is the player
+ * bulldozing it.
+ */
+export function validPark(w: CityWorld, id: number, generation?: number): boolean {
+  if (!w.isAlive(id)) return false;
+  if (generation !== undefined && w.getEntityGeneration(id) !== generation) return false;
+  return w.getComponent(id, 'structure')?.type === 'park';
+}
+
 export function spawnPedestrian(
   w: CityWorld,
   citizen: number,
@@ -66,16 +77,19 @@ function destinationValid(w: CityWorld, path: PedestrianPathComponent): boolean 
   if (!w.isAlive(path.destination)) return false;
   if (w.getEntityGeneration(path.destination) !== path.destinationGen) return false;
   const citizen = w.getComponent(path.citizen, 'citizen');
-  const building = w.getComponent(path.destination, 'building');
-  if (!citizen || !building || building.abandoned) return false;
-  if (!path.outbound) return citizen.home === path.destination && building.zone === 'R';
-  if (path.purpose === 'shopping') {
+  if (!citizen) return false;
+  // An outbound outing ends at a shop or at a park; only the shop case is a
+  // building, so this arm is checked before anything reads `building`.
+  if (path.outbound && path.purpose === 'shopping') {
+    if (citizen.shop !== path.destination || citizen.shopGen !== path.destinationGen) return false;
     return (
-      citizen.shop === path.destination &&
-      citizen.shopGen === path.destinationGen &&
+      validPark(w, path.destination, path.destinationGen) ||
       validShop(w, path.destination, path.destinationGen)
     );
   }
+  const building = w.getComponent(path.destination, 'building');
+  if (!building || building.abandoned) return false;
+  if (!path.outbound) return citizen.home === path.destination && building.zone === 'R';
   return citizen.work === path.destination && building.zone !== 'R';
 }
 
@@ -170,7 +184,10 @@ function arrive(w: CityWorld, walker: number, path: PedestrianPathComponent): vo
       }
     }
   });
-  if (path.outbound && path.purpose === 'shopping') {
+  // An evening at the park is an outing, not a sale: only an arrival at a
+  // commercial building books retail. destinationValid has already run, so a
+  // shopping-purpose destination is either a live shop or a live park.
+  if (path.outbound && path.purpose === 'shopping' && w.getComponent(path.destination, 'building')) {
     w.setState(
       'pendingRetailVisits',
       ((w.getState('pendingRetailVisits') as number | undefined) ?? 0) + 1,

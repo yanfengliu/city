@@ -6,7 +6,7 @@ import {
   LEISURE_NEAREST_CHOICES,
 } from '../../src/sim/constants/activities';
 import { freeTimeWeights, pickFreeTimeActivity } from '../../src/sim/activities';
-import { chooseOutingShop, shopCandidates } from '../../src/sim/traffic/trips';
+import { chooseOutingDestination, outingVenues, shopCandidates } from '../../src/sim/traffic/trips';
 import { HAPPINESS_STRANDED_MEMORY_TICKS } from '../../src/sim/constants/happiness';
 import type { CitizenComponent, FreeTimeActivity, TripPhase } from '../../src/sim/types';
 import {
@@ -134,14 +134,17 @@ describe('free-time plans', () => {
     const { sim, home, shops } = freeTimeTown({ seed: 13 });
     const candidates = shopCandidates(sim);
     expect(candidates).toHaveLength(shops.length);
+    // No park in this town, so an evening out still falls back to the shops.
+    const venues = outingVenues(sim);
+    expect(venues.parks).toHaveLength(0);
 
     sim.world.runMaintenance(() => {
       for (let n = 0; n < 40; n++) {
-        expect(chooseOutingShop(sim, sim.world, home, candidates, 'shop')).toBe(shops[0]);
+        expect(chooseOutingDestination(sim, sim.world, home, venues, 'shop')).toBe(shops[0]);
       }
       const visited = new Set<number>();
       for (let n = 0; n < 200; n++) {
-        const shop = chooseOutingShop(sim, sim.world, home, candidates, 'leisure');
+        const shop = chooseOutingDestination(sim, sim.world, home, venues, 'leisure');
         if (shop !== null) visited.add(shop);
       }
       expect(visited.size).toBeGreaterThan(1);

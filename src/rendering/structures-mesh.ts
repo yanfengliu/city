@@ -16,7 +16,9 @@ export interface StructureRenderView {
   service: ServiceKind;
 }
 
-const SERVICE_KINDS: readonly ServiceKind[] = ['fireStation', 'police', 'clinic', 'school'];
+const SERVICE_KINDS: readonly ServiceKind[] = [
+  'fireStation', 'police', 'clinic', 'school', 'park',
+];
 
 /** Flat tone for services the active coverage overlay is not about. */
 const INACTIVE_SERVICE_GREY = new Color(0x9aa0a4);

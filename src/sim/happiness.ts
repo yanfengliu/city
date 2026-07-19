@@ -102,7 +102,7 @@ function cellLabel(x: number, y: number): string {
   return `(${x}, ${y})`;
 }
 
-/** Which of the four services cover a cell, in the canonical service order. */
+/** Which services cover a cell, in the canonical service order. */
 function coveringServices(sim: CitySim, x: number, y: number): ServiceType[] {
   const covering: ServiceType[] = [];
   for (const service of SERVICE_TYPES) {

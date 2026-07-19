@@ -21,11 +21,25 @@ export const FREE_TIME_REST_UNHAPPY_WEIGHT = 3;
 export const FREE_TIME_REST_STRANDED_WEIGHT = 4;
 
 /**
- * An evening out picks uniformly among this many nearest reachable shops
- * (a shopping run always takes the single nearest). Bounded so a night out is
- * a neighbourhood trip rather than a walk across the whole city.
+ * An evening out picks uniformly among this many nearest reachable venues —
+ * parks first, shops when no park is in reach (a shopping run always takes the
+ * single nearest shop). Bounded so a night out is a neighbourhood trip rather
+ * than a walk across the whole city.
  */
 export const LEISURE_NEAREST_CHOICES = 6;
+
+/**
+ * How far an evening out will look for a park, in cells, measured the way
+ * `nearestVenues` ranks: Manhattan distance between road access cells, so the
+ * road route walked can be longer than this. Past it the household goes to the
+ * shops instead — a park is somewhere you stroll to after work, not a
+ * destination you set out for.
+ *
+ * Sits comfortably outside SERVICE_RADIUS.park (10), so every home a park
+ * actually covers can also walk to it, and beyond PEDESTRIAN_WORK_MAX_CELLS
+ * (24), so an evening out ranges a little further than a walk to work.
+ */
+export const LEISURE_PARK_MAX_CELLS = 32;
 
 /** Households linger longer on an evening out than on a shopping run. */
 export const LEISURE_WAIT_BASE = 96;

@@ -97,12 +97,13 @@ export function createCityFields(terrain: TerrainData): CityFields {
       police: numberLayer(COVERAGE_BLOCK_SIZE, 0),
       clinic: numberLayer(COVERAGE_BLOCK_SIZE, 0),
       school: numberLayer(COVERAGE_BLOCK_SIZE, 0),
+      park: numberLayer(COVERAGE_BLOCK_SIZE, 0),
     },
     nearWaterBlocks: computeNearWaterBlocks(terrain),
   };
 }
 
-/** Snapshot of all four coverage layers for the coverageMirror component. */
+/** Snapshot of every coverage layer for the coverageMirror component. */
 export function coverageMirrorState(
   fields: CityFields,
 ): Record<ServiceType, LayerState<number>> {
@@ -111,6 +112,7 @@ export function coverageMirrorState(
     police: fields.coverage.police.getState(),
     clinic: fields.coverage.clinic.getState(),
     school: fields.coverage.school.getState(),
+    park: fields.coverage.park.getState(),
   };
 }
 
@@ -128,7 +130,13 @@ export function readFieldMirrors(sim: CitySim): void {
   const coverage = w.getComponent(mirror, 'coverageMirror');
   if (coverage) {
     for (const service of SERVICE_TYPES) {
-      sim.fields.coverage[service] = Layer.fromState(coverage[service]);
+      // A city saved before this service existed simply has no key for it, and
+      // Layer.fromState(undefined) throws — which would make every older save
+      // unloadable the moment a service is appended. Leave the freshly built
+      // empty layer in place instead: no such service was ever built, so empty
+      // is the truth, and the next structure change rewrites the whole mirror.
+      const state = coverage[service];
+      if (state) sim.fields.coverage[service] = Layer.fromState(state);
     }
   }
 }
@@ -150,7 +158,7 @@ export function fieldScoreInputs(sim: CitySim): ScoreInputs {
   };
 }
 
-/** How many of the four services cover the given cell (0..4). */
+/** How many services cover the given cell (0..SERVICE_TYPES.length). */
 export function coverageCountAt(sim: CitySim, x: number, y: number): number {
   let count = 0;
   for (const service of SERVICE_TYPES) count += sim.fields.coverage[service].getAt(x, y);
@@ -331,8 +339,21 @@ function averageOverBlock(layer: Layer<number>, bx: number, by: number): number 
 }
 
 /**
- * Live tree proximity: the initial tree mask minus cells claimed by roads or
- * footprints (buildings and service structures both live in occupiedCells).
+ * Whether a footprint has paved over this cell. A park has not: it occupies its
+ * cells the way every structure does, but it is parkland — laying one over
+ * wooded ground must not read as "the park bulldozed the trees". It grants no
+ * new trees either; it simply leaves the ones that were there standing.
+ */
+function paved(sim: CitySim, cell: number): boolean {
+  const owner = sim.occupiedCells.get(cell);
+  if (owner === undefined) return false;
+  return sim.world.getComponent(owner, 'structure')?.type !== 'park';
+}
+
+/**
+ * Live tree proximity: the initial tree mask minus cells roads or footprints
+ * have paved (buildings and service structures both live in occupiedCells;
+ * `paved` exempts parks).
  */
 function nearLiveTrees(sim: CitySim, bx: number, by: number): boolean {
   const x0 = Math.max(0, bx * LAND_VALUE_BLOCK_SIZE - LAND_VALUE_TREE_RADIUS);
@@ -348,9 +369,7 @@ function nearLiveTrees(sim: CitySim, bx: number, by: number): boolean {
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       const i = cellIndex(x, y);
-      if (sim.terrain.trees[i] === 1 && !sim.roadCells.has(i) && !sim.occupiedCells.has(i)) {
-        return true;
-      }
+      if (sim.terrain.trees[i] === 1 && !sim.roadCells.has(i) && !paved(sim, i)) return true;
     }
   }
   return false;

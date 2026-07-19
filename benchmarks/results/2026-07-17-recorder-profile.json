@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-07-19T04:45:01.983Z",
+  "capturedAt": "2026-07-19T07:11:23.145Z",
   "profileTicks": 3000,
   "runOrder": [
     "recorded",
@@ -11,7 +11,7 @@
   "scope": "Controlled headless sim-loop proxy: one protocol-like no-op diff listener in both modes; SessionRecorder + MemorySink only in recorded mode.",
   "sourceRef": null,
   "source": {
-    "treeSha256": "93e073a66cdf05018693a9481179122c59ec7ac755113b64086435fe0e94d06b",
+    "treeSha256": "24b5f7c3306fb3e54e1411a38c98b62a438af4b05fbf41fc4d05509eb948da6b",
     "files": [
       {
         "path": "node_modules/civ-engine/dist/ai-contract.js",
@@ -515,8 +515,8 @@
       },
       {
         "path": "src/sim/citizen-detail.ts",
-        "bytes": 8614,
-        "sha256": "e538bfc1c5fa14dbc90937936ff7fb86160ba89b458328ffdedf173f5fb2b050"
+        "bytes": 10074,
+        "sha256": "203e4ae48e498cd48b7e32dbe51b6a539550865b211b20c4f1e58a4a162fa550"
       },
       {
         "path": "src/sim/citizens.ts",
@@ -530,8 +530,8 @@
       },
       {
         "path": "src/sim/constants/activities.ts",
-        "bytes": 1592,
-        "sha256": "2b73c6a839f94e191a4577892e71fd3405f7b5590111f69fa21d177eef160aed"
+        "bytes": 2266,
+        "sha256": "643d5604b9d0e2c51b47194743634c382d5e414358d73dc9903318b4c89898e3"
       },
       {
         "path": "src/sim/constants/economy.ts",
@@ -540,13 +540,13 @@
       },
       {
         "path": "src/sim/constants/fields.ts",
-        "bytes": 2144,
-        "sha256": "79a85d66d585050d37d156c1fcb8cc98acda20f908b93fa05fba965a63633164"
+        "bytes": 2206,
+        "sha256": "806ec31763dea1eb4199c87cab9d7c87085b6e73948718eeff2543d7cf0a0393"
       },
       {
         "path": "src/sim/constants/happiness.ts",
-        "bytes": 3377,
-        "sha256": "0de766bf04e623dc8eba7c4609c65625ad578983281f7ded4e945ad804b79bc6"
+        "bytes": 3534,
+        "sha256": "30b8fafd945814b1197c9b706d71472a8ae8ba56d67a40e65d36b887fec253a2"
       },
       {
         "path": "src/sim/constants/highway.ts",
@@ -560,8 +560,8 @@
       },
       {
         "path": "src/sim/constants/services.ts",
-        "bytes": 1619,
-        "sha256": "6b582b6c27d4fb978dc81aad58b6e25ec15c2d0975b6f11a0b57acb704cbe26a"
+        "bytes": 2612,
+        "sha256": "e4579167b82aefe7f09088c2b773d7a7109620ed02e8745300f292ad6e2c92dd"
       },
       {
         "path": "src/sim/constants/terrain.ts",
@@ -605,8 +605,8 @@
       },
       {
         "path": "src/sim/fields.ts",
-        "bytes": 14464,
-        "sha256": "87e858a9189e9196362b0f1aabb1341f15eebc98811db2ba8a2f0e2e0765c94b"
+        "bytes": 15544,
+        "sha256": "de80d8c8f95920d23d6804cc535a2e81671990fdd297773e4bc66589b5c3aa54"
       },
       {
         "path": "src/sim/grid.ts",
@@ -615,8 +615,8 @@
       },
       {
         "path": "src/sim/happiness.ts",
-        "bytes": 10881,
-        "sha256": "3d284a8e6404b6bdb6744aeb31d016e126362d17baaaa45e2e9aac3936c3f345"
+        "bytes": 10869,
+        "sha256": "87025ffc5ced2d05c84ae67a8d49ce12ea0dff39bfbacc23d10e9711ecbe53c4"
       },
       {
         "path": "src/sim/rejection.ts",
@@ -635,8 +635,8 @@
       },
       {
         "path": "src/sim/services.ts",
-        "bytes": 7738,
-        "sha256": "2bbc53a19c0bc87b38d0350ed0f560bc13bb1d547f895771974252df15e143c1"
+        "bytes": 7758,
+        "sha256": "4d1fe21199683ab56ff04a9ef4c59ecb8f8e9d618c883abf3bdafa9bfd9ec0bb"
       },
       {
         "path": "src/sim/summary.ts",
@@ -655,13 +655,13 @@
       },
       {
         "path": "src/sim/traffic/pathing.ts",
-        "bytes": 5985,
-        "sha256": "dcac9eba88041666349e79605fd8261e1f00324b5e4575cc098cd019eae2619c"
+        "bytes": 7118,
+        "sha256": "a82fbb538117fdc84f3b69cd68e0e9b9a3c3dc795d1a6fb502af1e8cc305c731"
       },
       {
         "path": "src/sim/traffic/pedestrians.ts",
-        "bytes": 8807,
-        "sha256": "c26dedd490d9e9d1e3615b98431b0e83d6b17dc69c3f093fb8d5f083a6ac212c"
+        "bytes": 9793,
+        "sha256": "d35c3d5a37c5b031384b82f2d572df2c2261d435d11d827e533685c50a1d3fd2"
       },
       {
         "path": "src/sim/traffic/topology.ts",
@@ -670,8 +670,8 @@
       },
       {
         "path": "src/sim/traffic/trips.ts",
-        "bytes": 13203,
-        "sha256": "2ef142a0453407d33ac09574561bbb4814466e6c4686c4ceb1f31d88dc8f1e41"
+        "bytes": 15135,
+        "sha256": "40962b09bfe5d95960f45d160a68d9503bf79af7eecd469ff3f53e17cb023a9f"
       },
       {
         "path": "src/sim/traffic/vehicles.ts",
@@ -680,8 +680,8 @@
       },
       {
         "path": "src/sim/types.ts",
-        "bytes": 9979,
-        "sha256": "221f2946dfdaf351fca95fba50337c83d2a9381f5c263ce7713658a194ad90f7"
+        "bytes": 10368,
+        "sha256": "deb2d79370195a37e4a2d8473171f0e126ad21a7fd33317c32c731fac5c5240c"
       },
       {
         "path": "src/sim/utilities.ts",
@@ -709,27 +709,27 @@
   "aggregate": {
     "recorded": {
       "runs": 2,
-      "meanWallMs": 9779.00795,
-      "meanTicksPerSecond": 306.9504091873413,
-      "meanBundleJsonBytes": 108662704
+      "meanWallMs": 6944.887050000001,
+      "meanTicksPerSecond": 432.2079442770838,
+      "meanBundleJsonBytes": 108668819
     },
     "lean": {
       "runs": 2,
-      "meanWallMs": 4600.517400000001,
-      "meanTicksPerSecond": 652.6005328025502,
+      "meanWallMs": 2940.927849999999,
+      "meanTicksPerSecond": 1020.4353546126001,
       "meanBundleJsonBytes": 0
     },
-    "wallMsReduction": 5178.490549999999,
-    "wallMsReductionPct": 52.95517271769882,
-    "throughputGain": 2.1260780675625295
+    "wallMsReduction": 4003.959200000002,
+    "wallMsReductionPct": 57.65333793297619,
+    "throughputGain": 2.360982411647691
   },
   "runs": [
     {
       "label": "recorded",
       "sequence": 1,
-      "wallMs": 9548.3144,
-      "ticksPerSecond": 314.1915812910392,
-      "bundleJsonBytes": 108661152,
+      "wallMs": 6782.7836,
+      "ticksPerSecond": 442.2962867339598,
+      "bundleJsonBytes": 108665960,
       "final": {
         "tick": 3002,
         "buildingCount": 608,
@@ -742,8 +742,8 @@
     {
       "label": "lean",
       "sequence": 2,
-      "wallMs": 4473.180700000001,
-      "ticksPerSecond": 670.6637181010817,
+      "wallMs": 2995.3257999999987,
+      "ticksPerSecond": 1001.5604980266257,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -757,8 +757,8 @@
     {
       "label": "lean",
       "sequence": 3,
-      "wallMs": 4727.8541000000005,
-      "ticksPerSecond": 634.5373475040187,
+      "wallMs": 2886.5298999999995,
+      "ticksPerSecond": 1039.3102111985745,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -772,9 +772,9 @@
     {
       "label": "recorded",
       "sequence": 4,
-      "wallMs": 10009.7015,
-      "ticksPerSecond": 299.7092370836433,
-      "bundleJsonBytes": 108664256,
+      "wallMs": 7106.990500000002,
+      "ticksPerSecond": 422.1196018202078,
+      "bundleJsonBytes": 108671678,
       "final": {
         "tick": 3002,
         "buildingCount": 608,

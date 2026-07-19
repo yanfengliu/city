@@ -53,7 +53,8 @@ export type OverlayFieldKind =
   | 'fireCoverage'
   | 'policeCoverage'
   | 'healthCoverage'
-  | 'educationCoverage';
+  | 'educationCoverage'
+  | 'parkCoverage';
 
 /** Normalised value at which a nuisance stops being a nuisance and starts being a problem. */
 export const FIELD_WARN_AT = 0.15;
@@ -68,6 +69,7 @@ const COVERAGE_FIELDS: ReadonlySet<OverlayFieldKind> = new Set([
   'policeCoverage',
   'healthCoverage',
   'educationCoverage',
+  'parkCoverage',
 ]);
 
 /**

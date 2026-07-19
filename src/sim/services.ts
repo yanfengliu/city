@@ -48,6 +48,7 @@ const COVERAGE_FIELD_OF: Record<ServiceType, CoverageFieldName> = {
   police: 'policeCoverage',
   clinic: 'healthCoverage',
   school: 'educationCoverage',
+  park: 'parkCoverage',
 };
 
 /**
@@ -68,7 +69,7 @@ export function rebuildCoverage(sim: CitySim, service: ServiceType): void {
   sim.world.emit('fieldChanged', { field: COVERAGE_FIELD_OF[service] });
 }
 
-/** Persists all four coverage layers — written only when structures change. */
+/** Persists every coverage layer — written only when structures change. */
 export function writeCoverageMirror(sim: CitySim, w: CityWorld): void {
   const mirror = w.getState('mirrorEntity') as number;
   w.setComponent(mirror, 'coverageMirror', coverageMirrorState(sim.fields));

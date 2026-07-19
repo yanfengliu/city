@@ -5,7 +5,9 @@ import { StructuresView } from '../../src/rendering/structures-mesh';
 import type { ServiceKind } from '../../src/rendering/constants';
 import type { TerrainSurfaceView } from '../../src/rendering/terrain-surface';
 
-const serviceKinds: readonly ServiceKind[] = ['fireStation', 'police', 'clinic', 'school'];
+const serviceKinds: readonly ServiceKind[] = [
+  'fireStation', 'police', 'clinic', 'school', 'park',
+];
 
 const modelMesh = (view: StructuresView, kind: ServiceKind): Mesh => {
   const child = view.group.getObjectByName(`${kind}-model`);
@@ -66,7 +68,7 @@ describe('StructuresView', () => {
     expect(school.visible).toBe(true);
     expect(vertexCount(school)).toBeGreaterThan(0);
     expect(view.count).toBe(1);
-    for (const kind of ['fireStation', 'police', 'clinic'] as const) {
+    for (const kind of ['fireStation', 'police', 'clinic', 'park'] as const) {
       expect(modelMesh(view, kind).visible).toBe(false);
     }
     const bounds = positionBounds(school);

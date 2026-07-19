@@ -12,6 +12,7 @@ import {
 import {
   addClinic,
   addFireStation,
+  addPark,
   addPoliceStation,
   addSchool,
   addServiceStructure,
@@ -34,6 +35,7 @@ const MODELS: ReadonlyArray<[ServiceKind, AddModel]> = [
   ['police', addPoliceStation],
   ['clinic', addClinic],
   ['school', addSchool],
+  ['park', addPark],
 ];
 
 const flatSurface = (width = 64, height = 64): TerrainSurfaceView => ({
@@ -105,6 +107,19 @@ const one = (parts: StructurePart[], kind: string): StructurePart => {
   return matches[0];
 };
 
+/** Bounding-box volume of the fattest part a model emits above its pad. */
+const largestPartVolume = (parts: StructurePart[]): number => {
+  let largest = 0;
+  for (const part of parts) {
+    if (part.kind === 'pad') continue;
+    largest = Math.max(
+      largest,
+      (part.max[0] - part.min[0]) * (part.max[1] - part.min[1]) * (part.max[2] - part.min[2]),
+    );
+  }
+  return largest;
+};
+
 const distinctColors = (builder: GeometryBuilder): number => {
   const colors = builder.build().getAttribute('color');
   const seen = new Set<string>();
@@ -161,6 +176,7 @@ describe('service structure shared contracts', () => {
       police: 'sign',
       clinic: 'cross-v',
       school: 'flag',
+      park: 'tree',
     };
     const kindSets = new Map<ServiceKind, Set<string>>(
       MODELS.map(([kind, add]) => {
@@ -367,5 +383,127 @@ describe('school geometry', () => {
     expect(yard.max[1] - yard.min[1]).toBeLessThanOrEqual(0.03);
     expect(yard.min[2]).toBeGreaterThanOrEqual(wingA.max[2] - 1e-4);
     expect(byKind(parts, 'fence')).toHaveLength(3);
+  });
+});
+
+describe('park geometry', () => {
+  const top = SERVICE_PAD_LIFT;
+
+  /** Footprint-relative part boxes, so composition can be compared across anchors. */
+  const relativeBoxes = (parts: StructurePart[], kind: string, x: number, y: number): string[] =>
+    byKind(parts, kind).map((part) =>
+      [
+        part.min[0] - x, part.min[1], part.min[2] - y,
+        part.max[0] - x, part.max[1], part.max[2] - y,
+      ]
+        .map((value) => value.toFixed(4))
+        .join(','),
+    );
+
+  it('lays a mown lawn with pale cross paths meeting at a plaza', () => {
+    const parts = addPark(new GeometryBuilder(), flatSurface(), 4, 6, 2, 2);
+
+    // The lawn pad is the park's ground, and nothing rises off it as a wall.
+    const pad = one(parts, 'pad');
+    expect(pad.max[1]).toBeCloseTo(top, 5);
+
+    const paths = byKind(parts, 'path');
+    expect(paths).toHaveLength(2);
+    // One path runs east-west, the other north-south, and both hug the ground.
+    const spans = paths.map((path) => [path.max[0] - path.min[0], path.max[2] - path.min[2]]);
+    expect(spans.some(([sx, sz]) => sx > 1.5 && sz < 0.5)).toBe(true);
+    expect(spans.some(([sx, sz]) => sz > 1.5 && sx < 0.5)).toBe(true);
+    for (const path of paths) expect(path.max[1] - path.min[1]).toBeLessThanOrEqual(0.03);
+
+    // The plaza sits where they cross, and mown stripes texture the rest.
+    const plaza = one(parts, 'plaza');
+    expect(plaza.max[1] - plaza.min[1]).toBeLessThanOrEqual(0.03);
+    expect((plaza.min[0] + plaza.max[0]) / 2).toBeCloseTo(5, 5);
+    expect((plaza.min[2] + plaza.max[2]) / 2).toBeCloseTo(7, 5);
+    expect(byKind(parts, 'mow-stripe').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('plants a grove whose species and heights vary between parks', () => {
+    const here = addPark(new GeometryBuilder(), flatSurface(), 4, 6, 2, 2);
+    const trees = byKind(here, 'tree');
+    expect(trees.length).toBeGreaterThanOrEqual(8);
+
+    // Species and hashed height scaling give the grove a varied skyline and
+    // varied canopy widths — not one stamped tree repeated.
+    const tops = new Set(trees.map((tree) => (tree.max[1] - top).toFixed(3)));
+    expect(tops.size).toBeGreaterThanOrEqual(4);
+    const widths = new Set(trees.map((tree) => (tree.max[0] - tree.min[0]).toFixed(3)));
+    expect(widths.size).toBeGreaterThanOrEqual(2);
+
+    // Same footprint anchor, same grove; a different anchor reshuffles it.
+    const again = addPark(new GeometryBuilder(), flatSurface(), 4, 6, 2, 2);
+    expect(relativeBoxes(again, 'tree', 4, 6)).toEqual(relativeBoxes(here, 'tree', 4, 6));
+    const elsewhere = addPark(new GeometryBuilder(), flatSurface(), 11, 3, 2, 2);
+    expect(relativeBoxes(elsewhere, 'tree', 11, 3)).not.toEqual(relativeBoxes(here, 'tree', 4, 6));
+  });
+
+  it('furnishes the lawn with a fountain, a pond, benches and lamps', () => {
+    const parts = addPark(new GeometryBuilder(), flatSurface(), 4, 6, 2, 2);
+
+    // The fountain stands on the plaza: a low basin under a slender jet.
+    const basin = one(parts, 'fountain-basin');
+    expect(basin.max[1] - basin.min[1]).toBeLessThanOrEqual(0.25);
+    const jet = one(parts, 'fountain-jet');
+    expect(jet.min[1]).toBeGreaterThanOrEqual(basin.max[1] - 1e-4);
+    expect(jet.max[0] - jet.min[0]).toBeLessThanOrEqual(0.2);
+
+    // The pond is a flat disc of water in its own corner, wider than it is tall.
+    const pond = one(parts, 'pond');
+    expect(pond.max[1] - pond.min[1]).toBeLessThanOrEqual(0.12);
+    expect(pond.max[0] - pond.min[0]).toBeGreaterThanOrEqual(0.35);
+    expect(pond.min[0]).toBeGreaterThan(5);
+    expect(pond.min[2]).toBeGreaterThan(7);
+
+    const benches = byKind(parts, 'bench');
+    expect(benches.length).toBeGreaterThanOrEqual(3);
+    for (const bench of benches) {
+      expect(bench.max[1] - bench.min[1]).toBeLessThanOrEqual(0.4);
+      expect(Math.max(bench.max[0] - bench.min[0], bench.max[2] - bench.min[2]))
+        .toBeGreaterThan(Math.min(bench.max[0] - bench.min[0], bench.max[2] - bench.min[2]));
+    }
+
+    const lamps = byKind(parts, 'lamp');
+    expect(lamps.length).toBeGreaterThanOrEqual(2);
+    for (const lamp of lamps) {
+      expect(lamp.max[1] - top).toBeGreaterThanOrEqual(0.4);
+      expect(lamp.max[0] - lamp.min[0]).toBeLessThanOrEqual(0.2);
+    }
+    expect(byKind(parts, 'flower-bed').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('reads as open ground, never a building-sized mass', () => {
+    const volumes = new Map<ServiceKind, number>(
+      MODELS.map(([kind, add]) => [
+        kind,
+        largestPartVolume(add(new GeometryBuilder(), flatSurface(), 4, 6, 2, 2)),
+      ]),
+    );
+    const park = volumes.get('park')!;
+    // Every building service carries a solid block many times fatter than the
+    // park's biggest single part (a tree canopy). That gap is the contract: a
+    // park is foliage and ground, so it can never be mistaken for a building.
+    for (const [kind, volume] of volumes) {
+      if (kind === 'park') continue;
+      expect(park * 3, `park vs ${kind}`).toBeLessThan(volume);
+    }
+  });
+
+  it('keeps a tiered silhouette so an overlay flat-tint is still readable', () => {
+    // setOverlayTint drops vertex colours and paints one flat tone, leaving
+    // Lambert shading as the only cue. Ground, furniture, and canopy tiers of
+    // differing heights keep the park from flattening into a green blob.
+    const parts = addPark(new GeometryBuilder(), flatSurface(), 4, 6, 2, 2);
+    const heights = parts.filter((part) => part.kind !== 'pad').map((part) => part.max[1] - top);
+    expect(heights.filter((height) => height <= 0.08).length).toBeGreaterThanOrEqual(4);
+    expect(heights.filter((height) => height > 0.08 && height < 0.5).length)
+      .toBeGreaterThanOrEqual(4);
+    const tall = heights.filter((height) => height >= 0.5);
+    expect(tall.length).toBeGreaterThanOrEqual(6);
+    expect(new Set(tall.map((height) => height.toFixed(2))).size).toBeGreaterThanOrEqual(3);
   });
 });

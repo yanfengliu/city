@@ -7,7 +7,7 @@ export interface Position {
 
 export type ZoneType = 'R' | 'C' | 'I';
 
-export type ServiceType = 'fireStation' | 'police' | 'clinic' | 'school';
+export type ServiceType = 'fireStation' | 'police' | 'clinic' | 'school' | 'park';
 
 export type PowerPlantKind = 'coal' | 'wind';
 
@@ -19,7 +19,8 @@ export type CoverageFieldName =
   | 'fireCoverage'
   | 'policeCoverage'
   | 'healthCoverage'
-  | 'educationCoverage';
+  | 'educationCoverage'
+  | 'parkCoverage';
 
 /** Everything the overlay layer can subscribe to. */
 export type OverlayFieldName = FieldName | CoverageFieldName;
@@ -30,6 +31,7 @@ export const COVERAGE_FIELD_SERVICE: Record<CoverageFieldName, ServiceType> = {
   policeCoverage: 'police',
   healthCoverage: 'clinic',
   educationCoverage: 'school',
+  parkCoverage: 'park',
 };
 
 /** Both road commands take an L-path between two cells (dominant axis first). */
@@ -128,9 +130,10 @@ export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome' | 'toShop' | 'at
 export type PedestrianPurpose = 'commercial-work' | 'industrial-work' | 'shopping';
 
 /**
- * What a household does with the free-time half of its cycle. `shop` and
- * `leisure` both walk to a commercial building — the nearest one versus one of
- * the nearest few — and `rest` stays home, spawning no agent at all.
+ * What a household does with the free-time half of its cycle. `shop` walks to
+ * the nearest commercial building; `leisure` walks to a park within reach, or
+ * to one of the nearest few shops when no park is; `rest` stays home, spawning
+ * no agent at all.
  */
 export type FreeTimeActivity = 'shop' | 'leisure' | 'rest';
 
@@ -149,9 +152,13 @@ export interface CitizenComponent {
    * snapshots created before pedestrian activities.
    */
   nextActivity?: CitizenActivity;
-  /** Commercial destination retained through the at-shop wait and return leg. */
+  /**
+   * Where the current outing is headed — a commercial building, or the park an
+   * evening out chose — retained through the at-destination wait and the return
+   * leg. Named for the shopping run it originally served.
+   */
   shop?: number | null;
-  /** Guards the shop assignment against entity-id reuse. */
+  /** Guards the outing destination against entity-id reuse. */
   shopGen?: number | null;
   /**
    * Quality of life in 0..1, recomputed on the staggered happiness cadence.
@@ -230,7 +237,11 @@ export type CityComponents = {
   pollutionMirror: LayerState<number>;
   noiseMirror: LayerState<number>;
   landValueMirror: LayerState<number>;
-  /** All four coverage layers, keyed by service; written on structure changes only. */
+  /**
+   * Every coverage layer, keyed by service; written on structure changes only.
+   * A snapshot saved before a service existed simply lacks its key — see
+   * `readFieldMirrors`, which leaves the fresh empty layer in place.
+   */
   coverageMirror: Record<ServiceType, LayerState<number>>;
   /** Coal plant (3x3) or wind turbine (1x1), anchored top-left at the position component. */
   powerPlant: { kind: PowerPlantKind };

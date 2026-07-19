@@ -20,7 +20,8 @@ export type OverlayName =
   | 'fireCoverage'
   | 'policeCoverage'
   | 'healthCoverage'
-  | 'educationCoverage';
+  | 'educationCoverage'
+  | 'parkCoverage';
 
 /** Every selectable overlay, in HUD button order. */
 export const OVERLAY_IDS: readonly OverlayName[] = [
@@ -35,6 +36,7 @@ export const OVERLAY_IDS: readonly OverlayName[] = [
   'policeCoverage',
   'healthCoverage',
   'educationCoverage',
+  'parkCoverage',
 ];
 
 /**

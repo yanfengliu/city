@@ -22,6 +22,9 @@ import {
   FIRE_TOWER_COLOR,
   FIRE_TOWER_HEIGHT,
   FIRE_TRIM_COLOR,
+  PARK_COLORS,
+  PARK_LAYOUT,
+  PARK_TREE_SPECIES,
   POLICE_ANTENNA_COLOR,
   POLICE_BASE_COLOR,
   POLICE_BASE_HEIGHT,
@@ -56,6 +59,7 @@ import {
   SERVICE_PAD_MARGIN,
   SERVICE_POST_SEGMENTS,
 } from './structure-style';
+import { cellHash01, TREE_FOLIAGE_PALETTES } from './constants';
 import type { ServiceKind } from './constants';
 import type { StructurePart } from './utility-structures';
 import type { TerrainSurfaceView } from './terrain-surface';
@@ -106,7 +110,8 @@ interface ModelFrame {
     color: number,
   ): void;
   post(kind: string, fx: number, fz: number, y0: number, y1: number, r: number, color: number): void;
-  pad(): void;
+  /** Levelled base slab; the park overrides the civic concrete with lawn. */
+  pad(color?: number): void;
 }
 
 function makeFrame(
@@ -144,9 +149,9 @@ function makeFrame(
         color),
     );
   };
-  const pad = (): void => {
+  const pad: ModelFrame['pad'] = (color = SERVICE_PAD_COLOR) => {
     box('pad', SERVICE_PAD_MARGIN, SERVICE_PAD_MARGIN, 1 - SERVICE_PAD_MARGIN,
-      1 - SERVICE_PAD_MARGIN, range.min - SERVICE_PAD_BURY, top, SERVICE_PAD_COLOR);
+      1 - SERVICE_PAD_MARGIN, range.min - SERVICE_PAD_BURY, top, color);
   };
   return { parts, top, u, v, part, box, roof, post, pad };
 }
@@ -333,6 +338,141 @@ export function addSchool(
   return f.parts;
 }
 
+// Every park visual is a salted draw off one seed, as with the decorative
+// terrain trees, so rebuilding a park never rerolls its grove.
+const PARK_HASH = {
+  anchorX: 0x9e3779b1, anchorZ: 0x85ebca6b, slotStride: 0x01000193,
+  species: 0x27d4eb2d, palette: 0x165667b1, height: 0x94d049bb,
+  jitterX: 0x369dea0f, jitterZ: 0xdb4f0b91, flower: 0x7f4a7c15,
+} as const;
+
+/** A park's identity is its footprint anchor, which outlives save/load and
+ * entity-id reuse — so the grove a player learns is the grove that comes back. */
+const parkSeed = (x: number, y: number): number =>
+  (Math.imul((x + 1) | 0, PARK_HASH.anchorX) ^ Math.imul((y + 1) | 0, PARK_HASH.anchorZ)) | 0;
+
+/** Uniform draw in [0, 1) for one salted axis of one slot inside a park. */
+const parkDraw = (seed: number, salt: number, slot: number): number =>
+  cellHash01(seed + salt + Math.imul(slot, PARK_HASH.slotStride));
+
+/**
+ * Park: two cells of open ground — a mown lawn under gravel paths crossing at a
+ * fountain plaza, a grove whose species, palette, height, and exact spot are
+ * hashed from the anchor cell, a stone-rimmed pond, benches, lamps, flower beds.
+ *
+ * No walls and no roof, by design: the largest single part is a tree canopy, a
+ * fraction of the solid block every other service raises, so a park never reads
+ * as a building. Slender verticals over flat ground also keep the silhouette
+ * alive when a coverage overlay flattens the vertex colours and leaves Lambert
+ * shading to work alone.
+ */
+export function addPark(
+  builder: GeometryBuilder, surface: TerrainSurfaceView,
+  x: number, y: number, w: number, h: number,
+): StructurePart[] {
+  const f = makeFrame(builder, surface, x, y, w, h);
+  const { top } = f;
+  const seed = parkSeed(x, y);
+  const L = PARK_LAYOUT;
+  const C = PARK_COLORS;
+  const { bench, fountain, lamp, pond, tree } = L;
+  /** Vertical low-poly frustum centered on a footprint point. */
+  const disc = (fx: number, fz: number, y0: number, y1: number, r0: number, r1: number,
+    segments: number, color: number): void =>
+    builder.coloredTube([f.u(fx), y0, f.v(fz)], [f.u(fx), y1, f.v(fz)], r0, r1, segments, color);
+  const pick = <T>(items: readonly T[], salt: number, slot: number): T =>
+    items[Math.min(items.length - 1, Math.floor(parkDraw(seed, salt, slot) * items.length))];
+
+  // Ground layers stack by lift so overlapping flat decals are never coplanar.
+  f.pad(C.lawn);
+  for (const fz of L.mowStripes) {
+    f.box('mow-stripe', L.pathInset, fz - L.mowHalfWidth, 1 - L.pathInset, fz + L.mowHalfWidth,
+      top, top + L.mowLift, C.mow);
+  }
+  f.box('path', 0.5 - L.pathHalfWidth, L.pathInset, 0.5 + L.pathHalfWidth, 1 - L.pathInset,
+    top, top + L.pathNorthSouthLift, C.path);
+  f.box('path', L.pathInset, 0.5 - L.pathHalfWidth, 1 - L.pathInset, 0.5 + L.pathHalfWidth,
+    top, top + L.pathEastWestLift, C.path);
+  f.part('plaza', () =>
+    disc(0.5, 0.5, top, top + L.plazaLift, L.plazaRadius, L.plazaRadius, L.discSegments, C.plaza));
+
+  f.part('fountain-basin', () => {
+    disc(0.5, 0.5, top + L.plazaLift, top + fountain.basinTop, fountain.basinRadius,
+      fountain.basinRadius, fountain.segments, C.stone);
+    disc(0.5, 0.5, top + fountain.basinTop, top + fountain.waterTop, fountain.waterRadius,
+      fountain.waterRadius, fountain.segments, C.water);
+  });
+  f.part('fountain-jet', () =>
+    disc(0.5, 0.5, top + fountain.waterTop, top + fountain.jetTop, fountain.jetRadius,
+      fountain.jetTopRadius, fountain.segments, C.water));
+
+  // A formal basin: the water sits on a stone rim rather than sinking below the
+  // pad, which would break the leveled-pad contract every service shares.
+  f.part('pond', () => {
+    disc(pond.fx, pond.fz, top, top + pond.rimTop, pond.rimRadius, pond.rimRadius, L.discSegments,
+      C.stone);
+    disc(pond.fx, pond.fz, top + pond.rimTop, top + pond.waterTop, pond.waterRadius,
+      pond.waterRadius, L.discSegments, C.water);
+  });
+
+  L.treeSlots.forEach((slot, index) => {
+    const species = pick(PARK_TREE_SPECIES, PARK_HASH.species, index);
+    const palette = pick(TREE_FOLIAGE_PALETTES, PARK_HASH.palette, index);
+    const grow = parkDraw(seed, PARK_HASH.height, index) * tree.heightScaleRange;
+    const scale = tree.heightScaleMin + grow;
+    const cx = f.u(slot.fx) + (parkDraw(seed, PARK_HASH.jitterX, index) - 0.5) * 2 * tree.jitter;
+    const cz = f.v(slot.fz) + (parkDraw(seed, PARK_HASH.jitterZ, index) - 0.5) * 2 * tree.jitter;
+    f.part('tree', () => {
+      builder.coloredTube([cx, top, cz], [cx, top + species.trunkTop * scale, cz],
+        species.trunkRadius, species.trunkRadius, tree.trunkSegments, palette.trunk);
+      species.canopy.forEach((layer, tier) => {
+        builder.coloredTube([cx, top + layer.bottom * scale, cz], [cx, top + layer.top * scale, cz],
+          layer.r0, layer.r1, tree.canopySegments, tier === 0 ? palette.lower : palette.upper);
+      });
+    });
+  });
+
+  for (const seat of L.benches) {
+    const hx = seat.alongX ? bench.halfLength : bench.halfDepth;
+    const hz = seat.alongX ? bench.halfDepth : bench.halfLength;
+    const cx = f.u(seat.fx);
+    const cz = f.v(seat.fz);
+    f.part('bench', () => {
+      builder.coloredBox(cx - hx, top + bench.seatBottom, cz - hz, cx + hx, top + bench.seatTop,
+        cz + hz, colorOf(C.benchSeat));
+      // Backrest stands on the seat's far long edge, inside the seat's own box.
+      const backX = seat.alongX ? cx - hx : cx + hx - bench.backThick;
+      const backZ = seat.alongX ? cz + hz - bench.backThick : cz - hz;
+      builder.coloredBox(backX, top + bench.seatTop, backZ,
+        backX + (seat.alongX ? hx * 2 : bench.backThick), top + bench.backTop,
+        backZ + (seat.alongX ? bench.backThick : hz * 2), colorOf(C.benchSeat));
+      for (const end of [-1, 1]) {
+        const reach = end * (bench.halfLength - bench.legInset);
+        const legX = seat.alongX ? cx + reach : cx;
+        const legZ = seat.alongX ? cz : cz + reach;
+        builder.coloredBox(legX - bench.legHalf, top, legZ - bench.legHalf, legX + bench.legHalf,
+          top + bench.seatBottom, legZ + bench.legHalf, colorOf(C.benchLeg));
+      }
+    });
+  }
+
+  for (const post of L.lamps) {
+    f.part('lamp', () => {
+      disc(post.fx, post.fz, top, top + lamp.postTop, lamp.postRadius, lamp.postRadius,
+        SERVICE_POST_SEGMENTS, C.lampPost);
+      disc(post.fx, post.fz, top + lamp.globeBottom, top + lamp.globeTop, lamp.globeRadius,
+        lamp.globeRadius, SERVICE_POST_SEGMENTS, C.lampGlobe);
+    });
+  }
+
+  L.flowerBeds.forEach((bed, index) => {
+    f.box('flower-bed', bed.fx - L.flowerBed.half / w, bed.fz - L.flowerBed.half / h,
+      bed.fx + L.flowerBed.half / w, bed.fz + L.flowerBed.half / h, top, top + L.flowerBed.top,
+      pick(C.flowers, PARK_HASH.flower, index));
+  });
+  return f.parts;
+}
+
 /** Builds the model for one structure view; exhaustive over ServiceKind. */
 export function addServiceStructure(
   builder: GeometryBuilder,
@@ -348,6 +488,8 @@ export function addServiceStructure(
       return addClinic(builder, surface, view.x, view.y, view.w, view.h);
     case 'school':
       return addSchool(builder, surface, view.x, view.y, view.w, view.h);
+    case 'park':
+      return addPark(builder, surface, view.x, view.y, view.w, view.h);
     default: {
       const unhandled: never = view.service;
       throw new Error(`unhandled service kind: ${String(unhandled)}`);

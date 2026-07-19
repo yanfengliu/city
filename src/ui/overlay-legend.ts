@@ -99,6 +99,7 @@ const OVERLAY_LEGENDS: Partial<Record<OverlayName, OverlayLegend>> = {
   policeCoverage: coverageLegend('Police cover', 'Police station'),
   healthCoverage: coverageLegend('Health cover', 'Clinic'),
   educationCoverage: coverageLegend('Education', 'School'),
+  parkCoverage: coverageLegend('Parks', 'Park'),
 };
 
 /**

@@ -102,6 +102,7 @@ const SERVICE_LABELS: Record<ServiceType, string> = {
   police: 'Police Station',
   clinic: 'Clinic',
   school: 'School',
+  park: 'Park',
 };
 /** Coverage overlay → the service that provides it (blank for every other overlay). */
 const COVERAGE_OVERLAY_SERVICE: Partial<Record<OverlayName, ServiceType>> = {
@@ -109,6 +110,7 @@ const COVERAGE_OVERLAY_SERVICE: Partial<Record<OverlayName, ServiceType>> = {
   policeCoverage: 'police',
   healthCoverage: 'clinic',
   educationCoverage: 'school',
+  parkCoverage: 'park',
 };
 
 /** Overlays backed by a subscribable sim layer (fields and service coverage). */
@@ -120,6 +122,7 @@ const FIELD_OVERLAYS: readonly OverlayName[] = [
   'policeCoverage',
   'healthCoverage',
   'educationCoverage',
+  'parkCoverage',
 ];
 
 /** A clicked map object: a grown RCI building or a player-placed service structure. */

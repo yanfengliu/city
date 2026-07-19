@@ -87,8 +87,14 @@ describe('committed recorder benchmark evidence', () => {
 
     const files = result.source.files.map((entry) => {
       const bytes = readFileSync(entry.path);
-      expect(entry.bytes).toBe(bytes.byteLength);
-      expect(entry.sha256).toBe(createHash('sha256').update(bytes).digest('hex'));
+      // Name the file in the failure: a bare "expected 8614 to be 10074"
+      // across ~100 pinned sources says nothing about which one drifted.
+      expect(entry.bytes, `${entry.path} size drifted — re-earn with npm run benchmark:recorder`)
+        .toBe(bytes.byteLength);
+      expect(
+        entry.sha256,
+        `${entry.path} content drifted — re-earn with npm run benchmark:recorder`,
+      ).toBe(createHash('sha256').update(bytes).digest('hex'));
       return entry;
     });
     const treeInput = files

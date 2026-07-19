@@ -1,5 +1,6 @@
 import { findPath } from 'civ-engine';
 import { GRID_HEIGHT, GRID_WIDTH } from '../constants/map';
+import { SERVICE_FOOTPRINT } from '../constants/services';
 import { EDGE_COST_BUCKET_FACTOR, PATH_MAX_ITERATIONS } from '../constants/traffic';
 import { cellIndex, inBounds } from '../grid';
 import { footprintCells } from '../buildings';
@@ -37,12 +38,15 @@ function adjacency(sim: CitySim): Map<number, AdjacencyEntry[]> {
   return map;
 }
 
-/** First road cell 4-adjacent to a building footprint, in deterministic scan order. */
-export function buildingAccessCell(sim: CitySim, building: number): number | null {
-  const data = sim.world.getComponent(building, 'building');
-  const position = sim.world.getComponent(building, 'position');
-  if (!data || !position) return null;
-  for (const cell of footprintCells(position.x, position.y, data.w, data.h)) {
+/** First road cell 4-adjacent to a w x h footprint, in deterministic scan order. */
+function footprintAccessCell(
+  sim: CitySim,
+  anchorX: number,
+  anchorY: number,
+  w: number,
+  h: number,
+): number | null {
+  for (const cell of footprintCells(anchorX, anchorY, w, h)) {
     const x = cell % GRID_WIDTH;
     const y = Math.floor(cell / GRID_WIDTH);
     for (const [nx, ny] of [
@@ -57,6 +61,28 @@ export function buildingAccessCell(sim: CitySim, building: number): number | nul
     }
   }
   return null;
+}
+
+/** First road cell 4-adjacent to a building footprint, in deterministic scan order. */
+export function buildingAccessCell(sim: CitySim, building: number): number | null {
+  const data = sim.world.getComponent(building, 'building');
+  const position = sim.world.getComponent(building, 'position');
+  if (!data || !position) return null;
+  return footprintAccessCell(sim, position.x, position.y, data.w, data.h);
+}
+
+/**
+ * Where a walker enters or leaves anywhere a citizen can go: a grown building,
+ * or a player-placed service structure (a park is the only one they visit
+ * today). Both must touch a road to exist, so a null answer means the road that
+ * served them is gone.
+ */
+export function accessCell(sim: CitySim, entity: number): number | null {
+  const building = buildingAccessCell(sim, entity);
+  if (building !== null) return building;
+  const position = sim.world.getComponent(entity, 'position');
+  if (!position || !sim.world.getComponent(entity, 'structure')) return null;
+  return footprintAccessCell(sim, position.x, position.y, SERVICE_FOOTPRINT, SERVICE_FOOTPRINT);
 }
 
 /**
@@ -115,14 +141,17 @@ const CELL_DIRECTIONS = [
   [0, 1],
 ] as const;
 
-/** Exact road-cell path between two buildings, cached only by topology version. */
+/**
+ * Exact road-cell path between two walkable places (buildings or service
+ * structures), cached only by topology version.
+ */
 export function findRoadCellPath(
   sim: CitySim,
-  fromBuilding: number,
-  toBuilding: number,
+  fromPlace: number,
+  toPlace: number,
 ): number[] | null {
-  const from = buildingAccessCell(sim, fromBuilding);
-  const to = buildingAccessCell(sim, toBuilding);
+  const from = accessCell(sim, fromPlace);
+  const to = accessCell(sim, toPlace);
   if (from === null || to === null) return null;
   if (from === to) return [from];
   const key = `${from}:${to}`;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createCitySim, getTreasury, rebuildDerived, type CitySim } from '../../src/sim/city';
+import { createCitySim, getTreasury, rebuildDerived } from '../../src/sim/city';
 import { GRID_WIDTH } from '../../src/sim/constants/map';
 import { SERVICE_COST, SERVICE_RADIUS } from '../../src/sim/constants/services';
-import { findLandBlock } from './helpers';
+import { findLandBlock, findWaterAnchor } from './helpers';
 
 /** Fields-enabled sim with a short road spine at base.y + 2. */
 function townWithRoad() {
@@ -18,16 +18,6 @@ function townWithRoad() {
   ).toBe(true);
   sim.world.step();
   return { sim, base };
-}
-
-function findWaterAnchor(sim: CitySim): { x: number; y: number } {
-  const { terrain } = sim;
-  for (let y = 0; y < terrain.height - 1; y++) {
-    for (let x = 0; x < terrain.width - 1; x++) {
-      if (terrain.water[y * terrain.width + x] === 1) return { x, y };
-    }
-  }
-  throw new Error('no water found');
 }
 
 describe('placeService', () => {

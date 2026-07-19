@@ -408,12 +408,13 @@ export type FieldKind =
   | 'fireCoverage'
   | 'policeCoverage'
   | 'healthCoverage'
-  | 'educationCoverage';
+  | 'educationCoverage'
+  | 'parkCoverage';
 
-// Service structures (player-placed 2x2 buildings). Model dimensions and
-// palette live in structure-style.ts alongside the service-structures builders.
+// Service structures (player-placed 2x2 amenities: four buildings and a park).
+// Dimensions and palette live in structure-style.ts, beside their builders.
 /** Service kind used across rendering (plain literal type; mirrors protocol ServiceType). */
-export type ServiceKind = 'fireStation' | 'police' | 'clinic' | 'school';
+export type ServiceKind = 'fireStation' | 'police' | 'clinic' | 'school' | 'park';
 
 /** Day/night endpoints consumed by CityScene. Kept as raw hex constants so
  * the palette contract can be tested without constructing a WebGL renderer. */

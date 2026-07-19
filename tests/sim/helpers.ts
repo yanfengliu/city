@@ -121,6 +121,17 @@ export function roadedSite(sim: CitySim): { x: number; y: number } {
   return base;
 }
 
+/** First water cell on the map — a site every land-only placement must refuse. */
+export function findWaterAnchor(sim: CitySim): { x: number; y: number } {
+  const { terrain } = sim;
+  for (let y = 0; y < terrain.height - 1; y++) {
+    for (let x = 0; x < terrain.width - 1; x++) {
+      if (terrain.water[y * terrain.width + x] === 1) return { x, y };
+    }
+  }
+  throw new Error('no water found');
+}
+
 /** Finds an all-land w×h region and returns its top-left cell. */
 export function findLandBlock(sim: CitySim, w: number, h: number): { x: number; y: number } {
   const { terrain } = sim;

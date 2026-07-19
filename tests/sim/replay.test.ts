@@ -48,6 +48,10 @@ describe('session replay self-check', () => {
       by: base.y + 6,
     });
     sim.world.submit('placeService', { service: 'fireStation', x: base.x + 12, y: base.y + 5 });
+    // A park inside the residential district puts the leisure-outing path (park
+    // coverage, park access cells, walkers arriving at a structure) under the
+    // determinism gate rather than only under its own unit tests.
+    sim.world.submit('placeService', { service: 'park', x: base.x + 2, y: base.y + 5 });
     sim.world.step();
     const pump = findConnectablePumpSpot(sim, { x: midX, y: base.y + 2 });
     sim.world.submit('placeWaterPump', { x: pump.x, y: pump.y });

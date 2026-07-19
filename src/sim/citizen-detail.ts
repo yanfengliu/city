@@ -1,3 +1,4 @@
+import { SERVICE_NAMES } from './constants/services';
 import { cellIndex } from './grid';
 import { ZONE_NAMES } from './rejection';
 import {
@@ -87,6 +88,22 @@ function at(target: CitizenPlace | null): string {
   return target ? `(${target.x}, ${target.y})` : 'an unknown address';
 }
 
+/**
+ * How the status line names an outing's venue. Read off the entity rather than a
+ * CitizenPlace, because a CitizenPlace is missing in both cases the sentence
+ * needs: a park is a service structure and never has one, and a household that
+ * has ARRIVED reports no `destination` at all (it is not heading anywhere) yet
+ * is plainly somewhere. "An unknown address" is then left for the one case that
+ * really is unknown — the venue being gone.
+ */
+function venueLabel(w: CityWorld, target: number | null): string {
+  const position = target === null ? undefined : w.getComponent(target, 'position');
+  if (target === null || !position) return at(null);
+  const structure = w.getComponent(target, 'structure');
+  const where = `(${position.x}, ${position.y})`;
+  return structure ? `the ${SERVICE_NAMES[structure.type]} at ${where}` : where;
+}
+
 /** The walker or car this household owns right now, in deterministic id order. */
 function activeAgent(w: CityWorld, citizenId: number): {
   agent: CitizenAgent;
@@ -120,16 +137,21 @@ function job(work: CitizenPlace | null): string {
   return work ? `the ${ZONE_NAMES[work.zone]} job at ${at(work)}` : `work at ${at(work)}`;
 }
 
+interface StatusInput {
+  phase: TripPhase;
+  activity: CitizenActivity;
+  waitUntil: number;
+  home: CitizenPlace | null;
+  work: CitizenPlace | null;
+  destination: CitizenPlace | null;
+  /** Where they are heading, already named — a park has no CitizenPlace. */
+  venue: string;
+  agent: CitizenAgent | null;
+}
+
 /** One sentence a panel can print verbatim — what they are doing and where. */
-function describe(
-  phase: TripPhase,
-  activity: CitizenActivity,
-  waitUntil: number,
-  home: CitizenPlace | null,
-  work: CitizenPlace | null,
-  destination: CitizenPlace | null,
-  agent: CitizenAgent | null,
-): string {
+function describe(input: StatusInput): string {
+  const { phase, activity, waitUntil, home, work, destination, venue, agent } = input;
   switch (phase) {
     case 'toWork':
       return `${travelVerb(agent)} to ${job(destination ?? work)}`;
@@ -137,12 +159,12 @@ function describe(
       return `At ${job(work)} until tick ${waitUntil}`;
     case 'toShop':
       return activity === 'leisure'
-        ? `${travelVerb(agent)} out for the evening to ${at(destination)}`
-        : `${travelVerb(agent)} to the shops at ${at(destination)}`;
+        ? `${travelVerb(agent)} out for the evening to ${venue}`
+        : `${travelVerb(agent)} to the shops at ${venue}`;
     case 'atShop':
       return activity === 'leisure'
-        ? `Out for the evening at ${at(destination)} until tick ${waitUntil}`
-        : `At the shops at ${at(destination)} until tick ${waitUntil}`;
+        ? `Out for the evening at ${venue} until tick ${waitUntil}`
+        : `At the shops at ${venue} until tick ${waitUntil}`;
     case 'toHome':
       return `${travelVerb(agent)} home to ${at(destination ?? home)}`;
     case 'home':
@@ -198,6 +220,10 @@ export function citizenDetail(sim: CitySim, entity: number): CitizenDetail | nul
     active?.destination ??
     fallbackTarget(citizen.phase, citizen.home, citizen.work, citizen.shop);
   const destination = phaseIsTravel(citizen.phase) ? place(w, target) : null;
+  // The outing sentence names the venue on both legs: the one being walked to,
+  // and — once arrived, when `destination` is deliberately null — the one they
+  // are sitting in.
+  const venue = citizen.phase === 'atShop' ? (citizen.shop ?? null) : target;
 
   const position = agent ? w.getComponent(agent.entity, 'position') : undefined;
   const x = position?.x ?? home?.x ?? 0;
@@ -211,7 +237,16 @@ export function citizenDetail(sim: CitySim, entity: number): CitizenDetail | nul
     breakdown,
     phase: citizen.phase,
     activity,
-    status: describe(citizen.phase, activity, citizen.waitUntil, home, work, destination, agent),
+    status: describe({
+      phase: citizen.phase,
+      activity,
+      waitUntil: citizen.waitUntil,
+      home,
+      work,
+      destination,
+      venue: venueLabel(w, venue),
+      agent,
+    }),
     home,
     work,
     destination,

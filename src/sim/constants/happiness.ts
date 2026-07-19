@@ -41,7 +41,11 @@ export const HAPPINESS_UNPOWERED = -0.22;
 export const HAPPINESS_WATERED = 0.08;
 export const HAPPINESS_UNWATERED = -0.22;
 
-/** Per service (fire/police/health/education) whose coverage layer reaches home. */
+/**
+ * Per service (fire/police/health/education/parks) whose coverage layer reaches
+ * home. A park earns its happiness the same way every other service does — by
+ * covering the household — so amenities need no factor of their own.
+ */
 export const HAPPINESS_PER_COVERED_SERVICE = 0.05;
 
 /** Land value that reads as ordinary — the field's own base, so a fresh block is neutral. */

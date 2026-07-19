@@ -24,6 +24,28 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-19 — Parks, so free time has somewhere to go
+
+User request following the citizen-depth work: "You should add parks then" — free time meant shopping, visiting a shop, or resting, because the game had no leisure venue at all.
+
+A park is a new `ServiceType`, reusing the amenity machinery wholesale (2x2, must touch a road, cost, upkeep, a coverage layer already feeding `coverageCount` → desirability → land value). Cost 150, upkeep 3, radius 10 — deliberately a third of a clinic on every axis, so a young city dots several around before affording its first civic building. A reviewer quantified and refuted the obvious worry that parks would be a cheap substitute: per covered cell a park costs 1.76x a fire station and 2.41x a clinic, and overlapping parks do not compound because `markCoverage` assigns 1 rather than summing. Both facts now have tests.
+
+`leisure` ranks parks first within 32 road cells on the same road component and picks uniformly among the nearest few, falling through to the old shop path when none is reachable. The design detail that matters: `pickVenue` consumes **zero** `random()` draws for 0 or 1 candidates, so a park-free city draws exactly the sequence it drew before parks existed. That was verifiable rather than asserted — the recorder benchmark re-earned to byte-identical outcomes (1,629 population, 427 shopping trips at tick 3002, unchanged), because its scenario places no park.
+
+Two traps were flagged up front and both were real. `readFieldMirrors` calls `Layer.fromState(coverage[service])` for every service, so a snapshot saved before parks existed would have handed it `undefined` and thrown — every old save would have failed to load; it now skips a missing key and keeps the empty layer, which is the truth. And `SERVICE_TYPES` order is a determinism contract, so park is appended, never inserted.
+
+One judgement call worth recording: a park's footprint was clearing the trees under it, because `nearLiveTrees` treats any occupied cell as paved. "The park bulldozed the trees" is a bad look for the one amenity that *is* greenery, so parks are now exempt — they leave existing trees standing but grant no new ones, pinned by a park-vs-clinic differential test.
+
+The model is 28 parts: mown lawn with stripes, gravel paths crossing at a plaza, a nine-tree perimeter grove, fountain, pond, benches, lamps, flower beds. It is seeded from the footprint anchor cell rather than the entity id, so a park's grove survives save/load and entity-id reuse. The first draft was wrong in a way worth remembering — nine canopies at full radius merged into exactly the solid mass a park must not be — so species radii dropped ~0.72x and the slots pushed outward to frame the lawn. The "not a building" contract is relational rather than a magic number: the park's largest above-pad part, tripled, must still be smaller than every building service's fattest part (~0.08 vs 0.58–1.19).
+
+Parks shift the economy, and the direction is not the obvious one. Measured on a grown city with and without two parks: retail tax falls 242 → 202 (−16.5%) and shopping trips 567 → 462, because a leisure outing books no sale — but total income *rises* 1208 → 1355 (+12%) and population 270 → 318 (+18%) through land value → desirability → growth. Worth knowing so a falling shop counter in `render_game_to_text` is not misread as a regression. `LEISURE_PARK_MAX_CELLS` is the single lever if the pull needs narrowing.
+
+Also corrected here: the Coal and Line tooltips still promised power spreads through "another powered building", false since buildings stopped conducting, and now state the real rule including that a line must start on the plant or an existing line. And the recorder benchmark's file-drift assertion printed a bare "expected 8614 to be 10074" across ~100 pinned sources; it now names the file and the command that re-earns it.
+
+Browser-verified: a park placed on a live street renders as bright lawn with paths, plaza, fountain and framing grove — unmistakably not a building — and the Parks overlay paints the park itself deep blue, its covered ground green, and everything beyond grey. A sampled household read 87% — thriving. Known nit, left alone: a park-bound household gets no "Heading to" line, because `CitizenDetail.destination` is a `CitizenPlace` requiring a zone and level that a structure has no equivalent for; the status sentence does name the park, which is pinned by a test.
+
+Gates: 600 tests across 104 files, typecheck, zero-warning lint, production build (worker 136,673 / 142,000 bytes); recorder benchmark re-earned.
+
 ### 2026-07-18 — Worker projections extracted back under the line limit
 
 Paying down the debt flagged in the previous entry. `src/worker/sim.worker.ts` was 574 lines against the 500-line rule, having regressed since the 2026-07-14 extraction; it mixed the message loop and lifecycle with pure world → protocol projections.

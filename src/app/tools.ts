@@ -16,6 +16,7 @@ export type ToolName =
   | 'police'
   | 'clinic'
   | 'school'
+  | 'park'
   | 'coal'
   | 'wind'
   | 'powerLine'
@@ -24,7 +25,7 @@ export type ToolName =
 
 /**
  * Toolbar layout: [Select] | [Road, Bulldoze, Dezone] | [Zone R, C, I] |
- * [services x4] | [utilities x5]. Each tool has a single-key shortcut (shown
+ * [services x5] | [utilities x5]. Each tool has a single-key shortcut (shown
  * as a badge on its button). W/A/S/D are reserved for camera panning, so the
  * tools avoid them: R/C/I are the zones (classic mnemonic), Road takes Q,
  * Select V, Wind K, and the rest fall to nearby unused letters.
@@ -46,11 +47,12 @@ export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: str
     { id: 'police', label: 'Police', key: 'p', title: 'Police station ($400): raises land value within 24 cells' },
     { id: 'clinic', label: 'Clinic', key: 'h', title: 'Clinic ($500): raises land value within 32 cells' },
     { id: 'school', label: 'School', key: 'e', title: 'School ($500): raises land value within 32 cells and lets buildings reach level 3' },
+    { id: 'park', label: 'Park 🌳', key: 'n', title: 'Park ($150): cheap green space that raises land value within 10 cells. Residents walk here on an evening out, so dot several through a neighbourhood' },
   ],
   [
-    { id: 'coal', label: 'Coal ⚡', key: 'g', title: `Coal plant ($800, 3x3): powers 400 units but pollutes. Buildings within ${UTILITY_BRIDGE_RADIUS} cells of the plant, a Line, or another powered building get power` },
+    { id: 'coal', label: 'Coal ⚡', key: 'g', title: `Coal plant ($800, 3x3): powers 400 units but pollutes. Only the plant and its Lines carry power — buildings within ${UTILITY_BRIDGE_RADIUS} cells of them are served, and never pass it on` },
     { id: 'wind', label: 'Wind ⚡', key: 'k', title: `Wind turbine ($300, 1x1): clean but small (40 units). Same ${UTILITY_BRIDGE_RADIUS}-cell connection rule` },
-    { id: 'powerLine', label: 'Line', key: 'l', title: `Power line ($4/cell): takes no space and may cross roads/buildings. Anything within ${UTILITY_BRIDGE_RADIUS} cells connects` },
+    { id: 'powerLine', label: 'Line', key: 'l', title: `Power line ($4/cell): takes no space and may cross roads/buildings. Must START on the plant or an existing line — a line laid across a gap carries nothing. Buildings within ${UTILITY_BRIDGE_RADIUS} cells of it are served` },
     { id: 'pump', label: 'Pump 💧', key: 'u', title: 'Water pump ($500): place on land RIGHT NEXT to water. Supplies 300 units through Pipes' },
     { id: 'pipe', label: 'Pipe', key: 'j', title: `Water pipe ($3/new cell): runs underground across land, roads, buildings, and lakes. Anything within ${UTILITY_BRIDGE_RADIUS} cells of a pump-connected pipe gets water` },
   ],
@@ -62,6 +64,7 @@ const SERVICE_BY_TOOL: Partial<Record<ToolName, ServiceType>> = {
   police: 'police',
   clinic: 'clinic',
   school: 'school',
+  park: 'park',
 };
 const PLANT_BY_TOOL: Partial<Record<ToolName, PowerPlantKind>> = { coal: 'coal', wind: 'wind' };
 /** L-path drag tools that lay linear utility runs. */

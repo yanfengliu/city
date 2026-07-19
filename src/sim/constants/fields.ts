@@ -37,7 +37,7 @@ export const LAND_VALUE_BASE = DEFAULT_LAND_VALUE;
 export const LAND_VALUE_WATER_BONUS = 15;
 /** Water within this Chebyshev distance (cells) of a block grants the bonus. */
 export const LAND_VALUE_WATER_RADIUS = 6;
-/** Per covering service (0..4). */
+/** Per covering service, counted over SERVICE_TYPES (fire, police, health, education, parks). */
 export const LAND_VALUE_COVERAGE_WEIGHT = 8;
 export const LAND_VALUE_TREE_BONUS = 4;
 /** Live trees within this Chebyshev distance (cells) of a block grant the bonus. */
