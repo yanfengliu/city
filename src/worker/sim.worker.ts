@@ -1,5 +1,4 @@
 import { MemorySink, SessionRecorder, snapshotAtTick, type SessionBundle } from 'civ-engine';
-import { footprintCells } from '../sim/buildings';
 import { createCitySim, getTreasury, rebuildDerived, type CitySimConfig } from '../sim/city';
 import { citizenDetail, citizenDetailProblem } from '../sim/citizen-detail';
 import { cityFindingToMarker, findingsFromMarkers } from '../harness/findings';
@@ -7,11 +6,17 @@ import { selfCheckBundle } from '../harness/inspect';
 import { simSummary } from '../sim/summary';
 import { GRID_HEIGHT, GRID_WIDTH } from '../sim/constants/map';
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
-import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
 import { utilityTotals } from '../sim/utilities';
-import { DEFAULT_TAX_RATE, UTILITY_ABANDON_EVALS } from '../sim/constants/zoning';
-import { cellIndex } from '../sim/grid';
+import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 import { projectRenderComponentRemovals } from './diff-projection';
+import {
+  projectBuildingView,
+  projectBuildings,
+  projectNetworks,
+  projectRoads,
+  projectStructures,
+  projectZoneCells,
+} from './entity-projection';
 import { MovingAgentMessageSync } from './pedestrian-projection';
 import { simFailureMessage, unknownCommandRejection } from './failure-reporting';
 import type {
@@ -182,123 +187,30 @@ function postField(name: OverlayFieldName): void {
 function postRoadsIfChanged(): void {
   if (sim.topologyVersion === sentTopologyVersion) return;
   sentTopologyVersion = sim.topologyVersion;
-  post({
-    type: 'roads',
-    topologyVersion: sim.topologyVersion,
-    cells: [...sim.roadCells].sort((a, b) => a - b),
-    edges: sim.roadGraph.edges.map((e) => ({ id: e.id, a: e.a, b: e.b, cells: e.cells })),
-  });
+  post({ type: 'roads', topologyVersion: sim.topologyVersion, ...projectRoads(sim) });
 }
 
 function postNetworksIfChanged(): void {
   if (!networksDirty) return;
   networksDirty = false;
-  const plantCells: number[] = [];
-  const plants: Array<{
-    kind: 'coal' | 'wind';
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    cells: number[];
-  }> = [];
-  for (const id of [...world.query('powerPlant', 'position')].sort((a, b) => a - b)) {
-    const plant = world.getComponent(id, 'powerPlant');
-    const position = world.getComponent(id, 'position');
-    if (!plant || !position) continue;
-    const side = POWER_PLANT_FOOTPRINT[plant.kind];
-    const cells = footprintCells(position.x, position.y, side, side);
-    plantCells.push(...cells);
-    plants.push({
-      kind: plant.kind,
-      x: position.x,
-      y: position.y,
-      w: side,
-      h: side,
-      cells,
-    });
-  }
-  const pumpCells: number[] = [];
-  for (const id of [...world.query('waterPump', 'position')].sort((a, b) => a - b)) {
-    const position = world.getComponent(id, 'position');
-    if (position) pumpCells.push(cellIndex(position.x, position.y));
-  }
-  post({
-    type: 'networks',
-    power: {
-      plants,
-      plantCells,
-      lineCells: [...sim.powerLineCells.keys()].sort((a, b) => a - b),
-    },
-    water: {
-      pumpCells,
-      pipeCells: [...sim.pipeCells.keys()].sort((a, b) => a - b),
-    },
-  });
+  post({ type: 'networks', ...projectNetworks(sim, world) });
 }
 
 function postZonesIfChanged(): void {
   if (!zonesDirty) return;
   zonesDirty = false;
-  post({
-    type: 'zones',
-    cells: [...sim.zoneCells.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([i, zone]) => ({ i, zone })),
-  });
-}
-
-function buildingView(id: number, data: BuildingComponent): BuildingView | null {
-  const position = world.getComponent(id, 'position');
-  if (!position) return null;
-  return {
-    id,
-    x: position.x,
-    y: position.y,
-    w: data.w,
-    h: data.h,
-    kind: 'rci',
-    zone: data.zone,
-    level: data.level,
-    abandoned: data.abandoned,
-    residents: data.residents,
-    jobsFilled: data.jobsFilled,
-    powered: data.powered,
-    watered: data.watered,
-    // Normalised so the renderer needs no sim constants to tell a building
-    // that just lost power from one about to be abandoned over it.
-    utilityDistress: Math.min(1, data.badUtilityEvals / UTILITY_ABANDON_EVALS),
-  };
+  post({ type: 'zones', cells: projectZoneCells(sim) });
 }
 
 /** Posts the full current building/structure sets (boot and post-load sync). */
 function postAllEntities(): void {
-  const buildings: BuildingView[] = [];
-  for (const id of [...world.query('building')].sort((a, b) => a - b)) {
-    const data = world.getComponent(id, 'building');
-    if (!data) continue;
-    const view = buildingView(id, data);
-    if (view) buildings.push(view);
-  }
+  const buildings = projectBuildings(world);
   if (buildings.length > 0) post({ type: 'buildings', upserts: buildings, removed: [] });
 
+  // knownStructures stays worker-owned: it is send-gating state, not a projection.
   knownStructures.clear();
-  const structures: StructureView[] = [];
-  for (const id of [...world.query('structure', 'position')].sort((a, b) => a - b)) {
-    const data = world.getComponent(id, 'structure');
-    const position = world.getComponent(id, 'position');
-    if (!data || !position) continue;
-    knownStructures.add(id);
-    structures.push({
-      id,
-      x: position.x,
-      y: position.y,
-      w: SERVICE_FOOTPRINT,
-      h: SERVICE_FOOTPRINT,
-      kind: 'service',
-      service: data.type,
-    });
-  }
+  const structures = projectStructures(world);
+  for (const structure of structures) knownStructures.add(structure.id);
   if (structures.length > 0) post({ type: 'structures', upserts: structures, removed: [] });
 }
 
@@ -336,7 +248,7 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
   const upserts: BuildingView[] = [];
   if (buildingDiff) {
     for (const [id, data] of buildingDiff.set) {
-      const view = buildingView(id, data as BuildingComponent);
+      const view = projectBuildingView(world, id, data as BuildingComponent);
       if (view) upserts.push(view);
     }
   }

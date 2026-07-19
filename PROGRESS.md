@@ -24,6 +24,18 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-18 — Worker projections extracted back under the line limit
+
+Paying down the debt flagged in the previous entry. `src/worker/sim.worker.ts` was 574 lines against the 500-line rule, having regressed since the 2026-07-14 extraction; it mixed the message loop and lifecycle with pure world → protocol projections.
+
+The projections moved to `src/worker/entity-projection.ts`: `projectBuildingView`, `projectBuildings`, `projectStructures`, `projectZoneCells`, `projectRoads`, and `projectNetworks`. They return payloads rather than taking a `post` callback — that is what the sibling `pedestrian-projection.ts` and `diff-projection.ts` already do, and it makes them assertable without a spy. The worker keeps everything that is genuinely lifecycle: the dirty flags, `sentTopologyVersion`, the `knownStructures` send-gating set, and the thin `postXIfChanged` wrappers. `sim.worker.ts` is now 486 lines, 105 deleted against 17 added.
+
+Pure refactor: no behavior, protocol, or message-shape change. The file had no direct unit coverage — which is how the regression went unnoticed — so `tests/worker/entity-projection.test.ts` adds 10 contracts over the extracted functions, including the ascending-id ordering the recorded-session gate depends on.
+
+Mutation-checking those contracts caught one of my own vacuous assertions. Reversing the building sort failed a test as intended, but removing the `lineCells` sort did not: the scenario drew its power line left to right, so `powerLineCells` was already in ascending insertion order and the sorted-output assertion held either way. The scenario now draws the line right to left, making insertion order descending; the assertion then fails when the sort is removed and passes when it is restored, both verified.
+
+Gates: 571 tests across 102 files, typecheck, zero-warning lint, production build (worker 135,258 / 142,000 bytes — up 174 from the module boundary). Browser-verified that a live city still exercises all five projections: 27 road cells, 34 zoned cells, 17 buildings, 1 service, 400 power supply, no console errors.
+
 ### 2026-07-18 — People walk, have lives, and can be clicked
 
 User request: pedestrians need walking animations, and the simulation should make people real — living in an actual building, working in an actual place, having their own plans in free time, and each clickable for a panel showing happiness, home, work, and where they are going. Three workstreams, two of them run in parallel by subagents.
