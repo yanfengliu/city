@@ -2,14 +2,17 @@ import {
   FREE_TIME_ACTIVITIES,
   FREE_TIME_LEISURE_WEIGHT,
   FREE_TIME_REST_STRANDED_WEIGHT,
+  FREE_TIME_SENIOR_REST_WEIGHT,
   FREE_TIME_REST_UNHAPPY_WEIGHT,
   FREE_TIME_REST_WEIGHT,
   FREE_TIME_SHOP_WEIGHT,
+  FREE_TIME_YOUNG_LEISURE_WEIGHT,
   REST_BASE_TICKS,
   REST_VARIANCE_TICKS,
 } from './constants/activities';
 import { citizenHappiness, recentlyStranded } from './happiness';
-import type { CitizenComponent, CityWorld, FreeTimeActivity } from './types';
+import { hasStoredCitizenProfile } from './citizen-profile';
+import type { CitizenComponent, CitizenProfile, CityWorld, FreeTimeActivity } from './types';
 
 /**
  * What a household chooses to do with its free time. The cycle alternates work
@@ -27,18 +30,27 @@ import type { CitizenComponent, CityWorld, FreeTimeActivity } from './types';
 export function freeTimeWeights(
   w: CityWorld,
   citizen: CitizenComponent,
+  profile?: CitizenProfile,
 ): Record<FreeTimeActivity, number> {
   const happiness = citizenHappiness(citizen);
+  const members = hasStoredCitizenProfile(profile) ? profile.members : [];
+  const youngMembers = members.filter(
+    (member) => member.lifeStage === 'child' || member.lifeStage === 'teen',
+  ).length;
+  const seniorMembers = members.filter((member) => member.lifeStage === 'senior').length;
   return {
     shop: FREE_TIME_SHOP_WEIGHT,
-    // A content household goes out; a miserable one does not.
-    leisure: FREE_TIME_LEISURE_WEIGHT * happiness,
+    // A content household goes out; children and teens add a concrete reason
+    // to use parks rather than leaving the roster as decorative panel text.
+    leisure:
+      (FREE_TIME_LEISURE_WEIGHT + youngMembers * FREE_TIME_YOUNG_LEISURE_WEIGHT) * happiness,
     // ... and stays in instead, all the more so if it could not get anywhere
     // the last time it tried.
     rest:
       FREE_TIME_REST_WEIGHT +
       FREE_TIME_REST_UNHAPPY_WEIGHT * (1 - happiness) +
-      (recentlyStranded(w, citizen) ? FREE_TIME_REST_STRANDED_WEIGHT : 0),
+      (recentlyStranded(w, citizen) ? FREE_TIME_REST_STRANDED_WEIGHT : 0) +
+      seniorMembers * FREE_TIME_SENIOR_REST_WEIGHT,
   };
 }
 
@@ -46,8 +58,9 @@ export function freeTimeWeights(
 export function pickFreeTimeActivity(
   w: CityWorld,
   citizen: CitizenComponent,
+  profile?: CitizenProfile,
 ): FreeTimeActivity {
-  const weights = freeTimeWeights(w, citizen);
+  const weights = freeTimeWeights(w, citizen, profile);
   let total = 0;
   for (const activity of FREE_TIME_ACTIVITIES) total += Math.max(0, weights[activity]);
 

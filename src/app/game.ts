@@ -25,6 +25,7 @@ import { TerrainSurface } from '../rendering/terrain-surface';
 import { TreesView } from '../rendering/trees';
 import { VehiclesView } from '../rendering/vehicles-mesh';
 import { PedestriansView } from '../rendering/pedestrians-mesh';
+import { CitizenLifeMarkers } from '../rendering/citizen-life-markers';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { BudgetPanel } from '../ui/budget-panel';
@@ -52,9 +53,11 @@ import {
   networkOverlayInputsChanged,
 } from './network-overlay-state';
 import { collectZoneOcclusionCells, replaceFootprintOwner } from './occupancy';
-import { TOOL_GROUPS, Tools, type ToolName } from './tools';
+import { TOOL_GROUPS, Tools, type PersonSelection, type ToolName } from './tools';
 import type {
   BuildingView,
+  CitizenDetail,
+  CitizenMemberRef,
   ClientToWorker,
   CommandName,
   GameSpeed,
@@ -83,8 +86,11 @@ import type {
 } from '../sim/types';
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 import { CommandFeedback } from './command-feedback';
+import { CitizenInspectionState } from './citizen-inspection-state';
 
 const HUD_REFRESH_MS = 250;
+/** Citizen detail stays visibly live without scaling worker/DOM churn with game speed. */
+const CITIZEN_INSPECT_REFRESH_MS = 500;
 /**
  * Render-side phase offset for the day/night cycle so a fresh game (tick 0)
  * boots in bright late morning instead of at midnight (0 = midnight, 0.5 = noon)
@@ -125,8 +131,13 @@ const FIELD_OVERLAYS: readonly OverlayName[] = [
   'parkCoverage',
 ];
 
-/** A clicked map object: a grown RCI building or a player-placed service structure. */
-type Inspected = { kind: 'building' | 'structure' | 'citizen'; id: number };
+/** Every selection carries the ECS incarnation so an id reuse cannot retarget it. */
+type Inspected =
+  | { kind: 'building'; id: number; generation: number }
+  | { kind: 'structure'; id: number; generation: number }
+  | ({ kind: 'citizen' } & CitizenMemberRef);
+
+type CitizenDetailMessage = Extract<WorkerToClient, { type: 'citizenDetail' }>;
 
 interface GameOptions {
   recordPlaytest?: boolean;
@@ -152,6 +163,7 @@ export class Game {
   private readonly voxelWalls: VoxelWallsHost | null;
   private readonly vehiclesView: VehiclesView;
   private readonly pedestriansView: PedestriansView;
+  private readonly citizenLifeMarkers = new CitizenLifeMarkers();
   private readonly structuresView: StructuresView;
   private readonly fieldOverlay: FieldOverlayView;
   private readonly trafficOverlay: TrafficOverlayView;
@@ -168,6 +180,10 @@ export class Game {
   private focusMarkerTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly networkOverlay: NetworkOverlayView;
   private readonly picker: GroundPicker;
+  /** Resets input's cached hover identity when a keyboard-selected tool takes over. */
+  private clearPersonHover = (): void => {};
+  /** Re-picks a stationary pointer after agents or the camera move. */
+  private refreshPersonHover = (): void => {};
   private hasPlant = false;
   private hasPump = false;
   private powerInfraCells: ReadonlySet<number> = new Set();
@@ -190,8 +206,9 @@ export class Game {
   /** Set when road/building/structure footprints change; flushed to trees + zone tint once per frame. */
   private occupancyDirty = false;
   private inspected: Inspected | null = null;
-  /** Correlates citizen-detail replies so a stale one cannot fill the panel. */
-  private citizenRequestId = 0;
+  /** Correlates async detail replies and owns generation-safe person state. */
+  private readonly citizenInspection = new CitizenInspectionState();
+  private lastCitizenInspectRefreshAt: number | null = null;
   private activeOverlay: OverlayName = 'none';
   /** Set once the worker reports a halted world; surfaced in the text state so
    * automation sees a dead sim instead of silently timing out on a frozen tick. */
@@ -310,6 +327,8 @@ export class Game {
       this.inspectCoverage.group,
       this.levelUpFx.group,
       this.utilityIconsFx.group,
+      this.pedestriansView.markerGroup,
+      this.citizenLifeMarkers.group,
       // Buildings grade themselves in overlay mode (BuildingsView.setOverlayStatuses):
       // they carry the active system's status colour, and grey their own
       // "nothing to report" cases, so the scene shader must not re-grey them.
@@ -328,6 +347,7 @@ export class Game {
       this.buildingsView.group,
       this.vehiclesView.mesh,
       this.pedestriansView.group,
+      this.citizenLifeMarkers.group,
       this.structuresView.group,
       this.fieldOverlay.mesh,
       this.trafficOverlay.mesh,
@@ -346,6 +366,7 @@ export class Game {
       // Fixture faces follow the same pure phase function the sim obeys.
       this.signalLenses.updateTick(this.tick);
       this.networksView.updateFrame(now);
+      this.refreshPersonHover();
       this.levelUpFx.updateFrame(now);
       this.utilityIconsFx.updateFrame(now, this.scene.camera.quaternion);
       // Day/night cycle: the sun orbits with game time (phase-offset so boot is
@@ -406,6 +427,8 @@ export class Game {
       notify: (message) => this.hud.showToast(message),
       onToolChanged: (tool) => {
         this.scene.setLeftDragEnabled(tool === 'select');
+        if (tool === 'select') this.refreshPersonHover();
+        else this.clearPersonHover();
         this.refreshHud();
       },
     });
@@ -415,9 +438,15 @@ export class Game {
       GRID_WIDTH,
       GRID_HEIGHT,
     );
-    attachInput(this.scene.renderer.domElement, this.picker, this.tools, (x, y) =>
-      this.pickPerson(x, y),
+    const input = attachInput(
+      this.scene.renderer.domElement,
+      this.picker,
+      this.tools,
+      (x, y) => this.pickPerson(x, y),
+      (person) => this.pedestriansView.setHoveredCitizen(person),
     );
+    this.clearPersonHover = input.clearPersonHover;
+    this.refreshPersonHover = input.refreshPersonHover;
 
     this.worker = new Worker(new URL('../worker/sim.worker.ts', import.meta.url), {
       type: 'module',
@@ -456,6 +485,7 @@ export class Game {
         this.voxelWalls?.setTerrainSurface(surface);
         this.vehiclesView.setTerrainSurface(surface);
         this.pedestriansView.setTerrainSurface(surface);
+        this.citizenLifeMarkers.setTerrainSurface(surface);
         this.structuresView.setTerrainSurface(surface);
         this.fieldOverlay.setTerrainSurface(surface);
         this.trafficOverlay.setTerrainSurface(surface);
@@ -500,6 +530,7 @@ export class Game {
       case 'buildings':
         for (const view of message.upserts) this.applyBuildingUpsert(view);
         for (const id of message.removed) this.applyBuildingRemoval(id);
+        this.reconcileCitizenResidentContext();
         this.refreshInspect();
         break;
       case 'structures':
@@ -578,20 +609,14 @@ export class Game {
         this.disconnectedTrips = message.stats.disconnectedTrips;
         this.power = message.stats.power;
         this.water = message.stats.water;
+        this.refreshCitizenOnFrame();
         break;
       case 'commandSubmissionResult':
         if (!this.commandFeedback.receive(message)) break;
         if (!message.accepted) this.hud.showToast(`Command rejected: ${message.message}`);
         break;
       case 'citizenDetail':
-        // Ignore a reply the player has already clicked past.
-        if (message.id !== this.citizenRequestId) break;
-        if (!message.detail) {
-          this.hud.showToast(message.error ?? `No household at entity ${message.entity}`);
-          this.clearInspect();
-          break;
-        }
-        this.inspectPanel.show(citizenInspectData(message.detail));
+        this.receiveCitizenDetail(message);
         break;
       case 'simFailure':
         // The world will not tick again. Say so loudly and stop the HUD from
@@ -723,7 +748,12 @@ export class Game {
     const previous = this.buildings.get(view.id);
     // Celebrate genuine level-ups only: a known building whose level rose
     // (boot/load full upserts have no `previous` and stay silent).
-    if (previous && !view.abandoned && view.level > previous.level) {
+    if (
+      previous &&
+      previous.generation === view.generation &&
+      !view.abandoned &&
+      view.level > previous.level
+    ) {
       this.levelUpFx.spawn(
         view.x + view.w / 2,
         view.y + view.h / 2,
@@ -804,16 +834,22 @@ export class Game {
 
   /**
    * Citizen entity under the pointer, or null. Hit-tests the pedestrian
-   * batches, which all share one slot order, so any batch resolves the walker.
+   * batches, which all share one slot order, and rejects walkers hidden behind
+   * a nearer building or service before resolving that slot to a person.
    */
-  private pickPerson(clientX: number, clientY: number): number | null {
+  private pickPerson(clientX: number, clientY: number): PersonSelection | null {
     const hit = this.picker.pickInstance(
       clientX,
       clientY,
       this.pedestriansView.pickableBatches,
+      [
+        this.buildingsView.group,
+        this.structuresView.group,
+        ...this.networksView.solidPickBlockers,
+      ],
     );
     if (!hit) return null;
-    return this.pedestriansView.citizenAtInstance(hit.instanceId);
+    return this.pedestriansView.citizenRefAtInstance(hit.instanceId);
   }
 
   /**
@@ -821,18 +857,32 @@ export class Game {
    * not streamed), so the panel fills on the reply; the request id correlates
    * it so a fast second click cannot show the first person's answer.
    */
-  private inspectCitizen(citizen: number): void {
-    this.inspected = { kind: 'citizen', id: citizen };
+  private inspectCitizen(person: PersonSelection): void {
+    this.inspected = { kind: 'citizen', ...person };
     this.inspectCoverage.hide();
-    this.citizenRequestId += 1;
-    this.send({ type: 'inspectCitizen', id: this.citizenRequestId, entity: citizen });
+    this.citizenLifeMarkers.hide();
+    this.pedestriansView.setSelectedCitizen(person);
+    this.inspectPanel.show({
+      subjectKey: `citizen:${person.id}:${person.generation}:${person.memberId}`,
+      title: 'Loading resident...',
+      lines: ['Reading this person\'s live simulation record...'],
+      abandoned: false,
+    });
+    this.lastCitizenInspectRefreshAt = performance.now();
+    this.send(this.citizenInspection.requestDirect(person));
   }
 
   private inspectCell(cell: Cell | null): void {
     const index = cell ? cellIndex(cell.x, cell.y) : null;
     const structureId = index === null ? undefined : this.structureCellOwner.get(index);
     if (structureId !== undefined) {
-      this.inspected = { kind: 'structure', id: structureId };
+      const view = this.structures.get(structureId);
+      if (!view) {
+        this.clearInspect();
+        return;
+      }
+      this.clearInspect();
+      this.inspected = { kind: 'structure', id: structureId, generation: view.generation };
       this.refreshInspect();
       return;
     }
@@ -841,33 +891,36 @@ export class Game {
       this.clearInspect();
       return;
     }
-    this.inspected = { kind: 'building', id: buildingId };
+    const view = this.buildings.get(buildingId);
+    if (!view) {
+      this.clearInspect();
+      return;
+    }
+    this.clearInspect();
+    this.inspected = { kind: 'building', id: buildingId, generation: view.generation };
     this.refreshInspect();
   }
 
   private clearInspect(): void {
+    this.citizenInspection.clear();
     this.inspected = null;
     this.inspectPanel.hide();
     this.inspectCoverage.hide();
+    this.citizenLifeMarkers.hide();
+    this.pedestriansView.setSelectedCitizen(null);
+    this.lastCitizenInspectRefreshAt = null;
   }
 
   /** Syncs the panel with the inspected object's latest view (or closes it when gone). */
   private refreshInspect(): void {
     if (this.inspected === null) return;
     if (this.inspected.kind === 'citizen') {
-      // People change every tick, so the panel re-asks rather than re-reading
-      // a cached view like buildings do.
-      this.citizenRequestId += 1;
-      this.send({
-        type: 'inspectCitizen',
-        id: this.citizenRequestId,
-        entity: this.inspected.id,
-      });
+      // The frame cadence owns live refreshes; building diffs can be noisy.
       return;
     }
     if (this.inspected.kind === 'structure') {
       const view = this.structures.get(this.inspected.id);
-      if (!view) {
+      if (!view || view.generation !== this.inspected.generation) {
         this.clearInspect();
         return;
       }
@@ -876,6 +929,7 @@ export class Game {
       const r = SERVICE_RADIUS[view.service];
       this.inspectCoverage.show(view.x - r, view.y - r, view.x + r, view.y + r);
       this.inspectPanel.show({
+        subjectKey: `structure:${view.id}:${view.generation}`,
         title: SERVICE_LABELS[view.service],
         lines: [
           `Footprint: ${view.w}×${view.h} cells`,
@@ -887,11 +941,12 @@ export class Game {
     }
     this.inspectCoverage.hide();
     const view = this.buildings.get(this.inspected.id);
-    if (!view) {
+    if (!view || view.generation !== this.inspected.generation) {
       this.clearInspect();
       return;
     }
     this.inspectPanel.show({
+      subjectKey: `building:${view.id}:${view.generation}`,
       title: `${ZONE_LABELS[view.zone]} — Level ${view.level}`,
       lines: [
         `Footprint: ${view.w}×${view.h} cells`,
@@ -900,10 +955,103 @@ export class Game {
         `💧 Water: ${view.watered ? 'connected' : 'not connected'}`,
       ],
       abandoned: view.abandoned,
+      actions:
+        view.zone === 'R' && view.residents > 0
+          ? [{
+              label: 'Meet a resident',
+              onClick: () => this.inspectHomeResident({ id: view.id, generation: view.generation }),
+            }]
+          : undefined,
     });
   }
 
-  /** R shows residents as people (×PEOPLE_PER_CITIZEN); C/I show job slots filled/capacity. */
+  /** On-demand residential drill-down, flattened to people rather than households. */
+  private inspectHomeResident(building: { id: number; generation: number }): void {
+    const live = this.buildings.get(building.id);
+    if (!live || live.generation !== building.generation || live.zone !== 'R') {
+      this.hud.showToast(
+        `Home ${building.id} generation ${building.generation} is no longer a residential building`,
+      );
+      return;
+    }
+    this.send(this.citizenInspection.requestHome(building));
+  }
+
+  private receiveCitizenDetail(message: CitizenDetailMessage): void {
+    const result = this.citizenInspection.acceptReply(
+      message,
+      this.tick,
+      (building) => this.buildings.get(building.id)?.generation === building.generation,
+    );
+    if (result.kind === 'ignored') return;
+    if (result.kind === 'failed') {
+      this.hud.showToast(result.error);
+      if (result.cleared) this.clearInspect();
+      else this.refreshInspect();
+      return;
+    }
+
+    this.inspected = { kind: 'citizen', ...result.person };
+    this.lastCitizenInspectRefreshAt = performance.now();
+    this.pedestriansView.setSelectedCitizen(result.person);
+    this.citizenLifeMarkers.show(result.detail);
+    this.showCitizenPanel(result.detail);
+  }
+
+  private showCitizenPanel(detail: CitizenDetail): void {
+    let context = this.citizenInspection.residentContext;
+    if (context) {
+      const live = this.buildings.get(context.building.id);
+      if (!live || live.generation !== context.building.generation) {
+        context = null;
+      }
+    }
+    const data = citizenInspectData(detail);
+    if (context) {
+      const residentPosition = `Resident ${context.index + 1} of ${context.total} at this home`;
+      data.lines.push(residentPosition);
+      data.sections?.unshift({ heading: 'Residential home', lines: [residentPosition] });
+      data.actions = [{
+        label: 'Next resident',
+        title: `Show resident ${(context.index + 1) % context.total + 1} of ${context.total}`,
+        onClick: () => this.inspectHomeResident(context!.building),
+      }];
+    }
+    this.inspectPanel.show(data);
+  }
+
+  /** Keeps a home's resident-cycle count truthful as households move in or out. */
+  private reconcileCitizenResidentContext(): void {
+    const context = this.citizenInspection.residentContext;
+    if (!context) return;
+    const home = this.buildings.get(context.building.id);
+    const total =
+      home &&
+      home.generation === context.building.generation &&
+      home.zone === 'R'
+        ? home.residents * PEOPLE_PER_CITIZEN
+        : null;
+    if (!this.citizenInspection.reconcileResidentTotal(total)) return;
+    const detail = this.citizenInspection.detail;
+    if (detail) this.showCitizenPanel(detail);
+  }
+
+  private refreshCitizenOnFrame(): void {
+    const now = performance.now();
+    if (
+      this.inspected?.kind !== 'citizen' ||
+      this.citizenInspection.pendingMode !== null ||
+      now - (this.lastCitizenInspectRefreshAt ?? Number.NEGATIVE_INFINITY) <
+        CITIZEN_INSPECT_REFRESH_MS
+    ) return;
+    const request = this.citizenInspection.requestRefresh();
+    if (request) {
+      this.lastCitizenInspectRefreshAt = now;
+      this.send(request);
+    }
+  }
+
+  /** R shows residents as people (xPEOPLE_PER_CITIZEN); C/I show job slots filled/capacity. */
   private occupancyLine(view: BuildingView): string {
     const levelIndex = Math.min(Math.max(view.level, 1), 3) - 1;
     const capacity = CAPACITY_PER_CELL[view.zone][levelIndex] * view.w * view.h;
@@ -1183,11 +1331,66 @@ export class Game {
 
   private inspectTextState(): Record<string, unknown> | null {
     if (this.inspected === null) return null;
+    if (this.inspected.kind === 'citizen') {
+      const detail = this.citizenInspection.detail;
+      if (
+        !detail ||
+        detail.entity !== this.inspected.id ||
+        detail.generation !== this.inspected.generation ||
+        detail.selectedMemberId !== this.inspected.memberId
+      ) {
+        return {
+          kind: 'person',
+          person: {
+            id: this.inspected.id,
+            generation: this.inspected.generation,
+            memberId: this.inspected.memberId,
+          },
+          loading: true,
+        };
+      }
+      return {
+        kind: 'person',
+        person: {
+          id: detail.entity,
+          generation: detail.generation,
+          memberId: detail.selectedMemberId,
+          name: `${detail.selectedMember.givenName} ${detail.profile.householdName}`,
+          age: detail.selectedMember.age,
+          lifeStage: detail.selectedMember.lifeStage,
+          education: detail.selectedMember.education,
+          role: detail.selectedMember.role,
+        },
+        household: detail.profile,
+        profileSource: detail.profileSource,
+        historyComplete: detail.historyComplete,
+        historyStartTick: detail.historyStartTick,
+        historyTruncated: detail.historyTruncated,
+        activeTraveller: {
+          memberId: detail.activeTravellerMemberId,
+          name: `${detail.activeTraveller.givenName} ${detail.profile.householdName}`,
+        },
+        detailTick: this.citizenInspection.detailTick,
+        phase: detail.phase,
+        activity: detail.activity,
+        status: detail.status,
+        happiness: round2(detail.happiness),
+        home: detail.home,
+        work: detail.work,
+        destination: detail.destination,
+        destinationPlace: detail.destinationPlace,
+        activityPlace: detail.activityPlace,
+        activeAgent: detail.agent,
+        recentLifeEvents: detail.lifeEvents,
+        residentContext: this.citizenInspection.residentContext,
+      };
+    }
     if (this.inspected.kind === 'structure') {
       const view = this.structures.get(this.inspected.id);
-      if (!view) return null;
+      if (!view || view.generation !== this.inspected.generation) return null;
       return {
         id: view.id,
+        generation: view.generation,
         kind: 'service',
         service: view.service,
         x: view.x,
@@ -1198,9 +1401,10 @@ export class Game {
       };
     }
     const view = this.buildings.get(this.inspected.id);
-    if (!view) return null;
+    if (!view || view.generation !== this.inspected.generation) return null;
     return {
       id: view.id,
+      generation: view.generation,
       kind: 'rci',
       zone: view.zone,
       level: view.level,

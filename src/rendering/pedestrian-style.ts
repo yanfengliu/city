@@ -20,6 +20,13 @@ export const PEDESTRIAN_PURPOSE_TOP_PALETTES: Record<
   ],
 };
 
+/** Wardrobe palette selected by stable person identity, never by the current trip. */
+export const PEDESTRIAN_TOP_COLORS = [
+  ...PEDESTRIAN_PURPOSE_TOP_PALETTES['commercial-work'],
+  ...PEDESTRIAN_PURPOSE_TOP_PALETTES['industrial-work'],
+  ...PEDESTRIAN_PURPOSE_TOP_PALETTES.shopping,
+] as const;
+
 export const PEDESTRIAN_BOTTOM_COLORS = [
   0x24313b, 0x35485c, 0x4d433b, 0x5c5144,
   0x3f4a3a, 0x554758, 0x6c604b, 0x2f343a,
@@ -65,10 +72,15 @@ function mix32(value: number): number {
  * every appearance axis. Shared with the gait so a walker's build and its walk
  * come from the same identity.
  */
-export function pedestrianIdentitySeed(id: number, generation: number): number {
+export function pedestrianIdentitySeed(
+  citizen: number,
+  generation: number,
+  memberId: number,
+): number {
   return (
-    Math.imul((id + 1) | 0, 0x9e3779b1) ^
-    Math.imul((generation + 1) | 0, 0x85ebca6b)
+    Math.imul((citizen + 1) | 0, 0x9e3779b1) ^
+    Math.imul((generation + 1) | 0, 0x85ebca6b) ^
+    Math.imul((memberId + 1) | 0, 0xc2b2ae35)
   ) | 0;
 }
 
@@ -79,14 +91,13 @@ export function identityDraw(seed: number, salt: number): number {
 
 /** Stable for one live pedestrian identity; a recycled generation gets a new outfit. */
 export function pedestrianStyle(
-  id: number,
+  citizen: number,
   generation: number,
-  purpose: PedestrianPurpose,
+  memberId: number,
 ): PedestrianStyle {
-  const base = pedestrianIdentitySeed(id, generation);
+  const base = pedestrianIdentitySeed(citizen, generation, memberId);
   const index = (salt: number, length: number): number => mix32(base ^ salt) % length;
-  const topPalette = PEDESTRIAN_PURPOSE_TOP_PALETTES[purpose];
-  const topColor = topPalette[index(0x2c1b3c6d, topPalette.length)];
+  const topColor = PEDESTRIAN_TOP_COLORS[index(0x2c1b3c6d, PEDESTRIAN_TOP_COLORS.length)];
   const skinColor = PEDESTRIAN_SKIN_COLORS[index(0x7f4a7c15, PEDESTRIAN_SKIN_COLORS.length)];
   return {
     topColor,

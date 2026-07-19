@@ -4,6 +4,7 @@ import type {
   WorkerToClient,
 } from '../protocol/messages';
 import type { CityWorld } from '../sim/types';
+import { resolvePedestrianMemberId } from '../sim/citizen-profile';
 
 type MovingAgentMessage = Extract<
   WorkerToClient,
@@ -49,6 +50,13 @@ export function projectPedestrians(world: CityWorld): PedestrianView[] {
       // Lets the main thread map a clicked walker back to the household it
       // belongs to, which is what `inspectCitizen` takes.
       citizen: path.citizen,
+      citizenGeneration: path.citizenGen,
+      memberId: resolvePedestrianMemberId(
+        world,
+        path.citizen,
+        path.citizenGen,
+        path.memberId,
+      ),
       fromCell,
       toCell,
       t: Math.min(motion.t, 0.999),

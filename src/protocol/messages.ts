@@ -14,13 +14,29 @@ import type { CityImprovementFindingInput, RecordedFinding } from '../harness/fi
 import type { SelfCheckSummary } from '../harness/inspect';
 import type { SimSummary } from '../sim/summary';
 import type { CitizenDetail } from '../sim/citizen-detail';
-export type { CitizenAgent, CitizenDetail, CitizenPlace } from '../sim/citizen-detail';
+export type {
+  CitizenActivityPlace,
+  CitizenAgent,
+  CitizenDetail,
+  CitizenPlace,
+} from '../sim/citizen-detail';
 export type { HappinessBreakdown, HappinessFactor, HappinessFactorId } from '../sim/happiness';
 export type { CitizenActivity, TripPhase } from '../sim/types';
 
 /** Typed messages between the main thread and the sim worker. All payloads must be structured-clone-safe plain data. */
 
 export type GameSpeed = 0 | 1 | 2 | 4;
+
+/** ECS identity guarded against entity-id reuse. */
+export interface EntityRef {
+  id: number;
+  generation: number;
+}
+
+/** One persistent person inside a household entity. */
+export interface CitizenMemberRef extends EntityRef {
+  memberId: number;
+}
 
 export type CommandName = keyof CityCommands;
 
@@ -53,11 +69,31 @@ export type ClientToWorker =
   /** Verify the recorded session replays identically (3-stream check). */
   | { type: 'selfCheck'; id: number }
   /**
-   * Everything about ONE household, for the citizen panel. On-demand by design:
-   * citizens are never streamed, so this costs nothing until a player clicks a
-   * walker (whose `citizen` field supplies the entity). `id` correlates the reply.
+   * One selected member plus their household context. On-demand by design:
+   * profiles are never streamed, so this costs nothing until the player clicks
+   * a walker or drills into a home. `id` correlates the reply.
    */
-  | { type: 'inspectCitizen'; id: number; entity: number };
+  | {
+      type: 'inspectCitizen';
+      id: number;
+      entity: number;
+      generation: number;
+      memberId: number;
+    }
+  /**
+   * Picks one person living in a residential building without streaming every
+   * resident id with each building diff. The paired cursor cycles people in
+   * canonical household-id/member-id order.
+   */
+  | {
+      type: 'inspectHomeResident';
+      id: number;
+      building: number;
+      buildingGeneration: number;
+      afterCitizen?: number;
+      afterCitizenGeneration?: number;
+      afterMemberId?: number;
+    };
 
 export interface TerrainPayload {
   width: number;
@@ -114,6 +150,8 @@ export interface VehicleView {
 
 export interface BuildingView {
   id: number;
+  /** ECS incarnation; selection must not follow a recycled entity id. */
+  generation: number;
   x: number;
   y: number;
   w: number;
@@ -139,6 +177,8 @@ export interface BuildingView {
 
 export interface StructureView {
   id: number;
+  /** ECS incarnation; selection must not follow a recycled entity id. */
+  generation: number;
   x: number;
   y: number;
   w: number;
@@ -152,12 +192,14 @@ export interface PedestrianView {
   id: number;
   generation: number;
   /**
-   * The household this walker belongs to — the id an `inspectCitizen` query
-   * takes, so clicking a walker resolves to a person. Always populated by the
-   * worker; optional only so presentation fixtures written before it still
-   * typecheck.
+   * The household entity this walker belongs to. Always populated by the
+   * worker and paired with generation/memberId below.
    */
-  citizen?: number;
+  citizen: number;
+  /** Owner incarnation, paired with `citizen` for a safe inspection query. */
+  citizenGeneration: number;
+  /** Stable member within the household who is making this trip. */
+  memberId: number;
   fromCell: number;
   toCell: number;
   t: number;
@@ -263,7 +305,15 @@ export type WorkerToClient =
   | {
       type: 'citizenDetail';
       id: number;
-      entity: number;
+      /** Null only when a residential-building query found no household. */
+      entity: number | null;
+      generation: number | null;
       detail: CitizenDetail | null;
+      /** Present when the household was reached through a residential building. */
+      residentContext?: {
+        building: EntityRef;
+        index: number;
+        total: number;
+      };
       error?: string;
     };

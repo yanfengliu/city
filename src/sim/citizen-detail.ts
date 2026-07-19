@@ -1,6 +1,14 @@
-import { SERVICE_NAMES } from './constants/services';
+import { SERVICE_FOOTPRINT, SERVICE_NAMES } from './constants/services';
 import { cellIndex } from './grid';
 import { ZONE_NAMES } from './rejection';
+import {
+  citizenLifeHistory,
+  copyCitizenProfile,
+  hasStoredCitizenProfile,
+  profileForCitizen,
+  resolvePedestrianMemberId,
+  travellerForActivity,
+} from './citizen-profile';
 import {
   citizenHappiness,
   commuteCells,
@@ -8,7 +16,15 @@ import {
   type HappinessBreakdown,
 } from './happiness';
 import type { CitySim } from './city';
-import type { CitizenActivity, CityWorld, TripPhase, ZoneType } from './types';
+import type {
+  CitizenActivity,
+  CitizenLifeEvent,
+  CitizenMemberProfile,
+  CitizenProfile,
+  CityWorld,
+  TripPhase,
+  ZoneType,
+} from './types';
 
 /**
  * Everything a "who is this person?" panel needs about one household, answered
@@ -19,6 +35,7 @@ import type { CitizenActivity, CityWorld, TripPhase, ZoneType } from './types';
 /** A building this household is attached to, with the cell to fly the camera to. */
 export interface CitizenPlace {
   entity: number;
+  generation: number;
   /** Top-left anchor of the footprint. */
   x: number;
   y: number;
@@ -26,6 +43,20 @@ export interface CitizenPlace {
   zone: ZoneType;
   level: number;
   abandoned: boolean;
+  w: number;
+  h: number;
+}
+
+/** Building or service anchor for the current free-time outing. */
+export interface CitizenActivityPlace {
+  entity: number;
+  generation: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  kind: 'building' | 'service';
+  label: string;
 }
 
 /** The walker or car currently carrying this household, if any. */
@@ -38,6 +69,27 @@ export interface CitizenAgent {
 export interface CitizenDetail {
   entity: number;
   generation: number;
+  /** Three named people represented by this one household entity. */
+  profile: CitizenProfile;
+  /** Legacy fallbacks are deterministic identities, not historical save data. */
+  profileSource: 'stored' | 'legacyFallback';
+  /** The named person represented by the active walker/car. */
+  activeTravellerMemberId: number;
+  activeTraveller: CitizenMemberProfile;
+  /** Person explicitly selected by the player, stable across changing trips. */
+  selectedMemberId: number;
+  selectedMember: CitizenMemberProfile;
+  /** Compatibility aliases for the active traveller. */
+  travellerMemberId: number;
+  traveller: CitizenMemberProfile;
+  /** Newest bounded biography entries in chronological order. */
+  lifeEvents: CitizenLifeEvent[];
+  /** True only when the biography reaches back to this household's move-in. */
+  historyComplete?: boolean;
+  /** Earliest tick supported by the biography, or null when no event is known. */
+  historyStartTick?: number | null;
+  /** True when older entries fell out of the retained window or saved data was malformed. */
+  historyTruncated?: boolean;
   /** The stored 0..1 score the sim maintains on its staggered cadence. */
   happiness: number;
   /**
@@ -55,6 +107,10 @@ export interface CitizenDetail {
   work: CitizenPlace | null;
   /** Where they are heading; null while they are at home, at work, or at a shop. */
   destination: CitizenPlace | null;
+  /** Generation-checked live target, including service destinations such as parks. */
+  destinationPlace?: CitizenActivityPlace | null;
+  /** Outing venue, retained while travelling there, visiting, and returning home. */
+  activityPlace: CitizenActivityPlace | null;
   agent: CitizenAgent | null;
   /** Current cell — the active agent's, or their home when they are not out. */
   x: number;
@@ -75,13 +131,69 @@ function place(w: CityWorld, entity: number | null | undefined): CitizenPlace | 
   if (!building || !position) return null;
   return {
     entity,
+    generation: w.getEntityGeneration(entity),
     x: position.x,
     y: position.y,
     cell: cellIndex(position.x, position.y),
     zone: building.zone,
     level: building.level,
     abandoned: building.abandoned,
+    w: building.w,
+    h: building.h,
   };
+}
+
+function activityAnchor(
+  w: CityWorld,
+  entity: number | null | undefined,
+): CitizenActivityPlace | null {
+  if (entity === null || entity === undefined) return null;
+  const position = w.getComponent(entity, 'position');
+  if (!position) return null;
+  const building = w.getComponent(entity, 'building');
+  if (building) {
+    return {
+      entity,
+      generation: w.getEntityGeneration(entity),
+      x: position.x,
+      y: position.y,
+      w: building.w,
+      h: building.h,
+      kind: 'building',
+      label: `${ZONE_NAMES[building.zone]} building`,
+    };
+  }
+  const structure = w.getComponent(entity, 'structure');
+  if (!structure) return null;
+  return {
+    entity,
+    generation: w.getEntityGeneration(entity),
+    x: position.x,
+    y: position.y,
+    w: SERVICE_FOOTPRINT,
+    h: SERVICE_FOOTPRINT,
+    kind: 'service',
+    label: SERVICE_NAMES[structure.type],
+  };
+}
+
+/** Resolves an entity reference only while its saved generation still owns the id. */
+function entityAtGeneration(
+  w: CityWorld,
+  entity: number | null | undefined,
+  generation: number | null | undefined,
+): number | null {
+  if (
+    entity === null ||
+    entity === undefined ||
+    generation === null ||
+    generation === undefined ||
+    !w.isAlive(entity) ||
+    w.getEntityGeneration(entity) !== generation
+  ) {
+    return null;
+  }
+  return entity;
 }
 
 function at(target: CitizenPlace | null): string {
@@ -108,21 +220,33 @@ function venueLabel(w: CityWorld, target: number | null): string {
 function activeAgent(w: CityWorld, citizenId: number): {
   agent: CitizenAgent;
   destination: number | null;
+  /** Old snapshots had no destination generation; the citizen phase may supply it. */
+  allowPhaseFallback: boolean;
+  memberId?: number;
 } | null {
+  const citizenGeneration = w.getEntityGeneration(citizenId);
   for (const id of [...w.query('pedestrianPath', 'pedestrian')].sort((a, b) => a - b)) {
     const path = w.getComponent(id, 'pedestrianPath');
-    if (path?.citizen !== citizenId) continue;
+    if (path?.citizen !== citizenId || path.citizenGen !== citizenGeneration) continue;
     return {
       agent: { kind: 'pedestrian', entity: id, generation: w.getEntityGeneration(id) },
-      destination: path.destination,
+      destination: entityAtGeneration(w, path.destination, path.destinationGen),
+      allowPhaseFallback: path.destinationGen === null || path.destinationGen === undefined,
+      memberId: resolvePedestrianMemberId(
+        w,
+        path.citizen,
+        path.citizenGen,
+        path.memberId,
+      ),
     };
   }
   for (const id of [...w.query('vehicle')].sort((a, b) => a - b)) {
     const data = w.getComponent(id, 'vehicle');
-    if (data?.citizen !== citizenId) continue;
+    if (data?.citizen !== citizenId || data.citizenGen !== citizenGeneration) continue;
     return {
       agent: { kind: 'vehicle', entity: id, generation: w.getEntityGeneration(id) },
-      destination: data.destination ?? null,
+      destination: entityAtGeneration(w, data.destination, data.destinationGen),
+      allowPhaseFallback: data.destinationGen === null || data.destinationGen === undefined,
     };
   }
   return null;
@@ -181,7 +305,11 @@ function describe(input: StatusInput): string {
  * can act on (AGENTS.md: error messages are a product surface). Null when the
  * entity really is a citizen and `citizenDetail` will answer.
  */
-export function citizenDetailProblem(sim: CitySim, entity: number): string | null {
+export function citizenDetailProblem(
+  sim: CitySim,
+  entity: number,
+  selectedMemberId?: number,
+): string | null {
   const w = sim.world;
   if (!Number.isInteger(entity) || entity < 0) {
     return `citizen ${entity} is not an entity id — pass a whole number from a pedestrian's "citizen" field`;
@@ -189,7 +317,8 @@ export function citizenDetailProblem(sim: CitySim, entity: number): string | nul
   if (!w.isAlive(entity)) {
     return `entity ${entity} is not alive — it was destroyed, or never existed in this city`;
   }
-  if (!w.getComponent(entity, 'citizen')) {
+  const citizen = w.getComponent(entity, 'citizen');
+  if (!citizen) {
     const kind = w.getComponent(entity, 'building')
       ? 'a building'
       : w.getComponent(entity, 'pedestrianPath')
@@ -199,11 +328,24 @@ export function citizenDetailProblem(sim: CitySim, entity: number): string | nul
           : 'not a household';
     return `entity ${entity} is ${kind}, so it has no citizen to describe`;
   }
+  if (selectedMemberId !== undefined) {
+    if (!Number.isInteger(selectedMemberId) || selectedMemberId < 0) {
+      return `member ${selectedMemberId} is not a household member id — pass 0, 1, or 2`;
+    }
+    const profile = profileForCitizen(sim, entity, citizen);
+    if (!profile.members.some((member) => member.id === selectedMemberId)) {
+      return `${profile.householdName} has no member ${selectedMemberId} — available member ids are ${profile.members.map((member) => member.id).join(', ')}`;
+    }
+  }
   return null;
 }
 
 /** Full detail for one household, or null when `citizenDetailProblem` explains why not. */
-export function citizenDetail(sim: CitySim, entity: number): CitizenDetail | null {
+export function citizenDetail(
+  sim: CitySim,
+  entity: number,
+  selectedMemberId?: number,
+): CitizenDetail | null {
   const w = sim.world;
   const citizen = w.getComponent(entity, 'citizen');
   if (!citizen) return null;
@@ -216,23 +358,73 @@ export function citizenDetail(sim: CitySim, entity: number): CitizenDetail | nul
   const agent = active?.agent ?? null;
   // The live agent is authoritative for where they are heading; the phase's
   // implied target covers the tick before an agent has spawned.
-  const target =
-    active?.destination ??
-    fallbackTarget(citizen.phase, citizen.home, citizen.work, citizen.shop);
+  const phaseTarget = fallbackTarget(
+        w,
+        citizen.phase,
+        citizen.home,
+        citizen.work,
+        citizen.shop,
+        citizen.shopGen,
+        active?.allowPhaseFallback ?? false,
+      );
+  const target = active
+    ? (active.destination ?? (active.allowPhaseFallback ? phaseTarget : null))
+    : phaseTarget;
   const destination = phaseIsTravel(citizen.phase) ? place(w, target) : null;
+  const destinationPlace = phaseIsTravel(citizen.phase)
+    ? activityAnchor(w, target)
+    : null;
   // The outing sentence names the venue on both legs: the one being walked to,
   // and — once arrived, when `destination` is deliberately null — the one they
   // are sitting in.
-  const venue = citizen.phase === 'atShop' ? (citizen.shop ?? null) : target;
+  const outingVenue = entityAtGeneration(w, citizen.shop, citizen.shopGen);
+  const venue = citizen.phase === 'atShop' ? outingVenue : target;
 
   const position = agent ? w.getComponent(agent.entity, 'position') : undefined;
   const x = position?.x ?? home?.x ?? 0;
   const y = position?.y ?? home?.y ?? 0;
-  const activity = citizen.nextActivity ?? 'work';
+  const activity =
+    citizen.phase === 'home' &&
+    Number.isFinite(citizen.restUntil) &&
+    citizen.restUntil! > w.tick
+      ? 'rest'
+      : (citizen.nextActivity ?? 'work');
+  const activityPlace =
+    activity === 'shop' || activity === 'leisure'
+      ? activityAnchor(w, citizen.phase === 'toShop' ? target : outingVenue)
+      : null;
+  const storedProfile = w.getComponent(entity, 'citizenProfile');
+  const profileSource = hasStoredCitizenProfile(storedProfile) ? 'stored' : 'legacyFallback';
+  const profile = copyCitizenProfile(profileForCitizen(sim, entity, citizen));
+  const storedTraveller = active?.memberId ?? citizen.travellerMemberId;
+  const activeTravellerMemberId = profile.members.some((member) => member.id === storedTraveller)
+    ? storedTraveller!
+    : travellerForActivity(profile, activity);
+  const activeTraveller = profile.members.find(
+    (member) => member.id === activeTravellerMemberId,
+  )!;
+  const selectedMember =
+    selectedMemberId === undefined
+      ? activeTraveller
+      : profile.members.find((member) => member.id === selectedMemberId);
+  if (!selectedMember) return null;
+  const life = citizenLifeHistory(w.getComponent(entity, 'citizenLife'));
 
   return {
     entity,
     generation: w.getEntityGeneration(entity),
+    profile,
+    profileSource,
+    activeTravellerMemberId,
+    activeTraveller,
+    selectedMemberId: selectedMember.id,
+    selectedMember,
+    travellerMemberId: activeTravellerMemberId,
+    traveller: activeTraveller,
+    lifeEvents: life.events,
+    historyComplete: life.historyComplete,
+    historyStartTick: life.historyStartTick,
+    historyTruncated: life.historyTruncated,
     happiness: citizenHappiness(citizen),
     breakdown,
     phase: citizen.phase,
@@ -250,6 +442,8 @@ export function citizenDetail(sim: CitySim, entity: number): CitizenDetail | nul
     home,
     work,
     destination,
+    destinationPlace,
+    activityPlace,
     agent,
     x,
     y,
@@ -267,12 +461,20 @@ function phaseIsTravel(phase: TripPhase): boolean {
 
 /** Target implied by the phase, for the tick where the agent has not spawned yet. */
 function fallbackTarget(
+  w: CityWorld,
   phase: TripPhase,
   home: number,
   work: number | null,
   shop: number | null | undefined,
+  shopGeneration: number | null | undefined,
+  allowLegacyTarget: boolean,
 ): number | null {
   if (phase === 'toWork') return work;
-  if (phase === 'toShop') return shop ?? null;
+  if (phase === 'toShop') {
+    const guarded = entityAtGeneration(w, shop, shopGeneration);
+    if (guarded !== null || !allowLegacyTarget) return guarded;
+    if (shopGeneration !== null && shopGeneration !== undefined) return null;
+    return shop !== null && shop !== undefined && w.isAlive(shop) ? shop : null;
+  }
   return home;
 }

@@ -45,8 +45,12 @@ export interface PedestrianPose {
 const spread = (draw: number, variance: number): number => 1 + (draw - 0.5) * variance;
 
 /** Stable for one live pedestrian identity; a recycled generation walks anew. */
-export function pedestrianGait(id: number, generation: number): PedestrianGait {
-  const seed = pedestrianIdentitySeed(id, generation);
+export function pedestrianGait(
+  citizen: number,
+  generation: number,
+  memberId: number,
+): PedestrianGait {
+  const seed = pedestrianIdentitySeed(citizen, generation, memberId);
   return {
     phaseOffset: identityDraw(seed, 0x1f83d9ab),
     strideCells:

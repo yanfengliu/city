@@ -4,10 +4,11 @@ import { resolve } from 'node:path';
 // Raised 120k → 132k on 2026-07-17 for the T1 traffic realism sim (headway
 // lanes, signal stop lines, spawn gaps), then 132k → 142k on 2026-07-18 for
 // citizen depth (the happiness model and its explanatory labels, free-time
-// activity selection, and the on-demand citizen-detail query). The budget
-// still exists to catch accidental bloat and recorder leakage, not to freeze
-// the sim's feature set.
-const MAX_WORKER_BYTES = 142_000;
+// activity selection, and the on-demand citizen-detail query), then 142k →
+// 150k on 2026-07-19 for persistent three-person profiles, rare-write life
+// histories, and generation-safe person/home inspection. The budget still
+// exists to catch accidental bloat and recorder leakage, not to freeze the sim.
+const MAX_WORKER_BYTES = 150_000;
 const FORBIDDEN_RECORDER_STRINGS = ['SessionRecorder', 'MemorySink', 'city-playtest-recorder'];
 
 const assetsDir = resolve('dist/assets');

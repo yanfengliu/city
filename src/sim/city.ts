@@ -221,6 +221,9 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.registerComponent('waterPump');
   world.registerComponent('pedestrianPath');
   world.registerComponent('pedestrian');
+  // Rare-write citizen data is appended for snapshot/replay registration compatibility.
+  world.registerComponent('citizenProfile');
+  world.registerComponent('citizenLife');
 
   // -- world state --
   world.setState('treasury', STARTING_TREASURY);

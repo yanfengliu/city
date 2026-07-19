@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCitySim, type CitySim } from '../../src/sim/city';
 import { citizenDetail } from '../../src/sim/citizen-detail';
+import { SERVICE_FOOTPRINT } from '../../src/sim/constants/services';
 import { outingVenues } from '../../src/sim/traffic/trips';
 import type { TripPhase } from '../../src/sim/types';
 import { FAR_PARK, NEAR_PARK, outingPick, parkTown } from './park-town';
@@ -84,12 +85,45 @@ describe('an evening out at the park', () => {
 
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
     expect(detailStatus(sim, citizen)).toBe(`Walking out for the evening to ${where}`);
+    expect(citizenDetail(sim, citizen)?.destination).toBeNull();
+    expect(citizenDetail(sim, citizen)?.destinationPlace).toEqual(
+      expect.objectContaining({
+        entity: town.parks[0],
+        generation: sim.world.getEntityGeneration(town.parks[0]),
+        kind: 'service',
+        label: 'park',
+      }),
+    );
+    expect(citizenDetail(sim, citizen)?.activityPlace).toEqual(
+      expect.objectContaining({
+        entity: town.parks[0],
+        generation: sim.world.getEntityGeneration(town.parks[0]),
+        x: base.x + NEAR_PARK,
+        y: streetY - 2,
+        w: SERVICE_FOOTPRINT,
+        h: SERVICE_FOOTPRINT,
+        kind: 'service',
+        label: 'park',
+      }),
+    );
 
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'atShop', 2_000);
     // Arrived, so there is no `destination` to read — the venue still has to
     // be named, or the panel would read "at an unknown address".
     expect(citizenDetail(sim, citizen)?.destination).toBeNull();
+    expect(citizenDetail(sim, citizen)?.destinationPlace).toBeNull();
+    expect(citizenDetail(sim, citizen)?.activityPlace?.entity).toBe(town.parks[0]);
     expect(detailStatus(sim, citizen)).toContain(`Out for the evening at ${where} until tick`);
+
+    stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toHome', 2_000);
+    const returning = citizenDetail(sim, citizen)!;
+    expect(returning.destinationPlace).toEqual(
+      expect.objectContaining({
+        entity: citizenOf(sim, citizen).home,
+        kind: 'building',
+      }),
+    );
+    expect(returning.activityPlace?.entity).toBe(town.parks[0]);
   });
 
   it('never leaves a park-goer in a travelling phase without an agent', () => {

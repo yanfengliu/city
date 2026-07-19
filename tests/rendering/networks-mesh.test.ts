@@ -65,6 +65,19 @@ const emptyPower = { plants: [], plantCells: [], lineCells: [] };
 const emptyWater = { pumpCells: [], pipeCells: [] };
 
 describe('NetworksView', () => {
+  it('exposes solid utility models as pick blockers without thin network geometry', () => {
+    const view = new NetworksView(64);
+    const blockers = view.solidPickBlockers[0];
+
+    for (const name of ['coal-plants', 'wind-turbines', 'wind-rotors', 'water-pumps']) {
+      expect(blockers.getObjectByName(name), name).toBeDefined();
+    }
+    for (const name of ['power-poles', 'power-wires-east', 'power-wires-south', 'water-pipes']) {
+      expect(blockers.getObjectByName(name), name).toBeUndefined();
+      expect(view.group.getObjectByName(name), name).toBeDefined();
+    }
+  });
+
   it('shows underground pipes only while the Water overlay is active', () => {
     const view = new NetworksView(64);
 

@@ -1,8 +1,17 @@
 import type { GroundPicker } from '../rendering/picking';
-import type { Tools } from './tools';
+import type { PersonSelection, Tools } from './tools';
 
 /** Max pointer travel (px, squared) for a press to still count as a select click. */
 const CLICK_SLOP_SQ = 36;
+/** Stationary-pointer rechecks stay responsive without raycasting every render frame. */
+export const PERSON_HOVER_REFRESH_MS = 100;
+
+export interface InputController {
+  /** Clears the cached pointer identity as well as the visible hover state. */
+  clearPersonHover(): void;
+  /** Rechecks the last in-canvas pointer after walkers or the camera move. */
+  refreshPersonHover(): void;
+}
 
 /**
  * Wires pointer/keyboard events on the canvas to the tool state machine.
@@ -16,11 +25,34 @@ export function attachInput(
   picker: GroundPicker,
   tools: Tools,
   /** Citizen entity under the pointer, or null — hit-tested before the ground. */
-  pickPerson?: (clientX: number, clientY: number) => number | null,
-): void {
+  pickPerson?: (clientX: number, clientY: number) => PersonSelection | null,
+  /** Called only when the hovered citizen identity changes. */
+  onPersonHover?: (citizen: PersonSelection | null) => void,
+  now: () => number = () => performance.now(),
+): InputController {
   let clickStart: { x: number; y: number } | null = null;
+  let hoveredPerson: PersonSelection | null = null;
+  let lastPointer: { x: number; y: number } | null = null;
+  let lastStationaryRefreshAt = Number.NEGATIVE_INFINITY;
+
+  const setHoveredPerson = (citizen: PersonSelection | null): void => {
+    if (
+      citizen?.id === hoveredPerson?.id &&
+      citizen?.generation === hoveredPerson?.generation &&
+      citizen?.memberId === hoveredPerson?.memberId
+    ) return;
+    hoveredPerson = citizen;
+    element.style.cursor = citizen === null ? '' : 'pointer';
+    onPersonHover?.(citizen);
+  };
+
+  const pickHoveredPerson = (): void => {
+    if (!lastPointer || tools.isBuildTool) return;
+    setHoveredPerson(pickPerson?.(lastPointer.x, lastPointer.y) ?? null);
+  };
 
   element.addEventListener('pointerdown', (event) => {
+    lastPointer = { x: event.clientX, y: event.clientY };
     if (event.button === 2 && tools.dragging) {
       tools.cancelDrag();
       return;
@@ -44,7 +76,12 @@ export function attachInput(
   });
 
   element.addEventListener('pointermove', (event) => {
-    if (!tools.isBuildTool) return;
+    lastPointer = { x: event.clientX, y: event.clientY };
+    if (!tools.isBuildTool) {
+      pickHoveredPerson();
+      return;
+    }
+    setHoveredPerson(null);
     // During a drag, clamp so the selection stays usable while the pointer roams off-map.
     const cell = tools.dragging
       ? picker.pickClamped(event.clientX, event.clientY)
@@ -53,6 +90,7 @@ export function attachInput(
   });
 
   element.addEventListener('pointerup', (event) => {
+    lastPointer = { x: event.clientX, y: event.clientY };
     if (event.button !== 0) return;
     if (tools.dragging) {
       tools.pointerUp(picker.pickClamped(event.clientX, event.clientY));
@@ -73,6 +111,8 @@ export function attachInput(
   });
 
   element.addEventListener('pointerleave', () => {
+    lastPointer = null;
+    setHoveredPerson(null);
     if (!tools.dragging) tools.pointerMove(null);
   });
 
@@ -81,4 +121,18 @@ export function attachInput(
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') tools.cancelDrag();
   });
+
+  return {
+    clearPersonHover: () => {
+      lastStationaryRefreshAt = Number.NEGATIVE_INFINITY;
+      setHoveredPerson(null);
+    },
+    refreshPersonHover: () => {
+      if (!lastPointer || tools.isBuildTool) return;
+      const timestamp = now();
+      if (timestamp - lastStationaryRefreshAt < PERSON_HOVER_REFRESH_MS) return;
+      lastStationaryRefreshAt = timestamp;
+      pickHoveredPerson();
+    },
+  };
 }

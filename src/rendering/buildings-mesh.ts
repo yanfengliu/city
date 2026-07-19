@@ -86,6 +86,16 @@ const archetypeMeshes = (archetype: Archetype): readonly InstancedMesh[] => [
 ];
 
 /**
+ * Three caches InstancedMesh bounds after the first raycast. Matrices and live
+ * counts change incrementally here, so defer a fresh bound until it is next
+ * needed instead of leaving a stale sphere or recomputing one per upsert.
+ */
+const invalidateInstanceBounds = (mesh: InstancedMesh): void => {
+  mesh.boundingSphere = null;
+  mesh.boundingBox = null;
+};
+
+/**
  * Grown RCI buildings as five instanced layers per zone: body, roof, rooftop
  * detail, literal windows, and a semantic frontage assembly. Every layer shares
  * one slot layout, so detail remains fixed-batch regardless of city size. Incremental
@@ -219,6 +229,7 @@ export class BuildingsView {
         mesh.getColorAt(last, COLOR);
         mesh.setColorAt(entry.slot, COLOR);
         mesh.instanceMatrix.needsUpdate = true;
+        invalidateInstanceBounds(mesh);
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       }
       archetype.ids[entry.slot] = movedId;
@@ -292,7 +303,10 @@ export class BuildingsView {
   }
 
   private syncCount(archetype: Archetype): void {
-    for (const mesh of archetypeMeshes(archetype)) mesh.count = archetype.ids.length;
+    for (const mesh of archetypeMeshes(archetype)) {
+      mesh.count = archetype.ids.length;
+      invalidateInstanceBounds(mesh);
+    }
   }
 
   private replaceMesh(
@@ -308,6 +322,7 @@ export class BuildingsView {
     }
     next.count = old.count;
     next.instanceMatrix.needsUpdate = true;
+    invalidateInstanceBounds(next);
     this.group.remove(old);
     old.dispose();
     return next;
@@ -394,6 +409,7 @@ export class BuildingsView {
       this.writeOverlayColors(archetype, slot, view, levelIndex);
       for (const mesh of archetypeMeshes(archetype)) {
         mesh.instanceMatrix.needsUpdate = true;
+        invalidateInstanceBounds(mesh);
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       }
       return;
@@ -442,6 +458,7 @@ export class BuildingsView {
     }
     for (const mesh of archetypeMeshes(archetype)) {
       mesh.instanceMatrix.needsUpdate = true;
+      invalidateInstanceBounds(mesh);
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
   }

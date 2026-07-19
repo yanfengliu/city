@@ -1,6 +1,7 @@
 import { MOVE_IN_BASE, MOVE_IN_DEMAND_SCALE, MOVE_IN_TRICKLE_THRESHOLD } from './constants/zoning';
 import { HAPPINESS_BASE } from './constants/happiness';
 import { buildingCapacity } from './buildings';
+import { appendCitizenLifeEvent, createCitizenProfile } from './citizen-profile';
 import type { CitySim } from './city';
 import type { CityWorld, DemandState } from './types';
 
@@ -8,7 +9,7 @@ import type { CityWorld, DemandState } from './types';
  * Moves new citizens (households) into residential buildings while R demand is
  * positive. All counts are in citizen entities — the canonical sim unit.
  */
-export function moveInSystem(_sim: CitySim): (w: CityWorld) => void {
+export function moveInSystem(sim: CitySim): (w: CityWorld) => void {
   return (w) => {
     const demand = w.getState('demand') as DemandState | undefined;
     // Below the trickle threshold nobody comes; between it and 0, cheap empty
@@ -42,6 +43,12 @@ export function moveInSystem(_sim: CitySim): (w: CityWorld) => void {
       if (!position) continue;
       const citizen = w.createEntity();
       w.setPosition(citizen, { x: position.x, y: position.y });
+      const profile = createCitizenProfile(
+        sim.seed,
+        citizen,
+        w.getEntityGeneration(citizen),
+        home,
+      );
       w.addComponent(citizen, 'citizen', {
         home,
         work: null,
@@ -54,6 +61,14 @@ export function moveInSystem(_sim: CitySim): (w: CityWorld) => void {
         // brand-new household never reads as miserable.
         happiness: HAPPINESS_BASE,
         strandedAt: null,
+        travellerMemberId: profile.primaryWorkerMemberId,
+      });
+      w.addComponent(citizen, 'citizenProfile', profile);
+      w.addComponent(citizen, 'citizenLife', { events: [] });
+      appendCitizenLifeEvent(w, citizen, {
+        kind: 'movedIn',
+        memberId: profile.primaryWorkerMemberId,
+        place: home,
       });
       w.patchComponent(home, 'building', (b) => {
         b.residents += 1;

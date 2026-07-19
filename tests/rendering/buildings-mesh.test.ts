@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Color, InstancedMesh, Matrix4 } from 'three';
+import { Color, InstancedMesh, Matrix4, Raycaster, Vector3 } from 'three';
 import type { MeshLambertMaterial } from 'three';
 import {
   BUILDING_ABANDONED_FRONTAGE_COLOR,
@@ -127,6 +127,31 @@ describe('BuildingsView', () => {
     expect(mesh(view, 'R-roof-details').count).toBe(0);
     expect(mesh(view, 'R-windows').count).toBe(0);
     expect(mesh(view, 'R-frontages').count).toBe(0);
+  });
+
+  it('invalidates cached instance bounds after count and matrix changes', () => {
+    const view = new BuildingsView();
+    const walls = mesh(view, 'R-walls');
+    walls.computeBoundingSphere();
+    expect(walls.boundingSphere?.radius).toBe(-1);
+
+    view.upsert({ id: 1, zone: 'R', x: 2, y: 3, w: 1, h: 1, level: 1, abandoned: false });
+    expect(walls.boundingSphere).toBeNull();
+    expect(
+      new Raycaster(new Vector3(2.5, 10, 3.5), new Vector3(0, -1, 0))
+        .intersectObject(walls, false),
+    ).not.toHaveLength(0);
+    expect(walls.boundingSphere).not.toBeNull();
+
+    view.upsert({ id: 1, zone: 'R', x: 40, y: 42, w: 1, h: 1, level: 1, abandoned: false });
+    expect(walls.boundingSphere).toBeNull();
+    expect(
+      new Raycaster(new Vector3(40.5, 10, 42.5), new Vector3(0, -1, 0))
+        .intersectObject(walls, false),
+    ).not.toHaveLength(0);
+
+    view.remove(1);
+    expect(walls.boundingSphere).toBeNull();
   });
 
   it('keeps window and frontage instances synchronized after capacity growth', () => {

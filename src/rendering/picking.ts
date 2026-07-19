@@ -1,9 +1,11 @@
-import { Raycaster, Vector2, Vector3 } from 'three';
-import type { Camera, InstancedMesh, Ray } from 'three';
+import { Matrix4, Raycaster, Vector2, Vector3 } from 'three';
+import type { Camera, InstancedMesh, Material, Object3D, Ray } from 'three';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 const DIRECTION_EPSILON = 1e-10;
 const INTERSECTION_EPSILON = 1e-7;
+const INSTANCE_MATRIX = new Matrix4();
+const INSTANCE_CENTER = new Vector3();
 
 function clipAxis(
   origin: number,
@@ -24,6 +26,8 @@ export interface PickedInstance {
   mesh: InstancedMesh;
   /** Index into the batch — the caller maps it back to a sim entity. */
   instanceId: number;
+  /** Distance from the configured ray origin to the instance surface. */
+  distance: number;
 }
 
 /**
@@ -42,10 +46,84 @@ export function nearestInstanceHit(
     for (const hit of raycaster.intersectObject(mesh, false)) {
       if (hit.instanceId === undefined || hit.distance >= bestDistance) continue;
       bestDistance = hit.distance;
-      best = { mesh, instanceId: hit.instanceId };
+      best = { mesh, instanceId: hit.instanceId, distance: hit.distance };
     }
   }
   return best;
+}
+
+/** One closest surface hit per live instance, across every offered batch. */
+function instanceHits(
+  raycaster: Raycaster,
+  meshes: readonly InstancedMesh[],
+): PickedInstance[] {
+  const hits: PickedInstance[] = [];
+  for (const mesh of meshes) {
+    if (mesh.count === 0 || !mesh.visible) continue;
+    const seen = new Set<number>();
+    for (const hit of raycaster.intersectObject(mesh, false)) {
+      if (hit.instanceId === undefined || seen.has(hit.instanceId)) continue;
+      seen.add(hit.instanceId);
+      hits.push({ mesh, instanceId: hit.instanceId, distance: hit.distance });
+    }
+  }
+  return hits;
+}
+
+/** Projected centre of an instance in pixel coordinates relative to `rect`. */
+function instanceScreenDistanceSq(
+  hit: PickedInstance,
+  camera: Camera,
+  pointer: Vector2,
+  width: number,
+  height: number,
+): number {
+  const geometry = hit.mesh.geometry;
+  if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+  const localCenter = geometry.boundingSphere?.center;
+  if (!localCenter) return Number.POSITIVE_INFINITY;
+  hit.mesh.updateMatrixWorld(true);
+  hit.mesh.getMatrixAt(hit.instanceId, INSTANCE_MATRIX);
+  INSTANCE_CENTER.copy(localCenter)
+    .applyMatrix4(INSTANCE_MATRIX)
+    .applyMatrix4(hit.mesh.matrixWorld)
+    .project(camera);
+  const dx = (INSTANCE_CENTER.x - pointer.x) * width;
+  const dy = (INSTANCE_CENTER.y - pointer.y) * height;
+  return dx * dx + dy * dy;
+}
+
+function materialIsVisible(object: Object3D): boolean {
+  const material = (object as Object3D & { material?: Material | Material[] }).material;
+  if (material === undefined) return true;
+  return (Array.isArray(material) ? material : [material]).some((entry) => entry.visible);
+}
+
+function objectIsVisible(object: Object3D): boolean {
+  for (let current: Object3D | null = object; current !== null; current = current.parent) {
+    if (!current.visible) return false;
+  }
+  return materialIsVisible(object);
+}
+
+/**
+ * Whether an instance hit is the first visible object on its ray. Blockers are
+ * ordinary rendered scene roots (for example building/structure groups); only
+ * a strictly nearer, effectively visible descendant occludes the instance.
+ */
+export function instanceHitIsVisible(
+  raycaster: Raycaster,
+  hit: PickedInstance,
+  blockers: readonly Object3D[],
+): boolean {
+  for (const blocker of blockers) {
+    if (!objectIsVisible(blocker)) continue;
+    for (const candidate of raycaster.intersectObject(blocker, true)) {
+      if (candidate.distance + INTERSECTION_EPSILON >= hit.distance) break;
+      if (objectIsVisible(candidate.object)) return false;
+    }
+  }
+  return true;
 }
 
 /** Integer sim cell coordinates under the pointer. */
@@ -157,9 +235,31 @@ export class GroundPicker {
     clientX: number,
     clientY: number,
     meshes: readonly InstancedMesh[],
+    blockers: readonly Object3D[] = [],
   ): PickedInstance | null {
     if (!this.pointerRay(clientX, clientY)) return null;
-    return nearestInstanceHit(this.raycaster, meshes);
+    const rect = this.element.getBoundingClientRect();
+    let best: PickedInstance | null = null;
+    let bestScreenDistance = Number.POSITIVE_INFINITY;
+    for (const hit of instanceHits(this.raycaster, meshes)) {
+      if (!instanceHitIsVisible(this.raycaster, hit, blockers)) continue;
+      const screenDistance = instanceScreenDistanceSq(
+        hit,
+        this.camera,
+        this.ndc,
+        rect.width / 2,
+        rect.height / 2,
+      );
+      if (
+        screenDistance < bestScreenDistance - INTERSECTION_EPSILON ||
+        (Math.abs(screenDistance - bestScreenDistance) <= INTERSECTION_EPSILON &&
+          hit.distance < (best?.distance ?? Number.POSITIVE_INFINITY))
+      ) {
+        best = hit;
+        bestScreenDistance = screenDistance;
+      }
+    }
+    return best;
   }
 
   private pointerRay(clientX: number, clientY: number): Ray | null {

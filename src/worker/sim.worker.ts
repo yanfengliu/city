@@ -1,6 +1,5 @@
 import { MemorySink, SessionRecorder, snapshotAtTick, type SessionBundle } from 'civ-engine';
 import { createCitySim, getTreasury, rebuildDerived, type CitySimConfig } from '../sim/city';
-import { citizenDetail, citizenDetailProblem } from '../sim/citizen-detail';
 import { cityFindingToMarker, findingsFromMarkers } from '../harness/findings';
 import { selfCheckBundle } from '../harness/inspect';
 import { simSummary } from '../sim/summary';
@@ -19,6 +18,7 @@ import {
 } from './entity-projection';
 import { MovingAgentMessageSync } from './pedestrian-projection';
 import { simFailureMessage, unknownCommandRejection } from './failure-reporting';
+import { inspectCitizenResponse, inspectHomeResidentResponse } from './citizen-inspection';
 import type {
   BuildingView,
   ClientToWorker,
@@ -266,6 +266,7 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
       knownStructures.add(id);
       structureUpserts.push({
         id,
+        generation: world.getEntityGeneration(id),
         x: position.x,
         y: position.y,
         w: SERVICE_FOOTPRINT,
@@ -447,20 +448,13 @@ addEventListener('message', (event) => {
       // On-demand only: citizens are never streamed, so the panel pays for one
       // household when the player asks and nothing otherwise. Always replies so
       // the client Promise settles, with a reason when there is no household.
-      const detail = citizenDetail(sim, message.entity);
+      post(inspectCitizenResponse(sim, message));
       // A null detail always says why — never a bare null the caller has to
       // guess at (AGENTS.md: error messages are a product surface).
-      const error = detail
-        ? undefined
-        : (citizenDetailProblem(sim, message.entity) ??
-          `entity ${message.entity} has no citizen detail at tick ${world.tick}`);
-      post({
-        type: 'citizenDetail',
-        id: message.id,
-        entity: message.entity,
-        detail,
-        ...(error === undefined ? {} : { error }),
-      });
+      break;
+    }
+    case 'inspectHomeResident': {
+      post(inspectHomeResidentResponse(sim, message));
       break;
     }
     case 'selfCheck': {

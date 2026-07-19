@@ -22,9 +22,11 @@ import {
 } from './constants/happiness';
 import { SERVICE_NAMES, SERVICE_TYPES } from './constants/services';
 import { DEFAULT_TAX_RATE } from './constants/zoning';
+import { CITIZEN_PRIMARY_MEMBER_ID } from './constants/citizens';
 import { taxRateOf } from './economy';
 import { ZONE_NAMES } from './rejection';
 import type { CitySim } from './city';
+import { appendCitizenLifeEvent } from './citizen-profile';
 import type { CitizenComponent, CityWorld, ServiceType, ZoneType } from './types';
 
 /**
@@ -87,10 +89,16 @@ export function recentlyStranded(w: CityWorld, citizen: CitizenComponent): boole
  * counter and the personal memory can never disagree.
  */
 export function markStranded(w: CityWorld, citizenId: number): void {
-  if (!w.getComponent(citizenId, 'citizen')) return;
+  const citizen = w.getComponent(citizenId, 'citizen');
+  if (!citizen) return;
   const tick = w.tick;
   w.patchComponent(citizenId, 'citizen', (data) => {
     data.strandedAt = tick;
+  });
+  appendCitizenLifeEvent(w, citizenId, {
+    kind: 'stranded',
+    memberId: citizen.travellerMemberId ?? CITIZEN_PRIMARY_MEMBER_ID,
+    activity: citizen.nextActivity ?? 'work',
   });
 }
 

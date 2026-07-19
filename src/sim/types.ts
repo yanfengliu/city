@@ -140,6 +140,69 @@ export type FreeTimeActivity = 'shop' | 'leisure' | 'rest';
 /** The whole plan vocabulary: a commute, or one of the free-time options. */
 export type CitizenActivity = 'work' | FreeTimeActivity;
 
+export type CitizenLifeStage = 'child' | 'teen' | 'adult' | 'senior';
+
+export type CitizenEducation = 'none' | 'primary' | 'secondary' | 'trade' | 'university';
+
+/** One named person's current place in the household and city economy. */
+export type CitizenMemberRole =
+  | 'child'
+  | 'student'
+  | 'jobSeeker'
+  | 'commercialWorker'
+  | 'industrialWorker'
+  | 'caregiver'
+  | 'retired';
+
+export interface CitizenMemberProfile {
+  /** Stable within the household; (citizen entity, member id) identifies a person. */
+  id: number;
+  givenName: string;
+  age: number;
+  lifeStage: CitizenLifeStage;
+  education: CitizenEducation;
+  role: CitizenMemberRole;
+}
+
+/** Persistent identity for the three people represented by one citizen entity. */
+export interface CitizenProfile {
+  version: 1;
+  householdName: string;
+  members: CitizenMemberProfile[];
+  /** The one member represented by the household's single employment slot. */
+  primaryWorkerMemberId: number;
+}
+
+export type CitizenLifeEventKind =
+  | 'movedIn'
+  | 'hired'
+  | 'jobLost'
+  | 'outingDeparted'
+  | 'stranded';
+
+/** A bounded, deterministic biography entry; ticks are the simulation clock. */
+export interface CitizenLifeEvent {
+  kind: CitizenLifeEventKind;
+  tick: number;
+  memberId: number;
+  /** Entity involved (home, workplace, or venue), when the event has one. */
+  place?: number;
+  /** Generation paired with place when that entity was live at event time. */
+  placeGeneration?: number;
+  activity?: CitizenActivity;
+}
+
+/** Rare-write biography, split from the per-tick citizen activity component. */
+export interface CitizenLifeComponent {
+  events: CitizenLifeEvent[];
+  /** True only when this record reaches back to the household's move-in. */
+  historyComplete?: boolean;
+  /** First tick this biography can substantiate; absent before the first known event. */
+  historyStartTick?: number;
+  /** The retained trail is incomplete because older entries fell out or saved data was malformed. */
+  historyTruncated?: boolean;
+}
+
 export interface CitizenComponent {
   home: number;
   work: number | null;
@@ -171,12 +234,18 @@ export interface CitizenComponent {
    * of `disconnectedTrips`. Null (or absent) when no trip has ever failed.
    */
   strandedAt?: number | null;
+  /** Member currently represented by this household's walker/car. */
+  travellerMemberId?: number;
+  /** Exclusive end tick of a rest currently in progress at home. */
+  restUntil?: number | null;
 }
 
 /** Immutable walking route; stored separately so tick diffs do not copy the path array. */
 export interface PedestrianPathComponent {
   citizen: number;
   citizenGen: number;
+  /** Stable named person represented by this walker, independent of later plans. */
+  memberId: number;
   cells: number[];
   destination: number;
   destinationGen: number;
@@ -254,6 +323,9 @@ export type CityComponents = {
   /** Appended for save/replay registration compatibility. */
   pedestrianPath: PedestrianPathComponent;
   pedestrian: PedestrianComponent;
+  /** Appended rare-write components; order is a save/replay registration contract. */
+  citizenProfile: CitizenProfile;
+  citizenLife: CitizenLifeComponent;
 };
 
 export type CityCommands = {

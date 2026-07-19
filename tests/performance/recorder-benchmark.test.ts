@@ -50,7 +50,7 @@ interface Aggregate {
 // The newest recorder profile. Its manifest must describe the current tree, so
 // this points at a freshly captured file whenever a pinned input changes;
 // earlier dated profiles stay in results/ as history.
-const resultText = readFileSync('benchmarks/results/2026-07-17-recorder-profile.json', 'utf8');
+const resultText = readFileSync('benchmarks/results/2026-07-19-recorder-profile.json', 'utf8');
 const result = JSON.parse(resultText) as RecorderResult;
 
 function mean(runs: RecorderRun[], select: (run: RecorderRun) => number): number {
@@ -138,25 +138,23 @@ describe('committed recorder benchmark evidence', () => {
 
   it('keeps measured city outcomes identical with and without recording', () => {
     expect(new Set(result.runs.map((run) => JSON.stringify(run.final))).size).toBe(1);
-    // Re-pinned 2026-07-18 for citizen free-time plans. `rest` keeps a share
-    // of households at home, so walkers and shopping trips fall (107 → 82,
-    // 509 → 427) — the intended cost of "staying in" being a real choice. The
-    // rest of the drift is the trajectory moving as activity selection changes
-    // how the seeded RNG is consumed; determinism itself is pinned by the
-    // identical-outcomes assertion above, not by these figures.
+    // Re-pinned 2026-07-19 for three-person profiles and composition-shaped
+    // free-time weights. The same seeded choice now has a household-specific
+    // distribution, so the trajectory changes without adding an RNG draw;
+    // determinism is the identical-outcomes assertion, not these exact counts.
     expect(result.runs[0]?.final).toEqual({
       tick: 3002,
-      buildingCount: 608,
-      vehicles: 111,
-      pedestrians: 82,
-      completedShoppingTrips: 427,
-      populationPeople: 1629,
+      buildingCount: 548,
+      vehicles: 80,
+      pedestrians: 122,
+      completedShoppingTrips: 413,
+      populationPeople: 1611,
     });
     expect(result.runs.filter((run) => run.label === 'lean').every(
       (run) => run.bundleJsonBytes === 0,
     )).toBe(true);
     expect(result.runs.filter((run) => run.label === 'recorded').every(
-      (run) => run.bundleJsonBytes > 70_000_000,
+      (run) => run.bundleJsonBytes > 100_000_000,
     )).toBe(true);
   });
 });

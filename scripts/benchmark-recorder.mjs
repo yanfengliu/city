@@ -83,7 +83,7 @@ function aggregate(runs, label) {
 
 const args = parseArgs(process.argv.slice(2));
 const outputPath = resolve(
-  args.get('output') ?? 'benchmarks/results/2026-07-17-recorder-profile.json',
+  args.get('output') ?? 'benchmarks/results/2026-07-19-recorder-profile.json',
 );
 const vite = await createServer({
   appType: 'custom',

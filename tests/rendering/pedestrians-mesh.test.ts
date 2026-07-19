@@ -1,7 +1,7 @@
-import { Color, Matrix4, Vector3 } from 'three';
+import { Color, Matrix4, Raycaster, Vector3 } from 'three';
 import type { BufferGeometry, InstancedMesh } from 'three';
 import { describe, expect, it } from 'vitest';
-import type { PedestrianPurpose, PedestrianView } from '../../src/protocol/messages';
+import type { PedestrianView } from '../../src/protocol/messages';
 import {
   PEDESTRIAN_ARM,
   PEDESTRIAN_BODY,
@@ -11,10 +11,12 @@ import {
 } from '../../src/rendering/constants';
 import { pedestrianGait } from '../../src/rendering/pedestrian-gait';
 import { PedestriansView } from '../../src/rendering/pedestrians-mesh';
+import { nearestInstanceHit } from '../../src/rendering/picking';
+import { PEDESTRIAN_PICK_RADIUS } from '../../src/rendering/pedestrian-selection';
 import {
   PEDESTRIAN_MAX_HALF_WIDTH,
   PEDESTRIAN_MAX_WIDTH_SCALE,
-  PEDESTRIAN_PURPOSE_TOP_PALETTES,
+  PEDESTRIAN_TOP_COLORS,
   PEDESTRIAN_Y,
   pedestrianStyle,
 } from '../../src/rendering/pedestrian-style';
@@ -30,6 +32,9 @@ const pedestrian = (
 ): PedestrianView => ({
   id: 1,
   generation: 0,
+  citizen: 101,
+  citizenGeneration: 7,
+  memberId: 1,
   fromCell: 0,
   toCell: 1,
   t: 0.5,
@@ -151,7 +156,8 @@ describe('PedestriansView', () => {
     const view = new PedestriansView(10);
 
     expect(view.group.name).toBe('pedestrians');
-    expect(view.group.children).toEqual(batches(view));
+    expect(view.group.children.slice(0, 7)).toEqual(batches(view));
+    expect(view.group.children[7]).toBe(view.markerGroup);
     expect(batches(view).map((mesh) => mesh.name)).toEqual([
       'pedestrian-tops',
       'pedestrian-bottoms',
@@ -174,6 +180,10 @@ describe('PedestriansView', () => {
       expect(mesh.frustumCulled).toBe(false);
       expect(mesh.count).toBe(0);
     }
+    expect(view.pickableBatches).toEqual([view.pickMesh]);
+    expect(view.pickMesh.name).toBe('pedestrian-pick-targets');
+    expect(view.pickMesh.count).toBe(0);
+    expect(view.markerGroup.children).toEqual([view.hoverMarker, view.selectionMarker]);
     const headZs = axisValues(view.headMesh.geometry, 2);
     expect(Math.max(...headZs)).toBeGreaterThan(0.08);
     expect(view.count).toBe(0);
@@ -195,6 +205,76 @@ describe('PedestriansView', () => {
       expect(Math.max(...ys)).toBeCloseTo(0, 6);
       expect(Math.min(...ys)).toBeCloseTo(-length, 6);
     }
+  });
+
+  it('repairs an empty cached crowd bound and raycasts the real pedestrian geometry', () => {
+    const view = new PedestriansView(10, () => 100);
+    // Reproduce the browser failure: Three cached these while count was zero.
+    view.topMesh.computeBoundingSphere();
+    view.pickMesh.computeBoundingSphere();
+    expect(view.topMesh.boundingSphere?.radius).toBe(-1);
+    expect(view.pickMesh.boundingSphere?.radius).toBe(-1);
+
+    view.setPedestrians([pedestrian()]);
+
+    expect(view.topMesh.boundingSphere!.radius).toBeGreaterThan(0);
+    expect(view.pickMesh.boundingSphere!.radius).toBeGreaterThan(0);
+    const center = new Vector3().setFromMatrixPosition(matrixOf(view.pickMesh, 0));
+    const ray = new Raycaster(
+      new Vector3(center.x, center.y + 5, center.z),
+      new Vector3(0, -1, 0),
+    );
+    expect(nearestInstanceHit(ray, [view.topMesh])?.instanceId).toBe(0);
+    expect(nearestInstanceHit(ray, view.pickableBatches)?.instanceId).toBe(0);
+  });
+
+  it('gives tiny pedestrian geometry a forgiving deterministic pick cylinder', () => {
+    const view = new PedestriansView(10, () => 100);
+    view.setPedestrians([
+      pedestrian({ id: 5, citizen: 50, memberId: 0 }),
+      pedestrian({ id: 8, citizen: 80, memberId: 2, fromCell: 10, toCell: 11 }),
+    ]);
+    const center = new Vector3().setFromMatrixPosition(matrixOf(view.pickMesh, 1));
+    const ray = new Raycaster(
+      new Vector3(center.x + PEDESTRIAN_PICK_RADIUS * 0.75, center.y + 5, center.z),
+      new Vector3(0, -1, 0),
+    );
+
+    // The offset deliberately misses every narrow body/limb batch.
+    expect(nearestInstanceHit(ray, batches(view))).toBeNull();
+    const hit = nearestInstanceHit(ray, view.pickableBatches);
+    expect(hit?.mesh).toBe(view.pickMesh);
+    expect(hit?.instanceId).toBe(1);
+    expect(view.citizenRefAtInstance(hit!.instanceId)).toEqual({
+      id: 80,
+      generation: 7,
+      memberId: 2,
+    });
+  });
+
+  it('tracks hover and selection rings by household incarnation and member', () => {
+    const view = new PedestriansView(10, () => 100);
+    view.setPedestrians([
+      pedestrian({ id: 3, citizen: 30, citizenGeneration: 4, memberId: 0 }),
+      pedestrian({ id: 4, citizen: 30, citizenGeneration: 4, memberId: 2, fromCell: 10, toCell: 11 }),
+    ]);
+
+    view.setHoveredCitizen({ id: 30, generation: 4, memberId: 0 });
+    expect(view.hoverMarker.visible).toBe(true);
+    expect(view.selectionMarker.visible).toBe(false);
+    expect(view.hoverMarker.position.x).toBeCloseTo(matrixOf(view.pickMesh, 0).elements[12]);
+
+    view.setSelectedCitizen({ id: 30, generation: 4, memberId: 0 });
+    expect(view.selectionMarker.visible).toBe(true);
+    expect(view.hoverMarker.visible).toBe(false);
+
+    view.setHoveredCitizen({ id: 30, generation: 4, memberId: 2 });
+    expect(view.hoverMarker.visible).toBe(true);
+    expect(view.hoverMarker.position.x).toBeCloseTo(matrixOf(view.pickMesh, 1).elements[12]);
+
+    // Same numeric household/member from another ECS incarnation must not mark.
+    view.setSelectedCitizen({ id: 30, generation: 5, memberId: 0 });
+    expect(view.selectionMarker.visible).toBe(false);
   });
 
   it('renders simultaneous opposing walkers on opposite sidewalk sides', () => {
@@ -291,32 +371,27 @@ describe('PedestriansView', () => {
     expect(returned.yaw).toBeCloseTo(0, 5);
   });
 
-  it('caps live instances and keeps tops inside trip-purpose color families', () => {
-    const purposes: PedestrianPurpose[] = [
-      'commercial-work',
-      'industrial-work',
-      'shopping',
-    ];
+  it('caps every visible and pick batch while keeping clothes in the identity palette', () => {
+    const purposes: PedestrianView['purpose'][] = ['commercial-work', 'industrial-work', 'shopping'];
     const view = new PedestriansView(10, () => 100);
     const list = Array.from({ length: PEDESTRIAN_CAPACITY + 4 }, (_, id) =>
-      pedestrian({ id, purpose: purposes[id % purposes.length] }),
+      pedestrian({ id, citizen: 1_000 + id, memberId: id % 3, purpose: purposes[id % purposes.length] }),
     );
 
     view.setPedestrians(list);
 
     expect(view.count).toBe(PEDESTRIAN_CAPACITY);
     for (const mesh of batches(view)) expect(mesh.count).toBe(PEDESTRIAN_CAPACITY);
+    expect(view.pickMesh.count).toBe(PEDESTRIAN_CAPACITY);
     for (let slot = 0; slot < purposes.length; slot++) {
-      expect(PEDESTRIAN_PURPOSE_TOP_PALETTES[purposes[slot]]).toContain(
-        colorAt(view.topMesh, slot),
-      );
+      expect(PEDESTRIAN_TOP_COLORS).toContain(colorAt(view.topMesh, slot));
     }
   });
 
   it('dresses the limbs in the identity garments', () => {
     const view = new PedestriansView(10, () => 100);
-    view.setPedestrians([pedestrian({ id: 12, generation: 4 })]);
-    const style = pedestrianStyle(12, 4, 'commercial-work');
+    view.setPedestrians([pedestrian({ citizen: 12, citizenGeneration: 4, memberId: 2 })]);
+    const style = pedestrianStyle(12, 4, 2);
 
     expect(colorAt(view.bottomMesh, 0)).toBe(style.bottomColor);
     expect(colorAt(view.legLeftMesh, 0)).toBe(style.bottomColor);
@@ -324,6 +399,36 @@ describe('PedestriansView', () => {
     expect(colorAt(view.armLeftMesh, 0)).toBe(style.sleeveColor);
     expect(colorAt(view.armRightMesh, 0)).toBe(style.sleeveColor);
     expect([style.topColor, style.skinColor]).toContain(style.sleeveColor);
+  });
+
+  it('keeps one member recognizable across transient walkers and trip purposes', () => {
+    const view = new PedestriansView(10, () => 100);
+    view.setPedestrians([
+      pedestrian({
+        id: 12,
+        generation: 1,
+        citizen: 70,
+        citizenGeneration: 5,
+        memberId: 2,
+        purpose: 'commercial-work',
+      }),
+    ]);
+    const firstPose = snapshotOf(view);
+    const firstColors = batches(view).map((mesh) => colorAt(mesh, 0));
+
+    view.setPedestrians([
+      pedestrian({
+        id: 99,
+        generation: 8,
+        citizen: 70,
+        citizenGeneration: 5,
+        memberId: 2,
+        purpose: 'shopping',
+      }),
+    ]);
+
+    expect(snapshotOf(view)).toEqual(firstPose);
+    expect(batches(view).map((mesh) => colorAt(mesh, 0))).toEqual(firstColors);
   });
 
   it('scissors the legs and counter-swings the arms along the walking direction', () => {
@@ -420,7 +525,7 @@ describe('PedestriansView', () => {
   it('keeps walkers sharing one route out of lockstep', () => {
     const view = new PedestriansView(10, () => 100);
     const crowd = Array.from({ length: 16 }, (_, id) =>
-      pedestrian({ id, fromCell: 0, toCell: 10, t: 0.5 }),
+      pedestrian({ id, citizen: 500 + id, memberId: id % 3, fromCell: 0, toCell: 10, t: 0.5 }),
     );
 
     view.setPedestrians(crowd);
@@ -430,7 +535,7 @@ describe('PedestriansView', () => {
       (_, slot) => footOf(view, 'left', slot).z - footOf(view, 'right', slot).z,
     );
     expect(new Set(swings.map((swing) => swing.toFixed(3))).size).toBeGreaterThanOrEqual(12);
-    expect(pedestrianGait(0, 0)).not.toEqual(pedestrianGait(1, 0));
+    expect(pedestrianGait(0, 0, 0)).not.toEqual(pedestrianGait(1, 0, 0));
   });
 
   it('keeps the swinging silhouette inside the sidewalk lane', () => {

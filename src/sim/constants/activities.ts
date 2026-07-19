@@ -20,6 +20,11 @@ export const FREE_TIME_REST_UNHAPPY_WEIGHT = 3;
 /** Extra pull toward staying in after a trip that could not be routed. */
 export const FREE_TIME_REST_STRANDED_WEIGHT = 4;
 
+/** Each child/teen adds this much pull toward a shared leisure outing. */
+export const FREE_TIME_YOUNG_LEISURE_WEIGHT = 0.75;
+/** Each senior adds this much pull toward a quiet night at home. */
+export const FREE_TIME_SENIOR_REST_WEIGHT = 0.75;
+
 /**
  * An evening out picks uniformly among this many nearest reachable venues —
  * parks first, shops when no park is in reach (a shopping run always takes the

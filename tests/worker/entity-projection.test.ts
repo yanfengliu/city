@@ -77,6 +77,7 @@ describe('projectBuildingView', () => {
     });
     expect(projectBuildingView(sim.world, id, data)).toEqual({
       id,
+      generation: sim.world.getEntityGeneration(id),
       x: 11,
       y: 22,
       w: 2,
@@ -140,6 +141,7 @@ describe('projectStructures', () => {
     const views = projectStructures(sim.world);
     expect(views).toHaveLength(1);
     expect(views[0]).toMatchObject({
+      generation: sim.world.getEntityGeneration(views[0].id),
       x: x + 2,
       y: y + 1,
       w: SERVICE_FOOTPRINT,

@@ -7,7 +7,13 @@ import {
 } from '../constants/traffic';
 import { GRID_WIDTH } from '../constants/map';
 import { LEISURE_NEAREST_CHOICES, LEISURE_PARK_MAX_CELLS } from '../constants/activities';
+import { CITIZEN_PRIMARY_MEMBER_ID } from '../constants/citizens';
 import { restUntil } from '../activities';
+import {
+  appendCitizenLifeEvent,
+  profileForCitizen,
+  travellerForActivity,
+} from '../citizen-profile';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type { CityWorld, PedestrianPurpose, VehicleLeg } from '../types';
@@ -33,6 +39,26 @@ function countDisconnected(w: CityWorld, citizenId: number): void {
     ((w.getState('disconnectedTrips') as number | undefined) ?? 0) + 1,
   );
   markStranded(w, citizenId);
+}
+
+/** Materializes legacy identity on first action and names this trip's person. */
+function setTripTraveller(
+  sim: CitySim,
+  w: CityWorld,
+  citizenId: number,
+  activity: 'work' | 'shop' | 'leisure' | 'rest',
+): number | null {
+  const citizen = w.getComponent(citizenId, 'citizen');
+  if (!citizen) return null;
+  const profile = profileForCitizen(sim, citizenId, citizen);
+  const memberId = travellerForActivity(profile, activity);
+  if (citizen.travellerMemberId !== memberId || (activity !== 'rest' && citizen.restUntil != null)) {
+    w.patchComponent(citizenId, 'citizen', (data) => {
+      data.travellerMemberId = memberId;
+      if (activity !== 'rest') data.restUntil = null;
+    });
+  }
+  return memberId;
 }
 
 /** Spawns a vehicle entity for a citizen at the first cell of its route. */
@@ -264,12 +290,16 @@ function retryLater(w: CityWorld, citizen: number): void {
  * A night in: no agent, just a cooldown at home. The plan flips back to work
  * as it starts, so a resting household can never sit at home indefinitely.
  */
-function restAtHome(w: CityWorld, citizenId: number): void {
+function restAtHome(sim: CitySim, w: CityWorld, citizenId: number): void {
   const until = restUntil(w);
+  // `nextActivity` flips to work below to prevent an endless rest loop, but
+  // the person currently represented remains the one taking the night in.
+  setTripTraveller(sim, w, citizenId, 'rest');
   w.patchComponent(citizenId, 'citizen', (data) => {
     data.phase = 'home';
     data.waitUntil = until;
     data.nextActivity = 'work';
+    data.restUntil = until;
   });
 }
 
@@ -283,6 +313,7 @@ function startWorkLeg(
   outbound: boolean,
   capacity: { walkers: number; vehicles: number },
 ): void {
+  setTripTraveller(sim, w, citizenId, 'work');
   const cells = findRoadCellPath(sim, fromBuilding, toBuilding);
   if (!cells) {
     countDisconnected(w, citizenId);
@@ -339,6 +370,7 @@ function startOutingLeg(
     // `nextActivity` holds the outing in progress, so the return leg and the
     // detail panel can still tell an evening out from a shopping run.
     const activity = citizen.nextActivity === 'leisure' ? 'leisure' : 'shop';
+    const memberId = setTripTraveller(sim, w, citizenId, activity);
     const shop = chooseOutingDestination(sim, w, citizen.home, venues, activity);
     const cells = shop === null ? null : findRoadCellPath(sim, citizen.home, shop);
     if (shop === null || !cells) {
@@ -347,6 +379,7 @@ function startOutingLeg(
         data.shop = null;
         data.shopGen = null;
         data.waitUntil = w.tick + TRIP_RETRY_TICKS;
+        data.travellerMemberId = CITIZEN_PRIMARY_MEMBER_ID;
       });
       return;
     }
@@ -355,6 +388,12 @@ function startOutingLeg(
       data.shopGen = w.getEntityGeneration(shop);
     });
     beginWalking(w, citizenId, cells, shop, 'shopping', true);
+    appendCitizenLifeEvent(w, citizenId, {
+      kind: 'outingDeparted',
+      memberId: memberId ?? CITIZEN_PRIMARY_MEMBER_ID,
+      place: shop,
+      activity,
+    });
     capacity.walkers++;
     return;
   }
@@ -372,6 +411,7 @@ function startOutingLeg(
       data.shop = null;
       data.shopGen = null;
       data.waitUntil = w.tick + TRIP_RETRY_TICKS;
+      data.travellerMemberId = CITIZEN_PRIMARY_MEMBER_ID;
     });
     return;
   }
@@ -420,7 +460,7 @@ export function tripSystem(sim: CitySim): (w: CityWorld) => void {
       } else if (citizen.phase === 'atShop') {
         startOutingLeg(sim, w, id, false, venues, capacity);
       } else if (activity === 'rest') {
-        restAtHome(w, id);
+        restAtHome(sim, w, id);
       } else if (activity === 'shop' || activity === 'leisure') {
         startOutingLeg(sim, w, id, true, venues, capacity);
       } else {

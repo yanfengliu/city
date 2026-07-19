@@ -2,8 +2,15 @@ import { EMPLOYMENT_ASSIGNMENTS_PER_RUN } from './constants/traffic';
 import { buildingCapacity } from './buildings';
 import { buildingAccessNode } from './traffic/pathing';
 import { despawnVehicle } from './traffic/vehicles';
+import {
+  appendCitizenLifeEvent,
+  profileForCitizen,
+  storeCitizenProfile,
+  travellerForActivity,
+  withWorkerRole,
+} from './citizen-profile';
 import type { CitySim } from './city';
-import type { CityWorld } from './types';
+import type { CityWorld, ZoneType } from './types';
 
 /**
  * Clears the work assignment of every citizen employed at the given building
@@ -22,12 +29,28 @@ export function unassignWorkers(sim: CitySim, w: CityWorld, building: number): v
       const data = w.getComponent(vehicle, 'vehicle');
       if (data?.citizen === id) despawnVehicle(sim, w, vehicle, data);
     }
+    const profile = profileForCitizen(sim, id, citizen);
+    const resting =
+      citizen.phase === 'home' &&
+      Number.isFinite(citizen.restUntil) &&
+      citizen.restUntil! > w.tick;
+    const activityMemberId = resting
+      ? travellerForActivity(profile, 'rest')
+      : profile.primaryWorkerMemberId;
     w.patchComponent(id, 'citizen', (c) => {
       c.work = null;
       c.phase = 'home';
       c.nextActivity = 'work';
       c.shop = null;
       c.shopGen = null;
+      c.travellerMemberId = activityMemberId;
+      if (!resting) c.restUntil = null;
+    });
+    storeCitizenProfile(w, id, withWorkerRole(profile, null));
+    appendCitizenLifeEvent(w, id, {
+      kind: 'jobLost',
+      memberId: profile.primaryWorkerMemberId,
+      place: building,
     });
   }
   const data = w.getComponent(building, 'building');
@@ -52,6 +75,7 @@ export function employmentSystem(sim: CitySim): (w: CityWorld) => void {
       y: number;
       free: number;
       component: number;
+      zone: Exclude<ZoneType, 'R'>;
     }> = [];
     for (const id of [...w.query('building', 'position')].sort((a, b) => a - b)) {
       const building = w.getComponent(id, 'building');
@@ -63,7 +87,7 @@ export function employmentSystem(sim: CitySim): (w: CityWorld) => void {
       if (node === null) continue;
       const component = sim.roadGraph.cellComponent.get(node);
       if (component === undefined) continue;
-      openJobs.push({ id, x: position.x, y: position.y, free, component });
+      openJobs.push({ id, x: position.x, y: position.y, free, component, zone: building.zone });
     }
     if (openJobs.length === 0) return;
 
@@ -92,13 +116,21 @@ export function employmentSystem(sim: CitySim): (w: CityWorld) => void {
       if (!best) continue;
 
       const workplace = best;
+      const profile = profileForCitizen(sim, id, citizen);
       w.patchComponent(id, 'citizen', (c) => {
         c.work = workplace.id;
+        c.travellerMemberId = profile.primaryWorkerMemberId;
       });
+      storeCitizenProfile(w, id, withWorkerRole(profile, workplace.zone));
       w.patchComponent(workplace.id, 'building', (b) => {
         b.jobsFilled += 1;
       });
       workplace.free -= 1;
+      appendCitizenLifeEvent(w, id, {
+        kind: 'hired',
+        memberId: profile.primaryWorkerMemberId,
+        place: workplace.id,
+      });
       assigned++;
     }
   };

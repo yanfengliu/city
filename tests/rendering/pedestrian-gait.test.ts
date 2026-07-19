@@ -29,19 +29,19 @@ const walked = (gait: PedestrianGait, cycles = 2, steps = 64): PedestrianPose[] 
   );
 
 const identities = (count: number): PedestrianGait[] =>
-  Array.from({ length: count }, (_, id) => pedestrianGait(id, 0));
+  Array.from({ length: count }, (_, id) => pedestrianGait(id, 0, 0));
 
 const POSE_KEYS = Object.keys(blankPose()) as (keyof PedestrianPose)[];
 
 describe('pedestrianGaitPoseInto', () => {
   it('derives the pose from travelled distance alone', () => {
-    const gait = pedestrianGait(7, 2);
+    const gait = pedestrianGait(7, 2, 1);
     const pose = poseOf(gait, 3.25);
 
     // Same walker, same point on its path: byte-identical however often it is
     // asked and whenever it is asked. Nothing in here reads a clock.
     for (let repeat = 0; repeat < 32; repeat++) {
-      expect(poseOf(pedestrianGait(7, 2), 3.25)).toEqual(pose);
+      expect(poseOf(pedestrianGait(7, 2, 1), 3.25)).toEqual(pose);
     }
     expect(poseOf(gait, 3.25 + gait.strideCells / 4)).not.toEqual(pose);
   });
@@ -78,7 +78,7 @@ describe('pedestrianGaitPoseInto', () => {
   });
 
   it('completes exactly one cycle per stride of travel', () => {
-    const gait = pedestrianGait(11, 0);
+    const gait = pedestrianGait(11, 0, 2);
 
     for (const progress of [0, 0.37, 1.4, 9.75]) {
       const pose = poseOf(gait, progress);
@@ -171,8 +171,9 @@ describe('pedestrianGait', () => {
     expect(
       new Set(gaits.map((gait) => JSON.stringify(poseOf(gait, 2.5)))).size,
     ).toBeGreaterThanOrEqual(60);
-    expect(pedestrianGait(9, 1)).toEqual(pedestrianGait(9, 1));
-    expect(pedestrianGait(9, 2)).not.toEqual(pedestrianGait(9, 1));
+    expect(pedestrianGait(9, 1, 2)).toEqual(pedestrianGait(9, 1, 2));
+    expect(pedestrianGait(9, 2, 2)).not.toEqual(pedestrianGait(9, 1, 2));
+    expect(pedestrianGait(9, 1, 1)).not.toEqual(pedestrianGait(9, 1, 2));
   });
 
   it('keeps every identity inside the tuned cadence and swing spread', () => {

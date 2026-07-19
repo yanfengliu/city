@@ -14,6 +14,7 @@ import {
 } from '../constants/traffic';
 import { signalPhase } from '../../protocol/signal-phase';
 import { pickFreeTimeActivity } from '../activities';
+import { profileForCitizen, travellerForActivity } from '../citizen-profile';
 import type { CitySim } from '../city';
 import type { RoadEdge } from '../road/road-graph';
 import type { CitizenComponent, CityWorld, VehicleComponent, VehicleLeg } from '../types';
@@ -114,10 +115,12 @@ function arrive(sim: CitySim, w: CityWorld, id: number, data: VehicleComponent):
   w.destroyEntity(id);
   const citizen = w.getComponent(data.citizen, 'citizen');
   if (!citizen) return;
+  const profile = profileForCitizen(sim, data.citizen, citizen);
   if (data.toWork && validOutboundDestination(w, citizen, data)) {
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'atWork';
       c.waitUntil = w.tick + WORK_WAIT_BASE + Math.floor(w.random() * WORK_WAIT_VARIANCE);
+      c.travellerMemberId = travellerForActivity(profile, 'work');
     });
   } else if (data.toWork) {
     // A stale/recycled destination never becomes a valid work arrival. Keep a
@@ -126,13 +129,15 @@ function arrive(sim: CitySim, w: CityWorld, id: number, data: VehicleComponent):
       c.phase = 'home';
       c.waitUntil = w.tick + HOME_COOLDOWN_BASE + Math.floor(w.random() * HOME_COOLDOWN_VARIANCE);
       c.nextActivity = 'work';
+      c.travellerMemberId = travellerForActivity(profile, 'work');
     });
   } else {
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'home';
       c.waitUntil = w.tick + HOME_COOLDOWN_BASE + Math.floor(w.random() * HOME_COOLDOWN_VARIANCE);
       // Home from work — the evening is theirs to plan.
-      c.nextActivity = pickFreeTimeActivity(w, citizen);
+      c.nextActivity = pickFreeTimeActivity(w, citizen, profile);
+      c.travellerMemberId = travellerForActivity(profile, c.nextActivity);
     });
   }
 }

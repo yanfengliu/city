@@ -69,7 +69,7 @@ const SCALE = new Vector3();
  * to the newest one over the observed message spacing (renderer-owned
  * smoothing). Road graphs are kept per topologyVersion until no vehicle
  * message references them, so cars never sample a graph they aren't on.
- * Instance color = the congestion bucket of the car's edge (speed proxy).
+ * Instance color is stable identity paint; congestion remains an overlay concern.
  */
 export class VehiclesView {
   readonly mesh: InstancedMesh;

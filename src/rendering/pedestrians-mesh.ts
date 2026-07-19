@@ -37,6 +37,17 @@ import {
   pedestrianStyle,
   type PedestrianStyle,
 } from './pedestrian-style';
+import {
+  createPedestrianPickMesh,
+  createPedestrianSelectionMarkers,
+  PEDESTRIAN_MARKER_Y,
+  pedestrianCitizenRef,
+  pedestrianCitizenMatches,
+  samePedestrianCitizenRef,
+  setPedestrianCrowdBounds,
+  type PedestrianCitizenRef,
+  type PedestrianSelectionMarkers,
+} from './pedestrian-selection';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 import {
   retargetVehicleMotion,
@@ -48,7 +59,7 @@ import {
 interface PedestrianState {
   generation: number;
   /** The household this walker is carrying — what a click on them selects. */
-  citizen: number | null;
+  citizen: PedestrianCitizenRef | null;
   style: PedestrianStyle;
   gait: PedestrianGait;
   motion: VehicleMotionSegment;
@@ -57,7 +68,6 @@ interface PedestrianState {
   /** Odometer reading the newest message asks for, in cells. */
   toProgress: number;
 }
-
 interface SampledSegment {
   pose: VehicleMotionPose;
   progress: number;
@@ -67,6 +77,8 @@ const ROOT = new Matrix4();
 const TORSO = new Matrix4();
 const JOINT = new Matrix4();
 const LIMB = new Matrix4();
+const PICK = new Matrix4();
+const MARKER_MATRIX = new Matrix4();
 const SCALE = new Vector3();
 const MOTION_POSE = { x: 0, z: 0, yaw: 0 };
 const POSE: PedestrianPose = {
@@ -78,7 +90,6 @@ const POSE: PedestrianPose = {
   lean: 0,
 };
 const COLOR = new Color();
-
 /**
  * Composes `parent · translate(joint) · rotateX(angle)` into `out` — the
  * instanced-limb trick. Limb geometry is authored with its joint at the origin,
@@ -103,8 +114,8 @@ const jointInto = (
  * buffer; two legs and two arms swing about their hip and shoulder joints in
  * their own batches. The cycle is a pure function of distance travelled and the
  * walker's identity hash (see pedestrian-gait), so it costs no clock and no
- * per-frame state. Deterministic identity styling keeps purpose-readable top
- * palettes while varying clothes, sleeves, skin tone, height, build, and gait.
+ * per-frame state. Styling keys clothes, skin tone, height, build, and gait to
+ * the stable household incarnation and member, not to a temporary walk agent.
  */
 export class PedestriansView {
   readonly group = new Group();
@@ -115,8 +126,18 @@ export class PedestriansView {
   readonly legRightMesh: InstancedMesh;
   readonly armLeftMesh: InstancedMesh;
   readonly armRightMesh: InstancedMesh;
+  /** Forgiving, non-rendered cylinders sharing the visible batches' slot order. */
+  readonly pickMesh: InstancedMesh;
+  /** Persistent hover/selection visuals; identities can outlive one walking trip. */
+  readonly markerGroup: Group;
+  readonly hoverMarker: PedestrianSelectionMarkers['hover'];
+  readonly selectionMarker: PedestrianSelectionMarkers['selected'];
   private readonly batches: readonly InstancedMesh[];
+  private readonly boundedBatches: readonly InstancedMesh[];
+  private readonly pickBatches: readonly InstancedMesh[];
   private states = new Map<number, PedestrianState>();
+  private hoveredCitizen: PedestrianCitizenRef | null = null;
+  private selectedCitizen: PedestrianCitizenRef | null = null;
   private lastMessageAt: number | null = null;
   private messageIntervalMs = VEHICLE_LERP_DEFAULT_MS;
   private surface: TerrainSurfaceView = FLAT_TERRAIN_SURFACE;
@@ -172,6 +193,11 @@ export class PedestriansView {
     this.legRightMesh = makeBatch(legGeometry, 'pedestrian-right-legs');
     this.armLeftMesh = makeBatch(armGeometry, 'pedestrian-left-arms');
     this.armRightMesh = makeBatch(armGeometry, 'pedestrian-right-arms');
+    this.pickMesh = createPedestrianPickMesh();
+    const markers = createPedestrianSelectionMarkers();
+    this.markerGroup = markers.group;
+    this.hoverMarker = markers.hover;
+    this.selectionMarker = markers.selected;
     // The three body layers move as one, so they share a transform buffer and
     // per-frame interpolation writes their pose once.
     this.bottomMesh.instanceMatrix = this.topMesh.instanceMatrix;
@@ -185,10 +211,11 @@ export class PedestriansView {
       this.armLeftMesh,
       this.armRightMesh,
     ];
+    this.boundedBatches = [...this.batches, this.pickMesh];
+    this.pickBatches = [this.pickMesh];
     this.group.name = 'pedestrians';
-    this.group.add(...this.batches);
+    this.group.add(...this.batches, this.markerGroup);
   }
-
   get count(): number {
     return this.states.size;
   }
@@ -198,13 +225,26 @@ export class PedestriansView {
     this.updateFrame(this.now());
   }
 
-  /** Newest full pedestrian list; agents absent from it despawn immediately. */
   /**
-   * Every batch this view draws, for hit-testing a click against the crowd.
-   * All seven share one slot order, so any of them yields the same walker.
+   * The one non-rendered hit-target batch. Its cylinders share the seven visible
+   * batches' slot order, but are deliberately wider than the visual silhouette.
    */
   get pickableBatches(): readonly InstancedMesh[] {
-    return this.batches;
+    return this.pickBatches;
+  }
+
+  /** Stable citizen identity to emphasize while the pointer is over a walker. */
+  setHoveredCitizen(citizen: PedestrianCitizenRef | null): void {
+    if (samePedestrianCitizenRef(citizen, this.hoveredCitizen)) return;
+    this.hoveredCitizen = citizen;
+    this.refreshMarkers();
+  }
+
+  /** Stable citizen identity to keep marked while its detail panel is open. */
+  setSelectedCitizen(citizen: PedestrianCitizenRef | null): void {
+    if (samePedestrianCitizenRef(citizen, this.selectedCitizen)) return;
+    this.selectedCitizen = citizen;
+    this.refreshMarkers();
   }
 
   /**
@@ -212,7 +252,7 @@ export class PedestriansView {
    * walker predates the citizen field. Insertion order into `states` IS the
    * slot order — the same iteration fills the matrices and the colours.
    */
-  citizenAtInstance(slot: number): number | null {
+  citizenRefAtInstance(slot: number): PedestrianCitizenRef | null {
     if (slot < 0 || slot >= this.states.size) return null;
     let index = 0;
     for (const state of this.states.values()) {
@@ -224,7 +264,12 @@ export class PedestriansView {
   setPedestrians(list: readonly PedestrianView[]): void {
     if (list.length === 0) {
       this.states.clear();
-      for (const mesh of this.batches) mesh.count = 0;
+      for (const mesh of this.boundedBatches) {
+        mesh.count = 0;
+        mesh.boundingSphere?.makeEmpty();
+      }
+      this.hoverMarker.visible = false;
+      this.selectionMarker.visible = false;
       this.lastMessageAt = null;
       this.messageIntervalMs = VEHICLE_LERP_DEFAULT_MS;
       return;
@@ -248,11 +293,15 @@ export class PedestriansView {
       const continuing = previous?.generation === pedestrian.generation
         ? previous
         : undefined;
+      const citizen = pedestrianCitizenRef(pedestrian);
+      const identityCitizen = citizen?.id ?? pedestrian.id;
+      const identityGeneration = citizen?.generation ?? pedestrian.generation;
+      const identityMember = citizen?.memberId ?? 0;
       next.set(pedestrian.id, {
         generation: pedestrian.generation,
-        citizen: pedestrian.citizen ?? null,
-        style: pedestrianStyle(pedestrian.id, pedestrian.generation, pedestrian.purpose),
-        gait: pedestrianGait(pedestrian.id, pedestrian.generation),
+        citizen,
+        style: pedestrianStyle(identityCitizen, identityGeneration, identityMember),
+        gait: pedestrianGait(identityCitizen, identityGeneration, identityMember),
         motion: retargetVehicleMotion(continuing?.motion, previousAlpha, target.pose),
         // The odometer is retargeted like the pose: from what was on screen.
         fromProgress: continuing
@@ -263,16 +312,28 @@ export class PedestriansView {
       });
     }
     this.states = next;
-    for (const mesh of this.batches) mesh.count = next.size;
+    for (const mesh of this.boundedBatches) mesh.count = next.size;
     this.applyStyles();
     this.updateFrame(now);
   }
 
   /** Interpolate all active walkers without allocating per-instance objects. */
   updateFrame(now: number): void {
-    if (this.states.size === 0) return;
+    if (this.states.size === 0) {
+      this.hoverMarker.visible = false;
+      this.selectionMarker.visible = false;
+      return;
+    }
     const alpha = this.presentationAlpha(now);
     const shoulderY = PEDESTRIAN_ARM.y - PEDESTRIAN_HIP_JOINT_Y;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let minZ = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    let maxZ = Number.NEGATIVE_INFINITY;
+    let hoveredSlot = -1;
+    let selectedSlot = -1;
     let slot = 0;
     for (const state of this.states.values()) {
       const { x, z, yaw } = sampleVehicleMotionInto(state.motion, alpha, MOTION_POSE);
@@ -280,13 +341,15 @@ export class PedestriansView {
         state.fromProgress + (state.toProgress - state.fromProgress) * alpha;
       const pose = pedestrianGaitPoseInto(state.gait, progress, POSE);
       const { widthScale, heightScale } = state.style;
+      const groundY = this.surface.heightAt(x, z) + PEDESTRIAN_Y;
       ROOT.makeRotationY(yaw).scale(
         SCALE.set(widthScale, heightScale, widthScale),
       ).setPosition(
         x,
-        this.surface.heightAt(x, z) + PEDESTRIAN_Y,
+        groundY,
         z,
       );
+      this.pickMesh.setMatrixAt(slot, PICK.makeTranslation(x, groundY, z));
       // The hip rides the bob, so the legs and the upper body dip together and
       // the feet stay on the pavement. A limb hangs below its joint, so its
       // forward swing is a negative pitch; the upper body rises above the hip,
@@ -311,9 +374,53 @@ export class PedestriansView {
         slot,
         jointInto(LIMB, TORSO, PEDESTRIAN_ARM.x, shoulderY, -pose.rightArmSwing),
       );
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, groundY);
+      minZ = Math.min(minZ, z);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, groundY);
+      maxZ = Math.max(maxZ, z);
+      if (pedestrianCitizenMatches(state.citizen, this.selectedCitizen)) selectedSlot = slot;
+      if (pedestrianCitizenMatches(state.citizen, this.hoveredCitizen)) hoveredSlot = slot;
       slot++;
     }
-    for (const mesh of this.batches) mesh.instanceMatrix.needsUpdate = true;
+    for (const mesh of this.boundedBatches) mesh.instanceMatrix.needsUpdate = true;
+    setPedestrianCrowdBounds(
+      this.boundedBatches,
+      minX,
+      minY,
+      minZ,
+      maxX,
+      maxY,
+      maxZ,
+    );
+    this.placeMarkers(hoveredSlot, selectedSlot);
+  }
+
+  private refreshMarkers(): void {
+    let hoveredSlot = -1;
+    let selectedSlot = -1;
+    let slot = 0;
+    for (const state of this.states.values()) {
+      if (pedestrianCitizenMatches(state.citizen, this.selectedCitizen)) selectedSlot = slot;
+      if (pedestrianCitizenMatches(state.citizen, this.hoveredCitizen)) hoveredSlot = slot;
+      slot++;
+    }
+    this.placeMarkers(hoveredSlot, selectedSlot);
+  }
+
+  private placeMarkers(hoveredSlot: number, selectedSlot: number): void {
+    this.placeMarker(this.selectionMarker, selectedSlot);
+    // One citizen gets one ring: the persistent selected treatment wins.
+    this.placeMarker(this.hoverMarker, hoveredSlot === selectedSlot ? -1 : hoveredSlot);
+  }
+
+  private placeMarker(marker: PedestrianSelectionMarkers['hover'], slot: number): void {
+    marker.visible = slot >= 0;
+    if (slot < 0) return;
+    this.pickMesh.getMatrixAt(slot, MARKER_MATRIX);
+    const elements = MARKER_MATRIX.elements;
+    marker.position.set(elements[12], elements[13] + PEDESTRIAN_MARKER_Y, elements[14]);
   }
 
   private presentationAlpha(now: number): number {

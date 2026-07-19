@@ -4,6 +4,7 @@ import { createCitySim, type CitySim } from '../../src/sim/city';
 import { citizenDetail, citizenDetailProblem } from '../../src/sim/citizen-detail';
 import { cellIndex } from '../../src/sim/grid';
 import { citizenHappiness } from '../../src/sim/happiness';
+import type { VehicleComponent } from '../../src/sim/types';
 import { citizenOf, findLandBlock, seedBuilding, seedCitizen, stepUntil } from './helpers';
 
 interface DetailTown {
@@ -42,6 +43,7 @@ describe('citizen detail query', () => {
     expect(detail.home).toEqual(
       expect.objectContaining({
         entity: home,
+        generation: sim.world.getEntityGeneration(home),
         y: streetY + 1,
         cell: cellIndex(
           sim.world.getComponent(home, 'position')!.x,
@@ -52,6 +54,7 @@ describe('citizen detail query', () => {
       }),
     );
     expect(detail.work).toEqual(expect.objectContaining({ entity: work, zone: 'I' }));
+    expect(detail.work?.generation).toBe(sim.world.getEntityGeneration(work));
     expect(detail.happiness).toBe(citizenHappiness(citizenOf(sim, citizen)));
     expect(detail.phase).toBe('home');
     expect(detail.activity).toBe('work');
@@ -86,6 +89,13 @@ describe('citizen detail query', () => {
     if (!detail) throw new Error('no detail for a travelling citizen');
     expect(detail.phase).toBe('toWork');
     expect(detail.destination?.entity).toBe(work);
+    expect(detail.destinationPlace).toEqual(
+      expect.objectContaining({
+        entity: work,
+        generation: sim.world.getEntityGeneration(work),
+        kind: 'building',
+      }),
+    );
     expect(detail.agent?.kind).toBe('pedestrian');
     expect(detail.status).toContain(`(${detail.destination!.x}, ${detail.destination!.y})`);
 
@@ -98,7 +108,150 @@ describe('citizen detail query', () => {
     const { sim, citizen } = detailTown();
     const detail = citizenDetail(sim, citizen);
     expect(detail?.destination).toBeNull();
+    expect(detail?.destinationPlace).toBeNull();
     expect(detail?.agent).toBeNull();
+  });
+
+  it('uses the logical phase target for a legacy vehicle without destination generation', () => {
+    const { sim, citizen, home } = detailTown();
+    sim.world.runMaintenance(() => {
+      sim.world.patchComponent(citizen, 'citizen', (data) => {
+        data.phase = 'toHome';
+      });
+      const vehicle = sim.world.createEntity();
+      const position = sim.world.getComponent(citizen, 'position')!;
+      sim.world.setPosition(vehicle, { ...position });
+      sim.world.addComponent(vehicle, 'vehicle', {
+        citizen,
+        citizenGen: sim.world.getEntityGeneration(citizen),
+        destination: home,
+        legs: [],
+        legIndex: 0,
+        t: 0,
+        toWork: false,
+      } as unknown as VehicleComponent);
+    });
+
+    const detail = citizenDetail(sim, citizen)!;
+    expect(detail.status).toContain('Driving home');
+    expect(detail.destinationPlace).toEqual(
+      expect.objectContaining({ entity: home, kind: 'building' }),
+    );
+  });
+
+  it('ignores an agent whose owner generation does not match the household', () => {
+    const { sim, citizen, work } = detailTown();
+    sim.world.runMaintenance(() => {
+      const walker = sim.world.createEntity();
+      const position = sim.world.getComponent(citizen, 'position')!;
+      sim.world.setPosition(walker, { ...position });
+      sim.world.addComponent(walker, 'pedestrianPath', {
+        citizen,
+        citizenGen: sim.world.getEntityGeneration(citizen) + 1,
+        memberId: 0,
+        cells: [cellIndex(position.x, position.y)],
+        destination: work,
+        destinationGen: sim.world.getEntityGeneration(work),
+        purpose: 'industrial-work',
+        outbound: true,
+      });
+      sim.world.addComponent(walker, 'pedestrian', { segmentIndex: 0, t: 0 });
+      const vehicle = sim.world.createEntity();
+      sim.world.setPosition(vehicle, { ...position });
+      sim.world.addComponent(vehicle, 'vehicle', {
+        citizen,
+        citizenGen: sim.world.getEntityGeneration(citizen) + 1,
+        destination: work,
+        destinationGen: sim.world.getEntityGeneration(work),
+        legs: [],
+        legIndex: 0,
+        t: 0,
+        toWork: true,
+      });
+    });
+
+    expect(citizenDetail(sim, citizen)?.agent).toBeNull();
+  });
+
+  it('fails closed when an outing path and stored venue point at a recycled generation', () => {
+    const { sim, citizen, shop } = detailTown();
+    const shopGeneration = sim.world.getEntityGeneration(shop);
+    let walker = -1;
+    let replacement = -1;
+    sim.world.runMaintenance(() => {
+      sim.world.patchComponent(citizen, 'citizen', (data) => {
+        data.phase = 'toShop';
+        data.nextActivity = 'leisure';
+        data.shop = shop;
+        data.shopGen = shopGeneration;
+      });
+      walker = sim.world.createEntity();
+      const position = sim.world.getComponent(citizen, 'position')!;
+      sim.world.setPosition(walker, { ...position });
+      sim.world.addComponent(walker, 'pedestrianPath', {
+        citizen,
+        citizenGen: sim.world.getEntityGeneration(citizen),
+        memberId: 0,
+        cells: [cellIndex(position.x, position.y)],
+        destination: shop,
+        destinationGen: shopGeneration,
+        purpose: 'shopping',
+        outbound: true,
+      });
+      sim.world.addComponent(walker, 'pedestrian', { segmentIndex: 0, t: 0 });
+      sim.world.destroyEntity(shop);
+      replacement = sim.world.createEntity();
+      sim.world.setPosition(replacement, { x: position.x + 1, y: position.y + 1 });
+      sim.world.addComponent(replacement, 'structure', { type: 'park' });
+    });
+    expect(replacement).toBe(shop);
+    expect(sim.world.getEntityGeneration(replacement)).not.toBe(shopGeneration);
+
+    const detail = citizenDetail(sim, citizen)!;
+    expect(detail.agent?.entity).toBe(walker);
+    expect(detail.destination).toBeNull();
+    expect(detail.destinationPlace).toBeNull();
+    expect(detail.activityPlace).toBeNull();
+    expect(detail.status).toContain('an unknown address');
+    expect(detail.status).not.toContain('park');
+  });
+
+  it('fails closed when a legacy outing path omits its generation but the stored venue generation is recycled', () => {
+    const { sim, citizen, shop } = detailTown();
+    const shopGeneration = sim.world.getEntityGeneration(shop);
+    sim.world.runMaintenance(() => {
+      sim.world.patchComponent(citizen, 'citizen', (data) => {
+        data.phase = 'toShop';
+        data.nextActivity = 'shop';
+        data.shop = shop;
+        data.shopGen = shopGeneration;
+      });
+      const walker = sim.world.createEntity();
+      const position = sim.world.getComponent(citizen, 'position')!;
+      sim.world.setPosition(walker, { ...position });
+      sim.world.addComponent(walker, 'pedestrianPath', {
+        citizen,
+        citizenGen: sim.world.getEntityGeneration(citizen),
+        memberId: 0,
+        cells: [cellIndex(position.x, position.y)],
+        destination: shop,
+        purpose: 'shopping',
+        outbound: true,
+      });
+      sim.world.addComponent(walker, 'pedestrian', { segmentIndex: 0, t: 0 });
+      sim.world.destroyEntity(shop);
+      const replacement = sim.world.createEntity();
+      sim.world.setPosition(replacement, { x: position.x + 1, y: position.y + 1 });
+      sim.world.addComponent(replacement, 'structure', { type: 'park' });
+      expect(replacement).toBe(shop);
+      expect(sim.world.getEntityGeneration(replacement)).not.toBe(shopGeneration);
+    });
+
+    const detail = citizenDetail(sim, citizen)!;
+    expect(detail.destinationPlace).toBeNull();
+    expect(detail.activityPlace).toBeNull();
+    expect(detail.status).toContain('an unknown address');
+    expect(detail.status).not.toContain('park');
   });
 
   it('names the entity when it is not a citizen at all', () => {

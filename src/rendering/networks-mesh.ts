@@ -145,6 +145,9 @@ interface RotorPlacement {
  */
 export class NetworksView {
   readonly group = new Group();
+  /** Solid utility models that can visually hide a pedestrian; thin wires/pipes stay excluded. */
+  private readonly solidStructures = new Group();
+  readonly solidPickBlockers: readonly Group[] = [this.solidStructures];
   private readonly coalPlants: Mesh;
   private readonly windTurbines: Mesh;
   private readonly waterPumps: Mesh;
@@ -177,6 +180,8 @@ export class NetworksView {
   private lastNow = 0;
 
   constructor(private readonly gridWidth: number) {
+    this.solidStructures.name = 'solid-utility-pick-blockers';
+    this.group.add(this.solidStructures);
     const material = (color: number) => new MeshLambertMaterial({ color: new Color(color) });
     this.coalPlants = this.makeStructureMesh('coal-plants');
     this.windTurbines = this.makeStructureMesh('wind-turbines');
@@ -186,7 +191,7 @@ export class NetworksView {
     this.rotorGeometry = rotorBuilder.build();
     this.rotorMaterial = new MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
     this.rotors = this.makeRotorMesh();
-    this.group.add(this.rotors);
+    this.solidStructures.add(this.rotors);
     this.poles = new CellInstances(
       this.group,
       new BoxGeometry(0.12, 0.9, 0.12),
@@ -286,7 +291,7 @@ export class NetworksView {
     mesh.visible = false;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    this.group.add(mesh);
+    this.solidStructures.add(mesh);
     return mesh;
   }
 
@@ -427,10 +432,10 @@ export class NetworksView {
     if (placements.length === 0 && this.rotors.count === 0) return;
     if (placements.length > this.rotorCapacity) {
       while (this.rotorCapacity < placements.length) this.rotorCapacity *= 2;
-      this.group.remove(this.rotors);
+      this.solidStructures.remove(this.rotors);
       this.rotors.dispose();
       this.rotors = this.makeRotorMesh();
-      this.group.add(this.rotors);
+      this.solidStructures.add(this.rotors);
     }
     for (let i = 0; i < placements.length; i++) {
       const p = placements[i];

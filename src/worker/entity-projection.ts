@@ -35,6 +35,7 @@ export function projectBuildingView(
   if (!position) return null;
   return {
     id,
+    generation: world.getEntityGeneration(id),
     x: position.x,
     y: position.y,
     w: data.w,
@@ -74,6 +75,7 @@ export function projectStructures(world: CityWorld): StructureView[] {
     if (!data || !position) continue;
     structures.push({
       id,
+      generation: world.getEntityGeneration(id),
       x: position.x,
       y: position.y,
       w: SERVICE_FOOTPRINT,

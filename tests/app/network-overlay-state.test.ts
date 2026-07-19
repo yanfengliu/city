@@ -17,6 +17,7 @@ function building(
 ): BuildingView {
   return {
     id,
+    generation: 1,
     x,
     y: Y,
     w: 1,
@@ -35,7 +36,16 @@ function building(
 }
 
 function service(id: number, x: number): StructureView {
-  return { id, x, y: Y, w: 2, h: 2, kind: 'service', service: 'fireStation' };
+  return {
+    id,
+    generation: 1,
+    x,
+    y: Y,
+    w: 2,
+    h: 2,
+    kind: 'service',
+    service: 'fireStation',
+  };
 }
 
 describe('network overlay state', () => {

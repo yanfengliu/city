@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Tools, type ToolHost } from '../../src/app/tools';
+import { TOOL_GROUPS, Tools, type ToolHost } from '../../src/app/tools';
 
 function host(overrides: Partial<ToolHost> = {}): ToolHost {
   return {
@@ -51,6 +51,23 @@ describe('special-building placement ghosts', () => {
     const utilityBlocked = new Tools(host({ hasUtilityFootprint: () => true }));
     utilityBlocked.setTool('wind');
     expect(utilityBlocked.footprintProblem([{ x: 2, y: 2 }])).toMatch(/bulldoze first/i);
+  });
+});
+
+describe('select tool', () => {
+  it('advertises both building and pedestrian inspection', () => {
+    const select = TOOL_GROUPS.flat().find((tool) => tool.id === 'select');
+    expect(select?.title).toMatch(/buildings or pedestrians/i);
+  });
+
+  it('preserves household generation and member when inspecting a pedestrian', () => {
+    const inspectPerson = vi.fn();
+    const tools = new Tools(host({ inspectPerson }));
+    const person = { id: 44, generation: 9, memberId: 2 };
+
+    tools.selectPerson(person);
+
+    expect(inspectPerson).toHaveBeenCalledWith(person);
   });
 });
 

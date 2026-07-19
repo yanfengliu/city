@@ -181,6 +181,7 @@ export class Hud<TTool extends string> {
     callbacks: HudCallbacks<TTool>,
   ) {
     this.root = document.createElement('div');
+    this.root.dataset.cityHud = 'top';
     this.root.style.cssText = `${HUD_TOP_BAR_LAYOUT_CSS}${HUD_PANEL_CHROME_CSS}`;
 
     this.treasuryEl = this.makeStatSlot(STAT_SLOT_CH.treasury);

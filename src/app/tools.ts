@@ -3,6 +3,12 @@ import { POWER_PLANT_FOOTPRINT, UTILITY_BRIDGE_RADIUS } from '../sim/constants/u
 import { ZONE_MAX_ROAD_DISTANCE } from '../sim/constants/zoning';
 import { cellIndex, lPathCells, type Cell } from '../sim/grid';
 import type { PowerPlantKind, ServiceType, ZoneType } from '../sim/types';
+import type { EntityRef } from '../protocol/messages';
+
+/** Household incarnation plus the stable member currently visible as a walker. */
+export interface PersonSelection extends EntityRef {
+  memberId: number;
+}
 
 export type ToolName =
   | 'select'
@@ -31,7 +37,7 @@ export type ToolName =
  * Select V, Wind K, and the rest fall to nearby unused letters.
  */
 export const TOOL_GROUPS: { id: ToolName; label: string; title: string; key: string }[][] = [
-  [{ id: 'select', label: 'Select', key: 'v', title: 'Click a building for details; left-drag or WASD pans the camera' }],
+  [{ id: 'select', label: 'Select', key: 'v', title: 'Click buildings or pedestrians for details; left-drag or WASD pans the camera' }],
   [
     { id: 'road', label: 'Road', key: 'q', title: 'Drag to draw a road ($10/cell; $40 over water as a bridge). Buildings grow along roads; traffic drives on them' },
     { id: 'bulldoze', label: 'Bulldoze', key: 'b', title: 'Drag a rectangle to demolish roads, buildings, services, and utilities (25% road refund)' },
@@ -100,7 +106,7 @@ export interface ToolHost {
   /** Select-tool click; null = off-grid (clears any open inspection). */
   inspect(cell: Cell | null): void;
   /** Select-tool click that landed on a walking household. */
-  inspectPerson(citizen: number): void;
+  inspectPerson(citizen: PersonSelection): void;
   /** validity: one flag for all-or-nothing commands; per-cell for subset painters (zone/dezone). */
   showGhost(cells: Cell[], validity: boolean | boolean[], zone?: ZoneType): void;
   clearGhost(): void;
@@ -232,7 +238,7 @@ export class Tools {
   }
 
   /** Select-tool click that landed on a person rather than the ground. */
-  selectPerson(citizen: number): void {
+  selectPerson(citizen: PersonSelection): void {
     if (this.activeTool !== 'select') return;
     this.host.inspectPerson(citizen);
   }

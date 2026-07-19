@@ -16,21 +16,33 @@ Presentation carries what the sim need not: lane offset, car paint, wheel-level 
 
 Prefer derived state over stored state: signal phase and queue order are computed from tick and existing components, so the save format, replay bundles, and determinism gate stay untouched unless a phase explicitly says otherwise.
 
-## Where we are today (2026-07-17)
+## Where we are today (2026-07-19)
 
-Purpose already exists: every vehicle and walker belongs to a citizen doing a real errand (commute to a specific workplace, shopping run to a specific staffed shop), trips rotate through phases with cooldowns, and unroutable trips are counted and retried. Nothing needs inventing here — later phases only surface it better.
+Purpose already exists: every vehicle and walker belongs to a household doing a real activity (commute to a specific workplace, shopping run to a specific staffed shop, or leisure outing to a reachable park/shop), trips rotate through phases with cooldowns, and unroutable trips are counted, remembered by the affected traveller, and retried.
 
-Space does not exist: vehicles advance `t` along an edge with speed a function of the edge's aggregate congestion bucket only; two cars on the same edge and direction pass through each other freely, and opposing cars drive the same center line, so they visually drive through each other as well.
+Vehicle and pedestrian space now exist at the implemented T1 depth: cars in each directed lane process leader-first, followers preserve a 0.6-cell headway, occupied entry stretches block edge transitions and fresh spawns, and presentation offsets opposing traffic onto separate right-hand lanes. Walkers likewise process leader-first on each directed road-cell segment and preserve a 0.25-cell personal-space gap, so same-lane pedestrians cannot pass through one another.
 
-Laws do not exist: junction traffic-light fixtures shipped 2026-07-14 are explicitly static decoration; nothing stops, yields, or holds an intersection; there is no stop line and no red phase.
+Basic traffic law now exists: junctions with at least three approaches use one shared pure `signalPhase(tick, nodeCell)` for north–south green, east–west green, and all-red clearance; the sim holds non-arriving cars at a 0.5-cell stop line and the renderer lights the matching faces. Blocked next lanes also hold cars at the edge boundary. Turn conflicts, left-turn yielding, and box occupancy remain deferred.
 
-Identity is wrong-channel: all cars share one box mesh, and instance color encodes the edge's congestion bucket — so cars all look the same and their color says "traffic state", duplicating the traffic overlay's job instead of reading as paint.
+Vehicle identity is now presentation-stable: `(vehicle id, generation)` selects paint and modest body proportions, while congestion color stays in the traffic overlay. Vehicle purpose classes remain deferred.
 
-Pedestrians are ahead of cars: direction-dependent curb lanes already separate opposing walkers, and clothing/skin/body variety shipped 2026-07-14; walkers still pass through each other on the same lane.
+Pedestrians are ahead of cars: direction-dependent curb lanes separate opposing walkers; deterministic same-lane queues preserve a 0.25-cell personal-space gap; clothing, skin, body proportions, and gait are keyed to stable `(citizen id, generation, member id)` person identity rather than a temporary walker entity; and a named resident remains recognizable across return legs and later outings.
+
+People now have inspectable continuity: one household entity stores exactly three deterministic named profiles with age, life stage, education, and role, plus the newest eight valid move-in/employment/outing-departure/stranding events. The UI explicitly reports when this bounded or sanitized record no longer reaches move-in. Household composition changes free-time weights, so children/teens pull toward leisure and seniors toward rest. Pointer hover with stationary re-picking, center-intent forgiving walker picking, a selection ring, solid-structure occlusion, live detail refresh throttled to 500 ms of wall-clock time, residential “Meet a resident” cycling with the full citizen id/generation/member cursor and live total reconciliation, generation guards, machine-readable inspection state, and home/work/destination anchors let a player or playtest agent verify that continuity instead of trusting crowd animation.
+
+The boundary remains household-scale: those three people share one happiness score, one employment slot, one activity state, and at most one active trip. The model chooses a stable member to represent each activity—primary worker for work, another adult for shopping when present, youngest for leisure, senior for rest when present—but it does not yet simulate three simultaneous personal calendars.
 
 ## Target model
 
-### Phase T1 — occupancy, right-hand traffic, signals, identity (this increment)
+### Deep citizen identity and observability (current)
+
+Persistent identity is cold simulation state, not renderer invention. `citizenProfile` holds the three-person roster and changes only with meaningful role changes; `citizenLife` appends bounded events only when something autobiographical happens. The hot `citizen` and motion components carry only current household activity and the selected traveller member id, keeping ordinary tick diffs small. Legacy saves derive stable fallback identities without fabricated history, label that provenance explicitly, and give an in-flight path without a stored member the household's valid traveller or deterministic primary-member fallback so it remains selectable immediately after restore.
+
+Selection is identity-safe end to end. Worker pedestrian views include the owning citizen generation and member id; the renderer hashes that tuple for style/gait and the input path returns the same tuple; worker inspection rejects dead or recycled generations; residential cycling carries citizen id, generation, and member id; and correlated replies cannot replace a newer selection. The panel separates the selected resident from the active traveller, calls an idle member the activity representative, preserves keyboard focus across refreshes, and stays below the wrapped HUD. Map anchors use cyan for home, orange for work, and magenta for the general generation-checked building-or-service `destinationPlace` while travelling or the current `activityPlace` venue while dwelling; outing provenance remains available through the return leg even while the magenta ring follows the actual homeward destination.
+
+Biography semantics stay conservative. `outingDeparted` means a named person left home for the stated activity and does not imply arrival or completion; a successful shopping arrival continues to be proven separately by retail counters. This keeps the visible life story aligned with events the sim actually observed.
+
+### Phase T1 — occupancy, right-hand traffic, signals, identity (implemented at the defined depth)
 
 Right-hand driving (presentation): a car's world pose offsets perpendicular-right of its travel direction by a lane half-gap, mirroring the pedestrian curb-lane precedent; opposing flows therefore occupy separate parallel lanes and can no longer intersect. The sim keeps `(edge, t, reverse)` untouched.
 
@@ -44,11 +56,11 @@ Two-approach nodes (bends, dead ends) and highway-gateway internals carry no sig
 
 Car identity (presentation): stable id/generation hash picks per-car paint from a curated palette plus a small set of body proportions (sedan/hatch/van-ish scale tweaks within the same low-poly silhouette family), mirroring the pedestrian variety system; congestion coloring leaves car paint entirely — the traffic overlay is the one place that visualizes load.
 
-Pedestrian spacing (sim): same-lane walkers get the same no-pass clamp with a much smaller personal-space gap, so sidewalk flows read as queues of people rather than coincident sprites.
+Pedestrian spacing (sim): same-lane walkers use a deterministic leader-first no-pass clamp with a 0.25-cell personal-space gap, so sidewalk flows read as queues of people rather than coincident sprites.
 
 Macro speed law stays: bucket-based slowdown still applies as the upper bound on free-flow speed, headway and signals only ever reduce below it; congestion measurement (edge counts, buckets, path costs, repath epochs) is unchanged.
 
-Explicit non-goals for T1: no lane-change model, no left-turn conflict resolution inside the junction box (cars cross opposing flow during their green as if protected), no per-vehicle save-state additions, no protocol message changes.
+Explicit non-goals for traffic T1: no lane-change model, no left-turn conflict resolution inside the junction box (cars cross opposing flow during their green as if protected), no per-vehicle save-state additions, and no traffic-signal protocol messages.
 
 ### Phase T2 — junction discipline and destinations that hold you
 
@@ -76,9 +88,11 @@ Signals: during a red window for an approach, no car crosses the stop line on th
 
 Right-hand presentation: for both traversal directions of the same edge, sampled render poses sit on opposite sides of the polyline, offset toward each car's travel-right; opposing poses never coincide.
 
-Identity: paint/body choice is a pure function of (id, generation) — same car same look across frames, saves, and replays; distribution across the palette is non-degenerate over 100 ids; bucket colors no longer touch car instances.
+Identity: car paint/body choice is a pure function of `(vehicle id, generation)`, while pedestrian clothes/body/gait are a pure function of `(citizen id, generation, member id)` — the same agent or person keeps the same look across frames, saves, replays, and replacement walk entities; distributions across each palette are non-degenerate; congestion buckets no longer recolor cars.
 
-Pedestrian spacing: same-lane followers never pass leaders and never render within the personal-space gap.
+Citizen observability: selecting a visible walker returns the exact generation-guarded member identity; selecting an occupied residential building can cycle all named people living there without adding resident ids to the hot building stream; the detail panel and `render_game_to_text()` agree on selected person, active traveller, status, places, happiness, and bounded life events; a selection reply for a stale generation cannot reopen or retarget the panel.
+
+Pedestrian spacing: same-lane followers never pass leaders and never render within the 0.25-cell personal-space gap.
 
 Determinism: the recorded-session replay self-check and byte-identical rebuild contracts stay green with all of the above active; no `Math.random`/`Date.now` anywhere in the new paths.
 

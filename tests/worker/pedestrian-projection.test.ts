@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createCitySim } from '../../src/sim/city';
+import { citizenDetail } from '../../src/sim/citizen-detail';
 import type { WorkerToClient } from '../../src/protocol/messages';
 import {
   MovingAgentMessageSync,
   projectPedestrians,
 } from '../../src/worker/pedestrian-projection';
+import type { PedestrianPathComponent } from '../../src/sim/types';
 
 function addWalker(sim: ReturnType<typeof createCitySim>): number {
   let walker = -1;
@@ -16,6 +18,7 @@ function addWalker(sim: ReturnType<typeof createCitySim>): number {
     sim.world.addComponent(walker, 'pedestrianPath', {
       citizen,
       citizenGen: sim.world.getEntityGeneration(citizen),
+      memberId: 2,
       cells: [1, 2, 3],
       destination,
       destinationGen: sim.world.getEntityGeneration(destination),
@@ -41,6 +44,7 @@ describe('pedestrian worker projection', () => {
       sim.world.addComponent(walker, 'pedestrianPath', {
         citizen,
         citizenGen: sim.world.getEntityGeneration(citizen),
+        memberId: 1,
         cells: [1, 2, 3, 4],
         destination,
         destinationGen: sim.world.getEntityGeneration(destination),
@@ -55,6 +59,8 @@ describe('pedestrian worker projection', () => {
         id: walker,
         generation: sim.world.getEntityGeneration(walker),
         citizen,
+        citizenGeneration: sim.world.getEntityGeneration(citizen),
+        memberId: 1,
         fromCell: 3,
         toCell: 4,
         t: 0.999,
@@ -72,6 +78,8 @@ describe('pedestrian worker projection', () => {
 
     const [view] = projectPedestrians(sim.world);
     expect(view.citizen).toBe(path.citizen);
+    expect(view.citizenGeneration).toBe(path.citizenGen);
+    expect(view.memberId).toBe(path.memberId);
   });
 
   it('returns an empty full-list payload when no walkers are active', () => {
@@ -96,6 +104,90 @@ describe('pedestrian worker projection', () => {
     expect(messages.filter((message) => message.type === 'pedestrians')).toEqual([
       { type: 'pedestrians', list: frame.pedestrians },
     ]);
+  });
+
+  it('gives a legacy in-flight path a deterministic selectable member on boot sync', () => {
+    const sim = createCitySim({ seed: 7 });
+    let citizen = -1;
+    let walker = -1;
+    sim.world.runMaintenance(() => {
+      citizen = sim.world.createEntity();
+      const destination = sim.world.createEntity();
+      walker = sim.world.createEntity();
+      sim.world.setPosition(citizen, { x: 1, y: 0 });
+      sim.world.addComponent(citizen, 'citizen', {
+        home: destination,
+        work: null,
+        phase: 'toShop',
+        waitUntil: 0,
+        nextActivity: 'leisure',
+        shop: destination,
+        shopGen: sim.world.getEntityGeneration(destination),
+        travellerMemberId: 2,
+      });
+      sim.world.setPosition(walker, { x: 1, y: 0 });
+      sim.world.addComponent(walker, 'pedestrianPath', {
+        citizen,
+        citizenGen: sim.world.getEntityGeneration(citizen),
+        cells: [1, 2, 3],
+        destination,
+        destinationGen: sim.world.getEntityGeneration(destination),
+        purpose: 'shopping',
+        outbound: true,
+      } as unknown as PedestrianPathComponent);
+      sim.world.addComponent(walker, 'pedestrian', { segmentIndex: 0, t: 0.4 });
+    });
+
+    const messages: WorkerToClient[] = [];
+    new MovingAgentMessageSync().resetAndSync(
+      sim.world,
+      sim.topologyVersion,
+      (message) => messages.push(message),
+    );
+
+    const projected = messages.find((message) => message.type === 'pedestrians');
+    expect(projected).toMatchObject({
+      type: 'pedestrians',
+      list: [{ id: walker, citizen, memberId: 2 }],
+    });
+  });
+
+  it('uses the same primary fallback in projection and detail when all legacy member fields are absent', () => {
+    const sim = createCitySim({ seed: 17 });
+    let citizen = -1;
+    let walker = -1;
+    sim.world.runMaintenance(() => {
+      citizen = sim.world.createEntity();
+      const destination = sim.world.createEntity();
+      walker = sim.world.createEntity();
+      sim.world.setPosition(citizen, { x: 1, y: 0 });
+      sim.world.addComponent(citizen, 'citizen', {
+        home: destination,
+        work: null,
+        phase: 'toShop',
+        waitUntil: 0,
+        nextActivity: 'leisure',
+        shop: destination,
+        shopGen: sim.world.getEntityGeneration(destination),
+      });
+      sim.world.setPosition(walker, { x: 1, y: 0 });
+      sim.world.addComponent(walker, 'pedestrianPath', {
+        citizen,
+        citizenGen: sim.world.getEntityGeneration(citizen),
+        cells: [1, 2, 3],
+        destination,
+        destinationGen: sim.world.getEntityGeneration(destination),
+        purpose: 'shopping',
+        outbound: true,
+      } as unknown as PedestrianPathComponent);
+      sim.world.addComponent(walker, 'pedestrian', { segmentIndex: 0, t: 0.4 });
+    });
+
+    const [projected] = projectPedestrians(sim.world);
+    const detail = citizenDetail(sim, citizen, projected.memberId)!;
+    expect(projected.memberId).toBe(0);
+    expect(detail.selectedMemberId).toBe(projected.memberId);
+    expect(detail.activeTravellerMemberId).toBe(projected.memberId);
   });
 
   it('sends one empty full list after the last walker disappears', () => {

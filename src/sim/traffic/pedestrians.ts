@@ -11,7 +11,9 @@ import {
   WORK_WAIT_VARIANCE,
 } from '../constants/traffic';
 import { LEISURE_WAIT_BASE, LEISURE_WAIT_VARIANCE } from '../constants/activities';
+import { CITIZEN_PRIMARY_MEMBER_ID } from '../constants/citizens';
 import { pickFreeTimeActivity } from '../activities';
+import { profileForCitizen, travellerForActivity } from '../citizen-profile';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type {
@@ -59,6 +61,8 @@ export function spawnPedestrian(
   w.addComponent(walker, 'pedestrianPath', {
     citizen,
     citizenGen: w.getEntityGeneration(citizen),
+    memberId:
+      w.getComponent(citizen, 'citizen')?.travellerMemberId ?? CITIZEN_PRIMARY_MEMBER_ID,
     cells,
     destination,
     destinationGen: w.getEntityGeneration(destination),
@@ -135,7 +139,12 @@ export function cancelPedestrian(
   });
 }
 
-function arrive(w: CityWorld, walker: number, path: PedestrianPathComponent): void {
+function arrive(
+  sim: CitySim,
+  w: CityWorld,
+  walker: number,
+  path: PedestrianPathComponent,
+): void {
   w.destroyEntity(walker);
   const component = w.getComponent(path.citizen, 'citizen');
   const owner =
@@ -161,8 +170,10 @@ function arrive(w: CityWorld, walker: number, path: PedestrianPathComponent): vo
     return;
   }
 
+  const profile = profileForCitizen(sim, path.citizen, owner);
   const outingIsLeisure = owner.nextActivity === 'leisure';
   w.patchComponent(path.citizen, 'citizen', (data) => {
+    data.travellerMemberId ??= travellerForActivity(profile, owner.nextActivity ?? 'work');
     if (path.outbound && path.purpose === 'shopping') {
       data.phase = 'atShop';
       data.waitUntil = outingIsLeisure
@@ -178,9 +189,11 @@ function arrive(w: CityWorld, walker: number, path: PedestrianPathComponent): vo
         data.nextActivity = 'work';
         data.shop = null;
         data.shopGen = null;
+        data.travellerMemberId = travellerForActivity(profile, 'work');
       } else {
         // Home from work — the evening is theirs to plan.
-        data.nextActivity = pickFreeTimeActivity(w, owner);
+        data.nextActivity = pickFreeTimeActivity(w, owner, profile);
+        data.travellerMemberId = travellerForActivity(profile, data.nextActivity);
       }
     }
   });
@@ -213,7 +226,7 @@ interface WalkerEntry {
  * (docs/design/simulation-realism.md T1). Segments are unit cells, so
  * `segmentIndex + t` is a global progress scale shared across a whole path.
  */
-export function pedestrianSystem(_sim: CitySim): (w: CityWorld) => void {
+export function pedestrianSystem(sim: CitySim): (w: CityWorld) => void {
   return (w) => {
     const lanes = new Map<string, WalkerEntry[]>();
     for (const id of [...w.query('pedestrianPath', 'pedestrian')].sort((a, b) => a - b)) {
@@ -260,7 +273,7 @@ export function pedestrianSystem(_sim: CitySim): (w: CityWorld) => void {
         const segmentIndex = Math.floor(progress);
         const t = progress - segmentIndex;
         if (path.cells.length <= 1 || segmentIndex + 1 >= path.cells.length) {
-          arrive(w, id, path);
+          arrive(sim, w, id, path);
           leaderProgress = null; // the lane ahead of the next walker is open
           continue;
         }
