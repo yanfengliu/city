@@ -39,31 +39,36 @@ function service(id: number, x: number): StructureView {
 }
 
 describe('network overlay state', () => {
-  it('mirrors live-building and service conduction to a fixpoint during brownouts', () => {
-    const brownout = building(1, 10);
+  it('draws the halo from the placed hardware alone, never through buildings', () => {
+    const nearInfra = building(1, 10);
     const abandoned = building(2, 21, { abandoned: true });
-    const disconnected = building(3, 30);
+    const distant = building(3, 30);
     const infrastructure = new Set([cellIndex(5, Y, WIDTH)]);
 
     const state = computeNetworkOverlayState({
       mode: 'power',
       infrastructure,
-      buildings: [brownout, abandoned, disconnected],
+      buildings: [nearInfra, abandoned, distant],
       structures: [service(4, 15)],
       gridWidth: WIDTH,
       gridHeight: HEIGHT,
       radius: 5,
     });
 
-    // Infrastructure reaches the brownout at x=10; that live growable still
-    // conducts to the service at x=15, whose 2-wide footprint reaches x=21.
-    expect(state.reach.has(cellIndex(21, Y, WIDTH))).toBe(true);
-    expect(state.warn.has(cellIndex(10, Y, WIDTH))).toBe(true);
-    expect(state.warn.has(cellIndex(30, Y, WIDTH))).toBe(true);
+    // Reach is exactly radius 5 around the one infrastructure cell at x=5.
+    expect(state.reach.has(cellIndex(10, Y, WIDTH))).toBe(true);
+    expect(state.reach.has(cellIndex(11, Y, WIDTH))).toBe(false);
 
-    // The abandoned x=21 building and disconnected island do not extend reach.
+    // Neither the live building at x=10 nor the service at x=15 relays the
+    // halo onward — that relaying is exactly what conduction used to do.
+    expect(state.reach.has(cellIndex(15, Y, WIDTH))).toBe(false);
+    expect(state.reach.has(cellIndex(21, Y, WIDTH))).toBe(false);
     expect(state.reach.has(cellIndex(26, Y, WIDTH))).toBe(false);
     expect(state.reach.has(cellIndex(35, Y, WIDTH))).toBe(false);
+
+    // Grading of the buildings themselves is unchanged.
+    expect(state.warn.has(cellIndex(10, Y, WIDTH))).toBe(true);
+    expect(state.warn.has(cellIndex(30, Y, WIDTH))).toBe(true);
     expect(state.warn.has(cellIndex(21, Y, WIDTH))).toBe(false);
   });
 

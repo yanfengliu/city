@@ -31,9 +31,10 @@ function footprintCells(view: RectFootprint, gridWidth: number): number[] {
 }
 
 /**
- * Mirrors the sim's utility-conduction fixpoint for an honest player overlay.
- * Every attached live growable and service conducts, even during a brownout;
- * abandoned or disconnected growables do not extend the halo.
+ * Mirrors the sim's utility membership rule for an honest player overlay.
+ * Only the infrastructure the player placed carries supply, so the halo is a
+ * plain radius around the network — buildings draw from it and relay nothing
+ * onward (see computeUtilityAssignments in sim/utilities.ts).
  */
 export function computeNetworkOverlayState(
   options: NetworkOverlayStateOptions,
@@ -42,7 +43,6 @@ export function computeNetworkOverlayState(
   const supplied = new Set<number>();
   const warn = new Set<number>();
   const severe = new Set<number>();
-  const conductorFootprints: number[][] = [];
 
   for (const view of options.buildings) {
     if (view.abandoned) continue;
@@ -54,10 +54,6 @@ export function computeNetworkOverlayState(
         utilityStatus(mode, view) as 'provided' | 'warn' | 'severe'
       ] ?? supplied;
     for (const cell of cells) bucket.add(cell);
-    conductorFootprints.push(cells);
-  }
-  for (const view of options.structures) {
-    conductorFootprints.push(footprintCells(view, gridWidth));
   }
 
   const reach = new Set<number>();
@@ -75,20 +71,8 @@ export function computeNetworkOverlayState(
       }
     }
   };
+  // One pass, no fixpoint: the halo is the reach of the placed hardware alone.
   expand(infrastructure);
-
-  const pending = [...conductorFootprints];
-  let attached = true;
-  while (attached) {
-    attached = false;
-    for (let i = pending.length - 1; i >= 0; i--) {
-      const cells = pending[i];
-      if (!cells.some((cell) => reach.has(cell))) continue;
-      expand(cells);
-      pending.splice(i, 1);
-      attached = true;
-    }
-  }
 
   return { infrastructure, reach, supplied, warn, severe };
 }

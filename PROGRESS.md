@@ -24,6 +24,20 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-18 — Only infrastructure carries a utility
+
+User direction: "'Non-abandoned buildings conduct' shouldn't happen. Same for any other infra." Follows directly from the previous entry's finding — a plant lit a whole district through a chain of houses, which made power lines close to decorative.
+
+`computeUtilityAssignments` no longer lets anything but placed hardware carry supply. Buildings and service structures are now plain consumers: they attach when a footprint cell is within Chebyshev `UTILITY_BRIDGE_RADIUS` of a network cell and relay nothing onward. The network is exactly plant/pump footprints plus line/pipe cells, joined by 4-directional adjacency. Membership collapses from a `while (changed)` fixpoint to a single pass, and a footprint straddling two separate networks now draws from the first in scan order rather than merging them — merging was conduction by another name. `computeNetworkOverlayState` drops its mirroring fixpoint so the halo stays honest: it is the reach of the hardware alone.
+
+Measured in the browser on a 30-cell strip of 31 houses. One coal plant at the near end, no lines: powered offsets are exactly 0–7 — the 3x3 footprint plus radius 5 — and every house from 8 to 30 stays dark, where previously all 31 lit up. Running one line from the plant along the strip powers all 31 out to offset 30. Wiring is now a real decision.
+
+Three existing tests encoded the old physics and were re-scenarioed rather than weakened, since the invariants they guard are unchanged. The utility recovery case now runs a water main the length of the spine instead of touching it at one point. The brownout-prefix case wires the whole district, because unattached buildings and browned-out buildings both read as "unpowered" and mixing the two populations broke the ascending-id ordering assertion for a reason unrelated to brownout. The overlay-state case now asserts the halo stops at radius 5 from the single infrastructure cell and is not relayed by the live building at x=10 or the service at x=15.
+
+`tests/sim/conduction.test.ts` adds five contracts pinning the new rule for power, water, and service structures, plus the positive case that a line restores full coverage. Writing them surfaced a real gameplay constraint worth knowing: conductors join the network by 4-directional adjacency, not by bridge radius, so a line laid across a gap from the plant is an orphan with no source — the first version of the test failed for exactly that reason.
+
+Gates: 493 tests across 94 files, typecheck, zero-warning lint, production build (worker 127,335 / 132,000 bytes); recorder benchmark re-earned. The ~1,000-population acceptance scenario still passes, so the change does not starve the growth loop.
+
 ### 2026-07-18 — A halted simulation says so
 
 Found while answering a user question about the power overlay ("why is everything green as soon as I place the coal plant — is the overlay lying?"). The overlay was honest; the investigation turned up a far worse defect underneath.

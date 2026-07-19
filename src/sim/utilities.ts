@@ -295,10 +295,13 @@ function computeUtilityAssignments(
     return hits;
   };
 
-  // Conductors (bridge AND extend the network) vs membership-only buildings.
-  const conductors: FootprintEntry[] = [];
-  const membershipOnly: FootprintEntry[] = [];
+  // Consumers only. Nothing here extends the network: a building draws from
+  // whatever infrastructure reaches it and relays nothing onward, so a city
+  // has to be wired rather than lit through a chain of houses. That makes the
+  // network exactly the hardware the player placed, and the membership test a
+  // single pass instead of a fixpoint.
   const allBuildings: FootprintEntry[] = [];
+  const consumers: FootprintEntry[] = [];
   for (const id of [...w.query('building', 'position')].sort((a, b) => a - b)) {
     const building = w.getComponent(id, 'building');
     const position = w.getComponent(id, 'position');
@@ -309,39 +312,25 @@ function computeUtilityAssignments(
       demand: UTILITY_DEMAND_PER_CELL_LEVEL * building.level * building.w * building.h,
     };
     allBuildings.push(entry);
-    // Buildings conduct regardless of their own supplied state (no brownout
-    // cascades), but abandoned buildings do not conduct.
-    if (building.abandoned) membershipOnly.push(entry);
-    else conductors.push(entry);
+    consumers.push(entry);
   }
   for (const id of [...w.query('structure', 'position')].sort((a, b) => a - b)) {
     const structure = w.getComponent(id, 'structure');
     const position = w.getComponent(id, 'position');
     if (!structure || !position) continue;
-    // Structures conduct and always function; they consume 0 in v1.
-    conductors.push({
+    // Services always function and consume 0 in v1; they are listed so an
+    // overlay can still show them as reached, never so they carry supply.
+    consumers.push({
       entity: id,
       cells: footprintCells(position.x, position.y, SERVICE_FOOTPRINT, SERVICE_FOOTPRINT),
       demand: 0,
     });
   }
 
+  // First hit in scan order wins: a footprint straddling two separate networks
+  // draws from one of them rather than merging them (merging is conduction).
   const attached = new Map<number, number>();
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const entry of conductors) {
-      if (attached.has(entry.entity)) continue;
-      const hits = hitNodes(entry.cells);
-      if (hits.length === 0) continue;
-      const node = makeNode();
-      for (const hit of hits) union(node, hit);
-      for (const cell of entry.cells) claimCell(cell, node);
-      attached.set(entry.entity, node);
-      changed = true;
-    }
-  }
-  for (const entry of membershipOnly) {
+  for (const entry of consumers) {
     const hits = hitNodes(entry.cells);
     if (hits.length > 0) attached.set(entry.entity, hits[0]);
   }

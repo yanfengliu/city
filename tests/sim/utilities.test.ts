@@ -81,6 +81,11 @@ describe('power network', () => {
     expect(
       sim.world.submit('placePipe', { ax: pumpAt.x, ay: pumpAt.y, bx: base.x + 8, by: spineY }),
     ).toBe(true);
+    // Buildings do not relay water, so the main has to run the whole spine
+    // rather than touching it at one point (see tests/sim/conduction.test.ts).
+    expect(
+      sim.world.submit('placePipe', { ax: base.x, ay: spineY, bx: base.x + 15, by: spineY }),
+    ).toBe(true);
     // Power lines from the plant along the spine.
     expect(
       sim.world.submit('placePowerLine', {
@@ -172,12 +177,24 @@ describe('power network', () => {
       expect(
         sim.world.submit('placePowerPlant', { kind: 'wind', x: base.x, y: base.y + 8 }),
       ).toBe(true);
+      // Wire the WHOLE district, so every building is attached to the one
+      // network and the only reason to be unpowered is the brownout prefix.
+      // (Buildings no longer relay supply, so an unwired building would be
+      // unpowered for lack of reach and would muddle the ordering assertion.)
       expect(
         sim.world.submit('placePowerLine', {
           ax: base.x,
           ay: base.y + 8,
+          bx: base.x,
+          by: base.y + 2,
+        }),
+      ).toBe(true);
+      expect(
+        sim.world.submit('placePowerLine', {
+          ax: base.x,
+          ay: base.y + 2,
           bx: base.x + 15,
-          by: base.y + 3,
+          by: base.y + 2,
         }),
       ).toBe(true);
       for (let i = 0; i < 900; i++) sim.world.step();
