@@ -24,6 +24,18 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-18 — A halted simulation says so
+
+Found while answering a user question about the power overlay ("why is everything green as soon as I place the coal plant — is the overlay lying?"). The overlay was honest; the investigation turned up a far worse defect underneath.
+
+Submitting a command name the world has no handler for was answered `accepted: true, "Queued command"` and then **permanently halted the simulation** on the next drain. The engine traps the throw inside the worker, so nothing reached the main thread: the city simply froze while the HUD still read "1×", which looks exactly like a rendering hang rather than a dead world. Reproduced in the browser at tick 256, and it is what stalled an earlier diagnostic session at tick 3732 — commands kept reporting "Queued command" against a world that had been dead for minutes.
+
+Two guards, both in the new `src/worker/failure-reporting.ts`. `unknownCommandRejection` refuses an unregistered name at the door with `unknown command "placeroad" — did you mean "placeRoad"? …`; `world.hasCommandHandler` stays the authority, so the name list backing the did-you-mean hint can never admit a bad command even if it goes stale. `simFailureMessage` formats an engine `TickFailure` into `The simulation stopped at tick N while running command "x": …`, posted over a new `simFailure` protocol message, logged in the worker, raised as a toast plus a milestone banner, and exposed as `simFailed` in `render_game_to_text()` so automation fails fast instead of polling a frozen tick forever.
+
+Verified against the exact input that caused the halt: the sim now keeps ticking (172 → 212) while the command is refused, and `placeroad` returns the did-you-mean. Gates: 488 tests across 93 files, typecheck, zero-warning lint, production build (worker 127,553 / 132,000 bytes).
+
+On the original question — conduction is working as designed and the overlay is faithful. `computeUtilityAssignments` lets every non-abandoned building conduct: a footprint joins the network within Chebyshev `UTILITY_BRIDGE_RADIUS` (5) of any network cell, then its own cells become network cells, repeating to a fixpoint. A plant therefore lights a whole contiguous district with no wires, which matches the reference game. Measured on two 40-cell-apart districts with zero power lines: 17/22 powered beside the plant, 0/20 across the gap, farthest powered building 7 cells out — beyond the radius, proving the building-to-building chain is real rather than direct radius. Power lines still matter for bridging gaps wider than 5 cells.
+
 ### 2026-07-18 — Overlay buttons toggle
 
 User request: pressing an overlay's own button should cancel it. Overlay selection behaved as a radio group, so leaving an overlay meant hunting for None while pressing the lit button did nothing at all — the one gesture a player naturally tries.

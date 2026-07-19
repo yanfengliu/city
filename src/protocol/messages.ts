@@ -223,6 +223,12 @@ export type WorkerToClient =
       message: string;
       tick: number;
     }
+  /**
+   * The simulation halted and will not tick again. The engine traps the throw
+   * inside the worker, so this is the only signal the city is dead rather than
+   * merely paused (AGENTS.md: error messages are a product surface).
+   */
+  | { type: 'simFailure'; tick: number; message: string }
   /** Save response: the serialized world + metadata for persistence. */
   | { type: 'snapshot'; snapshot: unknown; meta: SaveMeta }
   /** Harness: a finding was recorded, anchored to `tick`. */

@@ -12,6 +12,7 @@ import { DEFAULT_TAX_RATE, UTILITY_ABANDON_EVALS } from '../sim/constants/zoning
 import { cellIndex } from '../sim/grid';
 import { projectRenderComponentRemovals } from './diff-projection';
 import { MovingAgentMessageSync } from './pedestrian-projection';
+import { simFailureMessage, unknownCommandRejection } from './failure-reporting';
 import type {
   BuildingView,
   ClientToWorker,
@@ -105,6 +106,23 @@ let trafficDirty = false;
 let networksDirty = true;
 let lastBudget: BudgetReport = { income: 0, expenses: 0, retailIncome: 0 };
 const movingAgentMessages = new MovingAgentMessageSync();
+/** Every command the sim registers a handler for — powers the did-you-mean
+ * hint on a rejected name. `hasCommandHandler` remains the authority; this is
+ * only for the suggestion, so a stale entry can never admit a bad command. */
+const KNOWN_COMMANDS: readonly string[] = [
+  'bulldozeRect',
+  'bulldozeRoad',
+  'dezone',
+  'placePipe',
+  'placePowerLine',
+  'placePowerPlant',
+  'placeRoad',
+  'placeService',
+  'placeWaterPump',
+  'setTaxRate',
+  'zone',
+];
+
 const subscribedFields = new Set<OverlayFieldName>();
 const dirtyFields = new Set<OverlayFieldName>();
 const knownStructures = new Set<number>();
@@ -130,6 +148,13 @@ function attachWorldListeners(): void {
   });
   world.on('budget', (report) => {
     lastBudget = report;
+  });
+  // A halted world must announce itself. The engine traps the throw inside
+  // this worker, so without this the city just freezes with no console error
+  // and a HUD still showing its speed.
+  world.onTickFailure((failure) => {
+    console.error('sim tick failure', failure);
+    post({ type: 'simFailure', tick: failure.tick, message: simFailureMessage(failure) });
   });
   world.onDiff(onTickDiff);
 }
@@ -436,6 +461,21 @@ addEventListener('message', (event) => {
       for (const name of subscribedFields) postField(name);
       break;
     case 'command': {
+      // An unregistered name used to queue happily and then kill the world on
+      // the next drain, with the throw trapped inside the worker — the city
+      // froze while the HUD still read its speed. Refuse it at the door.
+      const unknown = unknownCommandRejection(
+        message.name,
+        (name) => world.hasCommandHandler(name as keyof CityCommands),
+        KNOWN_COMMANDS,
+      );
+      if (unknown !== null) {
+        post({
+          type: 'commandSubmissionResult', id: message.id ?? 0, name: message.name,
+          accepted: false, message: unknown, tick: world.tick,
+        });
+        break;
+      }
       const result = world.submitWithResult(message.name, message.data as never);
       post({
         type: 'commandSubmissionResult', id: message.id ?? 0, name: message.name,

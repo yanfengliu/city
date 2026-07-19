@@ -187,6 +187,9 @@ export class Game {
   private occupancyDirty = false;
   private inspected: Inspected | null = null;
   private activeOverlay: OverlayName = 'none';
+  /** Set once the worker reports a halted world; surfaced in the text state so
+   * automation sees a dead sim instead of silently timing out on a frozen tick. */
+  private simFailed: string | null = null;
   /** Densified snapshot of the subscribed field, for per-building grading. */
   private lastField: {
     name: OverlayFieldName;
@@ -570,6 +573,13 @@ export class Game {
       case 'commandSubmissionResult':
         if (!this.commandFeedback.receive(message)) break;
         if (!message.accepted) this.hud.showToast(`Command rejected: ${message.message}`);
+        break;
+      case 'simFailure':
+        // The world will not tick again. Say so loudly and stop the HUD from
+        // claiming a speed, so a dead city never reads as a rendering hang.
+        this.simFailed = message.message;
+        this.hud.showToast(`⛔ ${message.message}`);
+        this.hud.showMilestone('Simulation stopped — reload to start a new city');
         break;
       case 'annotated':
         this.harnessFindings.push(recordedFindingFromCityFinding(message.finding, message.tick));
@@ -1074,6 +1084,9 @@ export class Game {
       demand: { r: round2(this.demand.r), c: round2(this.demand.c), i: round2(this.demand.i) },
       activeTool: this.tools.activeTool,
       activeOverlay: this.activeOverlay,
+      // Non-null means the world halted and will never tick again — automation
+      // should fail fast here instead of polling a frozen tick forever.
+      simFailed: this.simFailed,
       overlayDesaturated: this.scene.getOverlayDesaturation(),
       // Includes the 10 seeded highway cells (they are real road cells);
       // subtract HIGHWAY_CELLS.length for a player-built-road baseline.
