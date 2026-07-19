@@ -108,7 +108,7 @@ describe('power lines route through buildings', () => {
     expect(sim.powerLineCells.has(lineCell)).toBe(true); // the line coexists and still conducts
   });
 
-  it('lets a road cross a line-only cell but not a building+line cell', () => {
+  it('lets a road cross a line-only cell, and keeps the line when it paves a building', () => {
     const { sim, base } = grownRDistrict();
     // Line-only cell on bare ground (row far from buildings): road may cross it.
     const freeRow = base.y + 8;
@@ -116,13 +116,19 @@ describe('power lines route through buildings', () => {
     sim.world.step();
     expect(sim.world.submit('placeRoad', { ax: base.x, ay: freeRow, bx: base.x, by: freeRow })).toBe(true);
 
-    // Building + line cell: a road must NOT pave over the building.
+    // Building + line cell: the road paves over the growable (as a service
+    // would) and the line, being an overlay that never owned the cell,
+    // survives untouched and keeps conducting.
     const { cell } = aBuildingCell(sim);
     const bx = cell % GRID_WIDTH;
     const by = Math.floor(cell / GRID_WIDTH);
     expect(sim.world.submit('placePowerLine', { ax: bx, ay: by, bx: bx, by: by })).toBe(true);
     sim.world.step();
-    expect(sim.world.submit('placeRoad', { ax: bx, ay: by, bx: bx, by: by })).toBe(false);
+    expect(sim.world.submit('placeRoad', { ax: bx, ay: by, bx: bx, by: by })).toBe(true);
+    sim.world.step();
+    expect(sim.roadCells.has(cell)).toBe(true);
+    expect(sim.occupiedCells.get(cell)).toBeUndefined();
+    expect(sim.powerLineCells.has(cell)).toBe(true);
   });
 
   it('a coexisting line survives a partial building bulldoze (freed cell stays free, save/load parity)', () => {

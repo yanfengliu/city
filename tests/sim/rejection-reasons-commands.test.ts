@@ -74,6 +74,11 @@ describe('road command rejection reasons', () => {
     expect(reason).toMatch(/fire station/i);
   });
 
+  /**
+   * Roads pave over growables now (tests/sim/road-replacement.test.ts), so
+   * zoning is where a grown building still blocks — and where the level/zone
+   * wording has to stay useful.
+   */
   it('names the level and zone of a grown building in the way', () => {
     const sim = createCitySim({ seed: 7 });
     const base = findLandBlock(sim, 18, 18);
@@ -81,11 +86,12 @@ describe('road command rejection reasons', () => {
     for (let i = 0; i < 120; i++) sim.world.step();
 
     const grown = [...sim.world.query('building', 'position')].sort((a, b) => a - b)[0];
-    expect(grown, 'district produced no buildings to block a road').toBeDefined();
+    expect(grown, 'district produced no buildings to block zoning').toBeDefined();
     const at = sim.world.getComponent(grown, 'position');
     if (!at) throw new Error('grown building has no position');
 
-    const reason = expectRejection(sim, 'placeRoad', {
+    const reason = expectRejection(sim, 'zone', {
+      zone: 'C',
       ax: at.x,
       ay: at.y,
       bx: at.x,

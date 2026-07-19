@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-07-19T03:31:09.828Z",
+  "capturedAt": "2026-07-19T03:59:11.102Z",
   "profileTicks": 3000,
   "runOrder": [
     "recorded",
@@ -11,7 +11,7 @@
   "scope": "Controlled headless sim-loop proxy: one protocol-like no-op diff listener in both modes; SessionRecorder + MemorySink only in recorded mode.",
   "sourceRef": null,
   "source": {
-    "treeSha256": "3417adf0382249c2c5cb26395956c08d17f413f23d197c9a71c449ec3a66bf47",
+    "treeSha256": "5acc39d4b5397f3c568c6e9f51250501646416cc6cecddfae11ecc864679e9c8",
     "files": [
       {
         "path": "node_modules/civ-engine/dist/ai-contract.js",
@@ -600,8 +600,8 @@
       },
       {
         "path": "src/sim/road/commands.ts",
-        "bytes": 11298,
-        "sha256": "0f63cbf01ad975fb3048184265b222a74e285adeaaf8e117cdb6c41786878d70"
+        "bytes": 11868,
+        "sha256": "ae8d9ccb3163ed7bfc589f773e77083181dd9b3fded68da29ba622424870518e"
       },
       {
         "path": "src/sim/road/road-graph.ts",
@@ -684,27 +684,27 @@
   "aggregate": {
     "recorded": {
       "runs": 2,
-      "meanWallMs": 6584.948200000001,
-      "meanTicksPerSecond": 455.58586383338104,
-      "meanBundleJsonBytes": 102668837.5
+      "meanWallMs": 6857.1721,
+      "meanTicksPerSecond": 438.1466952079588,
+      "meanBundleJsonBytes": 102667792.5
     },
     "lean": {
       "runs": 2,
-      "meanWallMs": 2848.515,
-      "meanTicksPerSecond": 1053.8024876404666,
+      "meanWallMs": 2820.63115,
+      "meanTicksPerSecond": 1063.6771653095825,
       "meanBundleJsonBytes": 0
     },
-    "wallMsReduction": 3736.433200000001,
-    "wallMsReductionPct": 56.74202873759888,
-    "throughputGain": 2.31307108340365
+    "wallMsReduction": 4036.5409499999996,
+    "wallMsReductionPct": 58.865971148660535,
+    "throughputGain": 2.4276736009722186
   },
   "runs": [
     {
       "label": "recorded",
       "sequence": 1,
-      "wallMs": 6596.5509,
-      "ticksPerSecond": 454.7831200696109,
-      "bundleJsonBytes": 102665550,
+      "wallMs": 7120.9939,
+      "ticksPerSecond": 421.2895056685837,
+      "bundleJsonBytes": 102664232,
       "final": {
         "tick": 3002,
         "buildingCount": 560,
@@ -717,8 +717,8 @@
     {
       "label": "lean",
       "sequence": 2,
-      "wallMs": 2779.3023999999996,
-      "ticksPerSecond": 1079.40755205335,
+      "wallMs": 2845.908300000001,
+      "ticksPerSecond": 1054.1449982769996,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -732,8 +732,8 @@
     {
       "label": "lean",
       "sequence": 3,
-      "wallMs": 2917.7276,
-      "ticksPerSecond": 1028.197423227583,
+      "wallMs": 2795.3539999999994,
+      "ticksPerSecond": 1073.2093323421652,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -747,9 +747,9 @@
     {
       "label": "recorded",
       "sequence": 4,
-      "wallMs": 6573.345500000001,
-      "ticksPerSecond": 456.3886075971512,
-      "bundleJsonBytes": 102672125,
+      "wallMs": 6593.3503,
+      "ticksPerSecond": 455.003884747334,
+      "bundleJsonBytes": 102671353,
       "final": {
         "tick": 3002,
         "buildingCount": 560,

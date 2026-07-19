@@ -24,6 +24,18 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-18 — Roads pave over growables
+
+User request: extending or branching a road should bulldoze generic buildings in its way, the way a special building already does. Previously any occupant refused the whole command, so a road could not be threaded through a district that had grown around it — the player had to bulldoze by hand first.
+
+`placeableRoadCells` now discriminates by occupant rather than refusing all of them: a growable R/C/I is collected for demolition, while a player-placed service, plant or pump still blocks (those are deliberate investments, not something to lose to a stray drag). The handler runs `bulldozeGrowableBuildings` before laying cells, so residents are evicted, workers unassigned, and occupancy freed in the same order the service path uses. Pricing is unchanged — a paved-over cell costs the same as empty ground, matching special placement, which also charges no demolition fee. Power lines are unaffected: they never own a cell, so a line under the new road survives and keeps conducting.
+
+Two existing tests encoded the old rule and were retargeted rather than deleted, since both still guard something real. `power-lines.test.ts` asserted a road could not cross a building+line cell; it now asserts the more useful thing — the road paves the growable, the cell ends up road-owned and unoccupied, and the line is still there conducting. `rejection-reasons-commands.test.ts` asserted the "level 1 residential building" wording through `placeRoad`; that arm of `occupantLabel` is still reached by zoning (`zoning.ts:54`) and dezoning, so the test moved to `zone` instead of being dropped as dead.
+
+`tests/sim/road-replacement.test.ts` adds four contracts: the building is demolished and the road laid, a full-row pave leaves no citizen pointing at a destroyed home, a service still refuses with its named reason, and the charge is exactly one road cell with no demolition fee. Writing them re-taught an engine trap worth repeating: the first version asserted `isAlive(entity) === false` and failed, because the destroyed building's id had already been recycled by another building growing in the same tick. Identity is (id, generation), never id alone.
+
+Browser-verified: a 20-cell terrace grown along a street, then a branch road driven north straight through it — accepted, the houses in its path gone, a signalled T-junction formed where it meets the main street. Gates: 497 tests across 95 files, typecheck, zero-warning lint, production build (worker 127,465 / 132,000 bytes); recorder benchmark re-earned.
+
 ### 2026-07-18 — Only infrastructure carries a utility
 
 User direction: "'Non-abandoned buildings conduct' shouldn't happen. Same for any other infra." Follows directly from the previous entry's finding — a plant lit a whole district through a chain of houses, which made power lines close to decorative.

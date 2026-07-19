@@ -64,7 +64,7 @@ function roadCellsCost(sim: CitySim, cells: Array<{ x: number; y: number }>): nu
 function placeableRoadCells(
   sim: CitySim,
   data: RoadEndpoints,
-): { cells: Array<{ x: number; y: number }>; cost: number } | null {
+): { cells: Array<{ x: number; y: number }>; cost: number; buildingIds: number[] } | null {
   const newCells = roadPath(data).filter((c) => !sim.roadCells.has(cellIndex(c.x, c.y)));
   if (newCells.length === 0) {
     return refuse(
@@ -72,19 +72,25 @@ function placeableRoadCells(
       `every cell of the path from ${spanLabel(data)} is already road — nothing to build`,
     );
   }
+  const replaced = new Set<number>();
   for (const c of newCells) {
     const i = cellIndex(c.x, c.y);
     // Water is buildable as a bridge (at a premium). Power lines are thin
-    // overlays that never own a cell, so roads cross them freely; any real
-    // occupant (building, service, plant, pump) blocks.
+    // overlays that never own a cell, so roads cross them freely. A growable
+    // R/C/I building is paved over and demolished in full, matching special
+    // buildings; a player-placed service, plant or pump is a deliberate
+    // investment and still blocks.
     const occupant = sim.occupiedCells.get(i);
-    if (occupant !== undefined) {
-      return refuse(
-        sim,
-        `${cellLabel(i)} is occupied by ${occupantLabel(sim.world, occupant)} — ` +
-          'bulldoze it before paving',
-      );
+    if (occupant === undefined) continue;
+    if (sim.world.getComponent(occupant, 'building')) {
+      replaced.add(occupant);
+      continue;
     }
+    return refuse(
+      sim,
+      `${cellLabel(i)} is occupied by ${occupantLabel(sim.world, occupant)} — ` +
+        'bulldoze it before paving',
+    );
   }
   const cost = roadCellsCost(sim, newCells);
   if (!purchaseAllowed(sim.world, cost, false)) {
@@ -94,7 +100,7 @@ function placeableRoadCells(
         `but the treasury holds $${Math.floor(treasury(sim.world))}`,
     );
   }
-  return { cells: newCells, cost };
+  return { cells: newCells, cost, buildingIds: [...replaced].sort((a, b) => a - b) };
 }
 
 /**
@@ -147,6 +153,9 @@ export function registerRoadCommands(sim: CitySim): void {
     // command made the placement unpayable or blocked.
     const placement = placeableRoadCells(sim, data);
     if (!placement) return;
+    // Clear the way first: demolishing in full evicts residents and unassigns
+    // workers, and frees the occupancy the new road cells are about to take.
+    bulldozeGrowableBuildings(sim, w, placement.buildingIds);
     for (const cell of placement.cells) {
       const entity = w.createEntity();
       w.setPosition(entity, { x: cell.x, y: cell.y });
