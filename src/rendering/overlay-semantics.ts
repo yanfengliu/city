@@ -3,11 +3,10 @@
  * readable). Whatever the player is inspecting, a colour means the same thing:
  *
  *   grey    nothing to report here — unaffected, or outside the system
- *   blue    the infrastructure itself — the plant, lines, poles, pumps and
- *           pipes, or the service building; deep so the thing you placed
- *           stands out instantly from the district around it
- *   green   what the infrastructure delivers: the buildings it serves, and
- *           (faintly) the bare reach where a new building would connect
+ *   blue    the network — deep for the infrastructure itself (plant, lines,
+ *           poles, pumps, pipes, or the service building), and a pale wash
+ *           for its bare reach, where a new building would connect
+ *   green   what the network delivers: a building it actually serves
  *   yellow  under-served — the building is missing something but coping
  *   red     failing — on the edge of abandonment, or already abandoned
  *
@@ -29,9 +28,11 @@ export type OverlayStatus =
 export const OVERLAY_STATUS_RGBA: Record<OverlayStatus, readonly [number, number, number, number]> = {
   // Achromatic, so unaffected ground stays the greyscale the world already is.
   neutral: [182, 182, 182, 30],
-  // Delivery, faint → solid: bare connection reach, then a served building.
-  reach: [126, 200, 140, 45],
-  provided: [86, 190, 108, 120],
+  // The network's bare reach: a pale wash of the infrastructure's own blue, so
+  // "you could connect here" never gets mistaken for "this is served".
+  reach: [140, 180, 236, 52],
+  // A building the network actually reached — solid, saturated green.
+  provided: [64, 176, 88, 140],
   // The infrastructure itself — deep blue, the darkest thing on the map.
   source: [30, 84, 176, 225],
   warn: [240, 196, 62, 175],

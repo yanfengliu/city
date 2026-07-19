@@ -24,6 +24,16 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-18 — Reach joins the network's colour family
+
+User report: on the power overlay, "powered" and "in reach" looked identical. They were — both mid-greens (`[126,200,140]` at alpha 45 versus `[86,190,108]` at alpha 120) separated mostly by opacity, so the halo showing where you *could* connect read the same as a building already served.
+
+Fixed semantically rather than cosmetically: bare reach moved into the blue infrastructure family as a pale wash. Blue is now the network end to end — deep for the hardware you placed, pale for how far it extends — and green means strictly one thing, a building the network actually reached. The ambiguity is gone by construction instead of by nudging two greens apart. `provided` also went to a more saturated green (`[64,176,88]` at alpha 140) so a served building reads solid against that wash.
+
+The instructive part is the test. The first separation contract *passed* on the old palette — composited RGB distance 43.9, over its 40 floor — while still looking identical on screen, because Euclidean distance overstates separation when the hue matches. The floor is now 60 with the old measured value recorded in the comment, so a same-hue pair can never satisfy it again; two further contracts pin reach to the blue family and keep it subordinate in luminance to the infrastructure projecting it. Browser-verified on a 42-building powered strip: deep-blue plant and line, pale-blue reach on the ground around them, solid green houses. An earlier capture in the same session showed the whole strip red, which was correct — every building was powered but abandoned for lack of water, and abandonment outranks power in the grading; adding a pump and pipes returned all 42 to green, diagnosed in one query because `utilityDistress` and the per-building flags are exposed.
+
+Gates: 476 tests across 91 files, typecheck, zero-warning lint, production build (worker 126,374 / 132,000 bytes). Renderer-only — no sim, protocol, or persistence change, so the recorder-benchmark evidence stands.
+
 ### 2026-07-18 — Infrastructure reads blue, and every refusal explains itself
 
 Two user directions landed together. First, the overlay ramp split cause from effect: the infrastructure itself — plant, lines, poles, pumps, pipes, and on a coverage map the service building — now takes a deep blue, while the buildings it delivers to keep the green, so one glance separates what you built from what it reached from what is in trouble. Service buildings gained per-kind materials, since all four previously shared one and could not be lit independently. Tinting is now always flat: a material colour can only multiply vertex colours, so a fire station's red roof times blue came out muddy maroon rather than infrastructure; any tinted state switches vertex colours off and leans on Lambert shading to keep the silhouette, verified on the coal plant whose massing still reads. Commit `42d9086`, which also adds `docs/design/portable-improvement-prompt.md` — a stack-agnostic prompt for starting this same work in another game repo.

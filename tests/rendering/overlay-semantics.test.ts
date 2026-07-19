@@ -16,11 +16,44 @@ function isGreenFamily(rgba: readonly number[]): boolean {
   return g > r && g > b;
 }
 
+/** What a status actually looks like once drawn over the greyed-out world. */
+function overTerrain(status: OverlayStatus): [number, number, number] {
+  const [r, g, b, a] = OVERLAY_STATUS_RGBA[status];
+  const GREY = 180; // the desaturated terrain these overlays sit on
+  const k = a / 255;
+  return [k * r + (1 - k) * GREY, k * g + (1 - k) * GREY, k * b + (1 - k) * GREY];
+}
+
+function distance(a: readonly number[], b: readonly number[]): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
 describe('overlay status palette', () => {
-  it('paints what the system delivers from one green family', () => {
-    for (const status of ['provided', 'reach'] as const) {
-      expect(isGreenFamily(OVERLAY_STATUS_RGBA[status])).toBe(true);
-    }
+  it('paints a served building green — the thing the network delivers', () => {
+    expect(isGreenFamily(OVERLAY_STATUS_RGBA.provided)).toBe(true);
+  });
+
+  it('keeps bare reach in the network family, not a second green', () => {
+    const [r, g, b] = OVERLAY_STATUS_RGBA.reach;
+    // Reach is the network's potential extent, so it belongs to the blue
+    // infrastructure family; a green here reads as "already served".
+    expect(b).toBeGreaterThan(g);
+    expect(b).toBeGreaterThan(r);
+    expect(isGreenFamily(OVERLAY_STATUS_RGBA.reach)).toBe(false);
+  });
+
+  it('separates reach from a powered building at a glance', () => {
+    // The defect this pins: both were mid-greens differing mostly in alpha
+    // (composited distance ~44), so "in reach" and "powered" were
+    // indistinguishable on the map even though the numbers differed. The
+    // floor sits above that so a same-hue pair can never satisfy it again.
+    expect(distance(overTerrain('reach'), overTerrain('provided'))).toBeGreaterThan(60);
+  });
+
+  it('keeps reach subordinate to the infrastructure that projects it', () => {
+    // Same family, but the built hardware must dominate its own halo.
+    expect(luminance(overTerrain('reach'))).toBeGreaterThan(luminance(overTerrain('source')));
+    expect(distance(overTerrain('reach'), overTerrain('source'))).toBeGreaterThan(40);
   });
 
   it('paints the infrastructure itself a deep blue, distinct from what it serves', () => {
