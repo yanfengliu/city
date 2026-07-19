@@ -16,20 +16,9 @@ import {
   hudWarningBadgeCss,
 } from './hud-style';
 import { OverlayLegendView } from './overlay-legend';
+import { nextOverlay, type OverlayName } from './overlay-toggle';
 
-/** Map overlay selection; field names mirror the protocol FieldName literals. */
-export type OverlayName =
-  | 'none'
-  | 'pollution'
-  | 'noise'
-  | 'landValue'
-  | 'traffic'
-  | 'power'
-  | 'water'
-  | 'fireCoverage'
-  | 'policeCoverage'
-  | 'healthCoverage'
-  | 'educationCoverage';
+export type { OverlayName } from './overlay-toggle';
 
 export interface HudState<TTool extends string> {
   /** In-game day number (player-facing time; raw tick/fps stay in the automation state only). */
@@ -104,6 +93,10 @@ const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   { id: 'healthCoverage', label: 'Health 🏥', title: COVERAGE_TITLE },
   { id: 'educationCoverage', label: 'Education 🎓', title: COVERAGE_TITLE },
 ];
+/** Button order actually rendered; pinned against OVERLAY_IDS so the toggle
+ * logic and the buttons can never disagree about which overlays exist. */
+export const OVERLAY_BUTTON_IDS: readonly OverlayName[] = OVERLAYS.map((o) => o.id);
+
 const TOAST_DURATION_MS = 4000;
 const MAX_TOASTS = 4;
 
@@ -177,6 +170,8 @@ export class Hud<TTool extends string> {
   private resumeSpeed: GameSpeed = 1;
   private readonly toolButtons = new Map<TTool, HTMLButtonElement>();
   private readonly overlayButtons = new Map<OverlayName, HTMLButtonElement>();
+  /** Latest rendered overlay — a click needs it to decide toggle-off vs switch. */
+  private activeOverlay: OverlayName = 'none';
   private readonly demandFills = new Map<'r' | 'c' | 'i', HTMLDivElement>();
 
   constructor(
@@ -247,7 +242,13 @@ export class Hud<TTool extends string> {
     overlaysLabel.style.color = HUD_MUTED_TEXT;
     this.root.appendChild(overlaysLabel);
     for (const overlay of OVERLAYS) {
-      const button = this.makeButton(overlay.label, () => callbacks.onSelectOverlay(overlay.id), overlay.title);
+      // Toggle, not radio: pressing the active overlay clears it, so leaving
+      // costs the same click as entering (see ui/overlay-toggle.ts).
+      const button = this.makeButton(
+        overlay.label,
+        () => callbacks.onSelectOverlay(nextOverlay(overlay.id, this.activeOverlay)),
+        overlay.title,
+      );
       this.overlayButtons.set(overlay.id, button);
     }
     this.root.appendChild(this.makeDivider());
@@ -422,6 +423,7 @@ export class Hud<TTool extends string> {
     for (const [tool, button] of this.toolButtons) {
       button.style.cssText = hudButtonCss(tool === state.activeTool);
     }
+    this.activeOverlay = state.activeOverlay;
     for (const [overlay, button] of this.overlayButtons) {
       button.style.cssText = hudButtonCss(overlay === state.activeOverlay);
     }

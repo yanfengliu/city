@@ -24,6 +24,16 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-18 — Overlay buttons toggle
+
+User request: pressing an overlay's own button should cancel it. Overlay selection behaved as a radio group, so leaving an overlay meant hunting for None while pressing the lit button did nothing at all — the one gesture a player naturally tries.
+
+The decision moved into `src/ui/overlay-toggle.ts` as pure data plus one function (`nextOverlay(clicked, active)`), which also became the single home for `OverlayName` and the ordered `OVERLAY_IDS`; `hud.ts` re-exports the type so no call site changed. Pressing the active overlay returns `'none'`, pressing a different one switches, and `'none'` is inert so it can never toggle back into an overlay. Extracting it keeps the contract testable without a DOM — this project runs Vitest in the node environment, so the existing UI tests only cover pure CSS-string helpers and instantiating `Hud` would have meant adding jsdom (a dependency change, and its audit gate, for a one-line rule).
+
+Two lists now describe overlays — ids in `overlay-toggle.ts`, labels and tooltips in `hud.ts` — so `OVERLAY_BUTTON_IDS` is exported and a contract pins them equal; adding an overlay to one without the other fails loudly instead of leaving a button the toggle logic was never exercised against.
+
+Browser-verified through real clicks rather than the pure function alone: Power on, Power off, Water on, Fire (switch), Fire off, None while already off — every step landed on the expected `activeOverlay`. Frame saturation went 47 → 0 → 47 across a toggle cycle, proving the world's colour genuinely returns rather than the state flag merely flipping. Gates: 481 tests across 92 files, typecheck, zero-warning lint, production build (worker 126,374 / 132,000 bytes). UI-only, so the recorder-benchmark evidence stands.
+
 ### 2026-07-18 — Reach joins the network's colour family
 
 User report: on the power overlay, "powered" and "in reach" looked identical. They were — both mid-greens (`[126,200,140]` at alpha 45 versus `[86,190,108]` at alpha 120) separated mostly by opacity, so the halo showing where you *could* connect read the same as a building already served.
