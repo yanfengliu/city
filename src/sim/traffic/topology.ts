@@ -1,6 +1,8 @@
 import { despawnVehicle } from './vehicles';
 import { refreshEdgeCounts } from './congestion';
 import { cancelPedestrian } from './pedestrians';
+import { markStranded } from '../happiness';
+import { TRIP_RETRY_TICKS } from '../constants/traffic';
 import type { CitySim } from '../city';
 import type { CityWorld } from '../types';
 import type { RoadEdge, RoadGraph } from '../road/road-graph';
@@ -56,9 +58,10 @@ export function remapVehiclesAfterTopologyChange(
       w.setState('disconnectedTrips', ((w.getState('disconnectedTrips') as number) ?? 0) + 1);
       const citizen = w.getComponent(citizenId, 'citizen');
       if (citizen) {
+        markStranded(w, citizenId);
         w.patchComponent(citizenId, 'citizen', (c) => {
           c.phase = c.phase === 'toWork' ? 'home' : 'atWork';
-          c.waitUntil = w.tick + 128;
+          c.waitUntil = w.tick + TRIP_RETRY_TICKS;
         });
       }
     }

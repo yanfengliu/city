@@ -54,6 +54,7 @@ describe('pedestrian worker projection', () => {
       {
         id: walker,
         generation: sim.world.getEntityGeneration(walker),
+        citizen,
         fromCell: 3,
         toCell: 4,
         t: 0.999,
@@ -61,6 +62,16 @@ describe('pedestrian worker projection', () => {
         outbound: true,
       },
     ]);
+  });
+
+  it('carries the owning citizen so a clicked walker maps back to a person', () => {
+    const sim = createCitySim({ seed: 7 });
+    const walker = addWalker(sim);
+    const path = sim.world.getComponent(walker, 'pedestrianPath');
+    if (!path) throw new Error(`walker ${walker} has no path component`);
+
+    const [view] = projectPedestrians(sim.world);
+    expect(view.citizen).toBe(path.citizen);
   });
 
   it('returns an empty full-list payload when no walkers are active', () => {

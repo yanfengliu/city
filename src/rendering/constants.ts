@@ -340,14 +340,53 @@ export const VEHICLE_LERP_DEFAULT_MS = 50;
 export const VEHICLE_LERP_MIN_MS = 15;
 export const VEHICLE_LERP_MAX_MS = 250;
 
-// Pedestrians (three instanced clothing layers sharing one transform buffer).
+// Pedestrians. Seven instanced batches: torso, lower garment, and head are
+// rigid together and share one transform buffer, while two legs and two arms
+// swing about their own joints. Every height is measured up from the pavement.
 export const PEDESTRIAN_CAPACITY = 256;
 export const PEDESTRIAN_CURB_OFFSET = 0.3;
 export const PEDESTRIAN_BODY = { width: 0.12, height: 0.2, depth: 0.07, y: 0.26 } as const;
+/**
+ * Hip joint height, and therefore also the leg length: a leg hanging straight
+ * down puts its foot exactly on the pavement. The upper body pitches about this
+ * point, and the legs swing about it.
+ */
+export const PEDESTRIAN_HIP_JOINT_Y = 0.175;
+/** Lower garment over the leg tops. Wider and deeper than the torso, so the
+ * garment seam reads cleanly and a swinging leg top stays enclosed by it. */
+export const PEDESTRIAN_HIP = { width: 0.128, height: 0.08, depth: 0.076, y: 0.155 } as const;
 export const PEDESTRIAN_LEG = {
-  width: 0.035, height: 0.16, depth: 0.04, x: 0.032, y: 0.08, stride: 0.025,
+  width: 0.04, depth: 0.045, length: PEDESTRIAN_HIP_JOINT_Y, x: 0.034,
 } as const;
-export const PEDESTRIAN_HEAD = { radius: 0.065, y: 0.43 } as const;
+export const PEDESTRIAN_ARM = {
+  width: 0.028, depth: 0.032, length: 0.15, x: 0.061, y: 0.335,
+} as const;
+export const PEDESTRIAN_HEAD = {
+  radius: 0.065, y: 0.43, noseRadius: 0.022, noseFlatten: 0.7, noseReach: 0.012,
+} as const;
+/**
+ * Walk cycle tuning. The cycle is driven by distance travelled, never by a
+ * clock, so every quantity here is per cell of travel or per cycle — a paused
+ * game simply holds its pose. Sim walkers cover PEDESTRIAN_BASE_SPEED cells per
+ * tick, which is brisk for their size, so the stride is tuned for a legible
+ * cadence rather than for exact foot contact.
+ */
+export const PEDESTRIAN_GAIT = {
+  /** Cells of travel per full two-step cycle. */
+  strideCells: 0.9,
+  /** Per-person cadence spread, as a fraction of strideCells. */
+  strideVariance: 0.16,
+  /** Peak forward swing of a leg about the hip, radians. */
+  legSwing: 0.42,
+  /** Peak forward swing of an arm about the shoulder, radians. */
+  armSwing: 0.3,
+  /** Per-person swing spread, as a fraction of both peaks. */
+  swingVariance: 0.22,
+  /** Constant forward pitch of the upper body while walking, radians. */
+  lean: 0.07,
+  /** Extra pitch rocked in twice per cycle, radians. */
+  leanSway: 0.022,
+} as const;
 
 // Traffic overlay (road cells tinted by their edge's congestion bucket).
 export const TRAFFIC_OVERLAY_Y = 0.028;

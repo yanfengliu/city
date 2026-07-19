@@ -1,4 +1,5 @@
 import { MOVE_IN_BASE, MOVE_IN_DEMAND_SCALE, MOVE_IN_TRICKLE_THRESHOLD } from './constants/zoning';
+import { HAPPINESS_BASE } from './constants/happiness';
 import { buildingCapacity } from './buildings';
 import type { CitySim } from './city';
 import type { CityWorld, DemandState } from './types';
@@ -49,6 +50,10 @@ export function moveInSystem(_sim: CitySim): (w: CityWorld) => void {
         nextActivity: 'work',
         shop: null,
         shopGen: null,
+        // Neutral until the staggered happiness system first reaches them, so a
+        // brand-new household never reads as miserable.
+        happiness: HAPPINESS_BASE,
+        strandedAt: null,
       });
       w.patchComponent(home, 'building', (b) => {
         b.residents += 1;

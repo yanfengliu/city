@@ -23,6 +23,7 @@ function host(overrides: Partial<ToolHost> = {}): ToolHost {
     submitPowerLine: vi.fn(),
     submitPipe: vi.fn(),
     inspect: vi.fn(),
+    inspectPerson: vi.fn(),
     showGhost: vi.fn(),
     clearGhost: vi.fn(),
     showRadius: vi.fn(),

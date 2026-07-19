@@ -13,6 +13,10 @@ export type { PedestrianPurpose } from '../sim/types';
 import type { CityImprovementFindingInput, RecordedFinding } from '../harness/findings';
 import type { SelfCheckSummary } from '../harness/inspect';
 import type { SimSummary } from '../sim/summary';
+import type { CitizenDetail } from '../sim/citizen-detail';
+export type { CitizenAgent, CitizenDetail, CitizenPlace } from '../sim/citizen-detail';
+export type { HappinessBreakdown, HappinessFactor, HappinessFactorId } from '../sim/happiness';
+export type { CitizenActivity, TripPhase } from '../sim/types';
 
 /** Typed messages between the main thread and the sim worker. All payloads must be structured-clone-safe plain data. */
 
@@ -47,7 +51,13 @@ export type ClientToWorker =
   /** Replay the recorded session to `tick` and return the exact state there. */
   | { type: 'inspectAt'; id: number; tick: number }
   /** Verify the recorded session replays identically (3-stream check). */
-  | { type: 'selfCheck'; id: number };
+  | { type: 'selfCheck'; id: number }
+  /**
+   * Everything about ONE household, for the citizen panel. On-demand by design:
+   * citizens are never streamed, so this costs nothing until a player clicks a
+   * walker (whose `citizen` field supplies the entity). `id` correlates the reply.
+   */
+  | { type: 'inspectCitizen'; id: number; entity: number };
 
 export interface TerrainPayload {
   width: number;
@@ -141,6 +151,13 @@ export interface StructureView {
 export interface PedestrianView {
   id: number;
   generation: number;
+  /**
+   * The household this walker belongs to — the id an `inspectCitizen` query
+   * takes, so clicking a walker resolves to a person. Always populated by the
+   * worker; optional only so presentation fixtures written before it still
+   * typecheck.
+   */
+  citizen?: number;
   fromCell: number;
   toCell: number;
   t: number;
@@ -238,4 +255,15 @@ export type WorkerToClient =
   /** Harness: 3-stream determinism self-check result (null + error on failure). */
   | { type: 'selfCheckResult'; id: number; result: SelfCheckSummary | null; error?: string }
   /** Harness: ground-truth city state replayed to `tick` (null + error on failure). */
-  | { type: 'inspection'; id: number; tick: number; summary: SimSummary | null; error?: string };
+  | { type: 'inspection'; id: number; tick: number; summary: SimSummary | null; error?: string }
+  /**
+   * One household's full detail (null + a reason naming the entity when it is
+   * not a citizen). `id` correlates the `inspectCitizen` request.
+   */
+  | {
+      type: 'citizenDetail';
+      id: number;
+      entity: number;
+      detail: CitizenDetail | null;
+      error?: string;
+    };

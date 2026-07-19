@@ -38,7 +38,8 @@ export function spanLabel(area: RectArea): string {
   return `(${area.ax}, ${area.ay}) to (${area.bx}, ${area.by})`;
 }
 
-const ZONE_NAMES: Record<ZoneType, string> = {
+/** Player-facing zone names, shared by refusals and the citizen detail panel. */
+export const ZONE_NAMES: Record<ZoneType, string> = {
   R: 'residential',
   C: 'commercial',
   I: 'industrial',

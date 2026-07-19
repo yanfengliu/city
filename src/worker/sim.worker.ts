@@ -1,6 +1,7 @@
 import { MemorySink, SessionRecorder, snapshotAtTick, type SessionBundle } from 'civ-engine';
 import { footprintCells } from '../sim/buildings';
 import { createCitySim, getTreasury, rebuildDerived, type CitySimConfig } from '../sim/city';
+import { citizenDetail, citizenDetailProblem } from '../sim/citizen-detail';
 import { cityFindingToMarker, findingsFromMarkers } from '../harness/findings';
 import { selfCheckBundle } from '../harness/inspect';
 import { simSummary } from '../sim/summary';
@@ -528,6 +529,26 @@ addEventListener('message', (event) => {
       } catch (e) {
         post({ type: 'inspection', id: message.id, tick: message.tick, summary: null, error: String(e) });
       }
+      break;
+    }
+    case 'inspectCitizen': {
+      // On-demand only: citizens are never streamed, so the panel pays for one
+      // household when the player asks and nothing otherwise. Always replies so
+      // the client Promise settles, with a reason when there is no household.
+      const detail = citizenDetail(sim, message.entity);
+      // A null detail always says why — never a bare null the caller has to
+      // guess at (AGENTS.md: error messages are a product surface).
+      const error = detail
+        ? undefined
+        : (citizenDetailProblem(sim, message.entity) ??
+          `entity ${message.entity} has no citizen detail at tick ${world.tick}`);
+      post({
+        type: 'citizenDetail',
+        id: message.id,
+        entity: message.entity,
+        detail,
+        ...(error === undefined ? {} : { error }),
+      });
       break;
     }
     case 'selfCheck': {

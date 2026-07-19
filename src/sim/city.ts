@@ -18,6 +18,8 @@ import { buildRoadGraph, type RoadGraph } from './road/road-graph';
 import { generateTerrain, type TerrainData } from './terrain';
 import { growthSystem, levelSystem, refreshOccupancy } from './buildings';
 import { moveInSystem } from './citizens';
+import { happinessSystem } from './happiness';
+import { HAPPINESS_INTERVAL, HAPPINESS_INTERVAL_OFFSET } from './constants/happiness';
 import { demandSystem } from './demand';
 import { budgetSystem, registerEconomyCommands, taxDemandPenaltyOf, taxPenaltyOf } from './economy';
 import { employmentSystem, unassignWorkers } from './employment';
@@ -226,6 +228,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.setState('population', 0);
   world.setState('disconnectedTrips', 0);
   world.setState('tripCursor', 0);
+  world.setState('happinessCursor', 0);
   world.setState('taxRates', { r: DEFAULT_TAX_RATE, c: DEFAULT_TAX_RATE, i: DEFAULT_TAX_RATE });
   world.setState('pendingRetailVisits', 0);
   world.setState('completedShoppingTrips', 0);
@@ -394,6 +397,13 @@ export function createCitySim(config: CitySimConfig): CitySim {
     intervalOffset: BUDGET_INTERVAL_OFFSET,
   });
   world.registerSystem({ name: 'pedestrians', phase: 'update', execute: pedestrianSystem(sim) });
+  world.registerSystem({
+    name: 'happiness',
+    phase: 'postUpdate',
+    execute: happinessSystem(sim),
+    interval: HAPPINESS_INTERVAL,
+    intervalOffset: HAPPINESS_INTERVAL_OFFSET,
+  });
 
   world.endSetup();
   return sim;

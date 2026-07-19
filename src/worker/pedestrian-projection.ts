@@ -46,6 +46,9 @@ export function projectPedestrians(world: CityWorld): PedestrianView[] {
     pedestrians.push({
       id,
       generation: world.getEntityGeneration(id),
+      // Lets the main thread map a clicked walker back to the household it
+      // belongs to, which is what `inspectCitizen` takes.
+      citizen: path.citizen,
       fromCell,
       toCell,
       t: Math.min(motion.t, 0.999),

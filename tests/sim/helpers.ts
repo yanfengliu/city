@@ -1,7 +1,99 @@
 import { expect } from 'vitest';
 import type { CitySim } from '../../src/sim/city';
 import { cellIndex, lPathCells } from '../../src/sim/grid';
-import type { CityCommands, ZoneType } from '../../src/sim/types';
+import type { CitizenComponent, CityCommands, ZoneType } from '../../src/sim/types';
+
+export interface SeedBuildingOptions {
+  x: number;
+  y: number;
+  zone: ZoneType;
+  residents?: number;
+  jobsFilled?: number;
+  abandoned?: boolean;
+  powered?: boolean;
+  watered?: boolean;
+  level?: number;
+}
+
+/** One hand-placed 1x1 building, bypassing growth so a scenario can pin its state. */
+export function seedBuilding(sim: CitySim, options: SeedBuildingOptions): number {
+  let entity = -1;
+  sim.world.runMaintenance(() => {
+    entity = sim.world.createEntity();
+    sim.world.setPosition(entity, { x: options.x, y: options.y });
+    sim.world.addComponent(entity, 'building', {
+      zone: options.zone,
+      level: options.level ?? 1,
+      w: 1,
+      h: 1,
+      residents: options.residents ?? 0,
+      jobsFilled: options.jobsFilled ?? 0,
+      abandoned: options.abandoned ?? false,
+      upEvals: 0,
+      badEvals: 0,
+      badUtilityEvals: 0,
+      recoverEvals: 0,
+      powered: options.powered ?? true,
+      watered: options.watered ?? true,
+    });
+  });
+  return entity;
+}
+
+/** One hand-placed household, bypassing move-in so a scenario can pin its state. */
+export function seedCitizen(
+  sim: CitySim,
+  home: number,
+  work: number | null,
+  overrides: Partial<CitizenComponent> = {},
+): number {
+  let entity = -1;
+  sim.world.runMaintenance(() => {
+    const homePosition = sim.world.getComponent(home, 'position');
+    if (!homePosition) throw new Error(`seed home ${home} has no position component`);
+    entity = sim.world.createEntity();
+    sim.world.setPosition(entity, { ...homePosition });
+    sim.world.addComponent(entity, 'citizen', {
+      home,
+      work,
+      phase: 'home',
+      waitUntil: 0,
+      nextActivity: 'work',
+      shop: null,
+      shopGen: null,
+      ...overrides,
+    });
+  });
+  return entity;
+}
+
+/** The citizen component, or a loud failure naming the entity that lacks one. */
+export function citizenOf(sim: CitySim, id: number): CitizenComponent {
+  const citizen = sim.world.getComponent(id, 'citizen');
+  if (!citizen) throw new Error(`entity ${id} has no citizen component`);
+  return citizen;
+}
+
+/** Steps until `predicate` holds, failing with the tick budget it exhausted. */
+export function stepUntil(sim: CitySim, predicate: () => boolean, maxTicks: number): void {
+  for (let i = 0; i < maxTicks; i++) {
+    if (predicate()) return;
+    sim.world.step();
+  }
+  expect(predicate(), `condition not reached within ${maxTicks} ticks`).toBe(true);
+}
+
+/** Every walker and vehicle entity currently owned by one citizen. */
+export function agentsFor(sim: CitySim, citizen: number): number[] {
+  const owned: number[] = [];
+  for (const id of [...sim.world.query('pedestrianPath')].sort((a, b) => a - b)) {
+    if (sim.world.getComponent(id, 'pedestrianPath')?.citizen === citizen) owned.push(id);
+  }
+  for (const id of [...sim.world.query('vehicle')].sort((a, b) => a - b)) {
+    if (sim.world.getComponent(id, 'vehicle')?.citizen === citizen) owned.push(id);
+  }
+  return owned;
+}
 
 /**
  * Submits a command that must be refused, and returns the reason it recorded.

@@ -16,6 +16,14 @@ export const SERVICE_LABELS: Record<ServiceType, string> = {
   school: 'a school',
 };
 
+/** Bare names for listing several at once; SERVICE_LABELS carries the article. */
+export const SERVICE_NAMES: Record<ServiceType, string> = {
+  fireStation: 'fire station',
+  police: 'police station',
+  clinic: 'clinic',
+  school: 'school',
+};
+
 /** Services occupy a square footprint of this side, anchored top-left. */
 export const SERVICE_FOOTPRINT = 2;
 

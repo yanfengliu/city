@@ -10,6 +10,9 @@ import {
   WORK_WAIT_BASE,
   WORK_WAIT_VARIANCE,
 } from '../constants/traffic';
+import { LEISURE_WAIT_BASE, LEISURE_WAIT_VARIANCE } from '../constants/activities';
+import { pickFreeTimeActivity } from '../activities';
+import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type {
   CityWorld,
@@ -97,14 +100,19 @@ export function cancelPedestrian(
       'disconnectedTrips',
       ((w.getState('disconnectedTrips') as number | undefined) ?? 0) + 1,
     );
+    markStranded(w, path.citizen);
   }
   w.patchComponent(path.citizen, 'citizen', (data) => {
     if (path.outbound) {
       data.phase = 'home';
-      data.nextActivity = path.purpose === 'shopping' ? 'shop' : 'work';
       if (path.purpose === 'shopping') {
+        // `nextActivity` still names the outing (a shopping run or an evening
+        // out), so leaving it alone retries the same plan rather than flattening
+        // every cancelled outing into a shopping trip.
         data.shop = null;
         data.shopGen = null;
+      } else {
+        data.nextActivity = 'work';
       }
     } else {
       data.phase = path.purpose === 'shopping' ? 'atShop' : 'atWork';
@@ -115,30 +123,37 @@ export function cancelPedestrian(
 
 function arrive(w: CityWorld, walker: number, path: PedestrianPathComponent): void {
   w.destroyEntity(walker);
-  const citizen = w.getComponent(path.citizen, 'citizen');
-  const ownerCurrent =
-    citizen !== undefined &&
+  const component = w.getComponent(path.citizen, 'citizen');
+  const owner =
+    component !== undefined &&
     w.isAlive(path.citizen) &&
-    w.getEntityGeneration(path.citizen) === path.citizenGen;
-  if (!ownerCurrent || !destinationValid(w, path)) {
-    if (ownerCurrent) {
+    w.getEntityGeneration(path.citizen) === path.citizenGen
+      ? component
+      : undefined;
+  if (!owner || !destinationValid(w, path)) {
+    if (owner) {
       w.patchComponent(path.citizen, 'citizen', (data) => {
         data.phase = 'home';
         data.waitUntil = w.tick + TRIP_RETRY_TICKS;
         if (path.purpose === 'shopping') {
-          data.nextActivity = 'shop';
           data.shop = null;
           data.shopGen = null;
+          // Outbound, the outing is still the plan and `nextActivity` already
+          // names it; inbound, the outing is over — back to the work half.
+          if (!path.outbound) data.nextActivity = 'work';
         }
       });
     }
     return;
   }
 
+  const outingIsLeisure = owner.nextActivity === 'leisure';
   w.patchComponent(path.citizen, 'citizen', (data) => {
     if (path.outbound && path.purpose === 'shopping') {
       data.phase = 'atShop';
-      data.waitUntil = randomWait(w, SHOP_WAIT_BASE, SHOP_WAIT_VARIANCE);
+      data.waitUntil = outingIsLeisure
+        ? randomWait(w, LEISURE_WAIT_BASE, LEISURE_WAIT_VARIANCE)
+        : randomWait(w, SHOP_WAIT_BASE, SHOP_WAIT_VARIANCE);
     } else if (path.outbound) {
       data.phase = 'atWork';
       data.waitUntil = randomWait(w, WORK_WAIT_BASE, WORK_WAIT_VARIANCE);
@@ -150,7 +165,8 @@ function arrive(w: CityWorld, walker: number, path: PedestrianPathComponent): vo
         data.shop = null;
         data.shopGen = null;
       } else {
-        data.nextActivity = 'shop';
+        // Home from work — the evening is theirs to plan.
+        data.nextActivity = pickFreeTimeActivity(w, owner);
       }
     }
   });

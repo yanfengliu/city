@@ -6,6 +6,9 @@ import {
   TRIP_RETRY_TICKS,
 } from '../constants/traffic';
 import { GRID_WIDTH } from '../constants/map';
+import { LEISURE_NEAREST_CHOICES } from '../constants/activities';
+import { restUntil } from '../activities';
+import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type { CityWorld, PedestrianPurpose, VehicleLeg } from '../types';
 import {
@@ -18,11 +21,17 @@ import {
 import { spawnPedestrian, validShop } from './pedestrians';
 import { spawnBlocked } from './vehicles';
 
-function countDisconnected(w: CityWorld): void {
+/**
+ * One trip gave up for want of a route. The global counter drives the HUD
+ * warning; the per-citizen mark lets that household's happiness and its next
+ * plan reflect the failure it personally hit.
+ */
+function countDisconnected(w: CityWorld, citizenId: number): void {
   w.setState(
     'disconnectedTrips',
     ((w.getState('disconnectedTrips') as number | undefined) ?? 0) + 1,
   );
+  markStranded(w, citizenId);
 }
 
 /** Spawns a vehicle entity for a citizen at the first cell of its route. */
@@ -130,7 +139,8 @@ function routeVehicle(
   return from !== null && from === to ? cellPathToLegs(sim, cells) : graphLegs;
 }
 
-function shopCandidates(sim: CitySim): number[] {
+/** Every live, staffed, served, road-reachable commercial building, by id. */
+export function shopCandidates(sim: CitySim): number[] {
   const shops: number[] = [];
   for (const id of [...sim.world.query('building')].sort((a, b) => a - b)) {
     if (validShop(sim.world, id) && buildingAccessCell(sim, id) !== null) shops.push(id);
@@ -138,30 +148,76 @@ function shopCandidates(sim: CitySim): number[] {
   return shops;
 }
 
-function nearestShop(sim: CitySim, home: number, shops: number[]): number | null {
+/**
+ * The `limit` shops closest to a home that share its road component, ascending
+ * by (distance, entity id). Bounded insertion rather than a full sort: `limit`
+ * is a handful, so a city with hundreds of shops still costs O(shops x limit)
+ * and allocates nothing proportional to its commerce.
+ */
+function nearestShops(sim: CitySim, home: number, shops: number[], limit: number): number[] {
   const homeCell = buildingAccessCell(sim, home);
-  if (homeCell === null) return null;
+  if (homeCell === null || limit <= 0) return [];
   const component = sim.roadGraph.cellComponent.get(homeCell);
-  if (component === undefined) return null;
-  let best: number | null = null;
-  let bestDistance = Infinity;
+  if (component === undefined) return [];
+  const homeX = homeCell % GRID_WIDTH;
+  const homeY = Math.floor(homeCell / GRID_WIDTH);
+
+  const best: Array<{ shop: number; distance: number }> = [];
   for (const shop of shops) {
     const cell = buildingAccessCell(sim, shop);
     if (cell === null || sim.roadGraph.cellComponent.get(cell) !== component) continue;
     const distance =
-      Math.abs((cell % GRID_WIDTH) - (homeCell % GRID_WIDTH)) +
-      Math.abs(Math.floor(cell / GRID_WIDTH) - Math.floor(homeCell / GRID_WIDTH));
-    if (distance < bestDistance) {
-      best = shop;
-      bestDistance = distance;
+      Math.abs((cell % GRID_WIDTH) - homeX) + Math.abs(Math.floor(cell / GRID_WIDTH) - homeY);
+    let at = best.length;
+    while (
+      at > 0 &&
+      (best[at - 1].distance > distance ||
+        (best[at - 1].distance === distance && best[at - 1].shop > shop))
+    ) {
+      at--;
     }
+    if (at >= limit) continue;
+    best.splice(at, 0, { shop, distance });
+    if (best.length > limit) best.pop();
   }
-  return best;
+  return best.map((entry) => entry.shop);
+}
+
+/**
+ * Where a household goes on its free-time outing: a shopping run takes the
+ * nearest shop, an evening out takes one of the nearest few at random — so
+ * "going out" reads differently from "popping to the shops" on the map.
+ */
+export function chooseOutingShop(
+  sim: CitySim,
+  w: CityWorld,
+  home: number,
+  shops: number[],
+  activity: 'shop' | 'leisure',
+): number | null {
+  const limit = activity === 'leisure' ? LEISURE_NEAREST_CHOICES : 1;
+  const ranked = nearestShops(sim, home, shops, limit);
+  if (ranked.length === 0) return null;
+  if (ranked.length === 1) return ranked[0];
+  return ranked[Math.floor(w.random() * ranked.length)];
 }
 
 function retryLater(w: CityWorld, citizen: number): void {
   w.patchComponent(citizen, 'citizen', (data) => {
     data.waitUntil = w.tick + TRIP_RETRY_TICKS;
+  });
+}
+
+/**
+ * A night in: no agent, just a cooldown at home. The plan flips back to work
+ * as it starts, so a resting household can never sit at home indefinitely.
+ */
+function restAtHome(w: CityWorld, citizenId: number): void {
+  const until = restUntil(w);
+  w.patchComponent(citizenId, 'citizen', (data) => {
+    data.phase = 'home';
+    data.waitUntil = until;
+    data.nextActivity = 'work';
   });
 }
 
@@ -177,7 +233,7 @@ function startWorkLeg(
 ): void {
   const cells = findRoadCellPath(sim, fromBuilding, toBuilding);
   if (!cells) {
-    countDisconnected(w);
+    countDisconnected(w, citizenId);
     retryLater(w, citizenId);
     return;
   }
@@ -193,7 +249,7 @@ function startWorkLeg(
   }
   const legs = routeVehicle(sim, fromBuilding, toBuilding, cells);
   if (!legs || legs.length === 0) {
-    countDisconnected(w);
+    countDisconnected(w, citizenId);
     retryLater(w, citizenId);
     return;
   }
@@ -223,7 +279,10 @@ function startShoppingLeg(
   const citizen = w.getComponent(citizenId, 'citizen');
   if (!citizen) return;
   if (outbound) {
-    const shop = nearestShop(sim, citizen.home, shops);
+    // `nextActivity` holds the outing in progress, so the return leg and the
+    // detail panel can still tell an evening out from a shopping run.
+    const activity = citizen.nextActivity === 'leisure' ? 'leisure' : 'shop';
+    const shop = chooseOutingShop(sim, w, citizen.home, shops, activity);
     const cells = shop === null ? null : findRoadCellPath(sim, citizen.home, shop);
     if (shop === null || !cells) {
       w.patchComponent(citizenId, 'citizen', (data) => {
@@ -261,7 +320,7 @@ function startShoppingLeg(
   }
   const cells = findRoadCellPath(sim, shop, citizen.home);
   if (!cells) {
-    countDisconnected(w);
+    countDisconnected(w, citizenId);
     retryLater(w, citizenId);
     return;
   }
@@ -298,11 +357,14 @@ export function tripSystem(sim: CitySim): (w: CityWorld) => void {
       const id = eligible[(cursor + n) % eligible.length];
       const citizen = w.getComponent(id, 'citizen');
       if (!citizen || citizen.work === null) continue;
+      const activity = citizen.nextActivity ?? 'work';
       if (citizen.phase === 'atWork') {
         startWorkLeg(sim, w, id, citizen.work, citizen.home, false, capacity);
       } else if (citizen.phase === 'atShop') {
         startShoppingLeg(sim, w, id, false, shops, capacity);
-      } else if ((citizen.nextActivity ?? 'work') === 'shop') {
+      } else if (activity === 'rest') {
+        restAtHome(w, id);
+      } else if (activity === 'shop' || activity === 'leisure') {
         startShoppingLeg(sim, w, id, true, shops, capacity);
       } else {
         startWorkLeg(sim, w, id, citizen.home, citizen.work, true, capacity);

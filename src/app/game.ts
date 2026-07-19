@@ -29,6 +29,7 @@ import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { BudgetPanel } from '../ui/budget-panel';
 import { InspectPanel } from '../ui/inspect-panel';
+import { citizenInspectData } from './citizen-inspect';
 import { AdvisorPanel, type Advisory } from '../ui/advisor';
 import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
 import { HIGHWAY_CELL_SET, HIGHWAY_COLUMN, HIGHWAY_LENGTH } from '../sim/constants/highway';
@@ -122,7 +123,7 @@ const FIELD_OVERLAYS: readonly OverlayName[] = [
 ];
 
 /** A clicked map object: a grown RCI building or a player-placed service structure. */
-type Inspected = { kind: 'building' | 'structure'; id: number };
+type Inspected = { kind: 'building' | 'structure' | 'citizen'; id: number };
 
 interface GameOptions {
   recordPlaytest?: boolean;
@@ -186,6 +187,8 @@ export class Game {
   /** Set when road/building/structure footprints change; flushed to trees + zone tint once per frame. */
   private occupancyDirty = false;
   private inspected: Inspected | null = null;
+  /** Correlates citizen-detail replies so a stale one cannot fill the panel. */
+  private citizenRequestId = 0;
   private activeOverlay: OverlayName = 'none';
   /** Set once the worker reports a halted world; surfaced in the text state so
    * automation sees a dead sim instead of silently timing out on a frozen tick. */
@@ -389,6 +392,7 @@ export class Game {
       submitPipe: (a, b) =>
         this.send({ type: 'command', name: 'placePipe', data: { ax: a.x, ay: a.y, bx: b.x, by: b.y } }),
       inspect: (cell) => this.inspectCell(cell),
+      inspectPerson: (citizen) => this.inspectCitizen(citizen),
       showGhost: (cells, validity, zone) =>
         this.ghost.update(cells, validity, zone ? ZONE_COLORS[zone] : undefined),
       clearGhost: () => {
@@ -408,7 +412,9 @@ export class Game {
       GRID_WIDTH,
       GRID_HEIGHT,
     );
-    attachInput(this.scene.renderer.domElement, this.picker, this.tools);
+    attachInput(this.scene.renderer.domElement, this.picker, this.tools, (x, y) =>
+      this.pickPerson(x, y),
+    );
 
     this.worker = new Worker(new URL('../worker/sim.worker.ts', import.meta.url), {
       type: 'module',
@@ -573,6 +579,16 @@ export class Game {
       case 'commandSubmissionResult':
         if (!this.commandFeedback.receive(message)) break;
         if (!message.accepted) this.hud.showToast(`Command rejected: ${message.message}`);
+        break;
+      case 'citizenDetail':
+        // Ignore a reply the player has already clicked past.
+        if (message.id !== this.citizenRequestId) break;
+        if (!message.detail) {
+          this.hud.showToast(message.error ?? `No household at entity ${message.entity}`);
+          this.clearInspect();
+          break;
+        }
+        this.inspectPanel.show(citizenInspectData(message.detail));
         break;
       case 'simFailure':
         // The world will not tick again. Say so loudly and stop the HUD from
@@ -783,6 +799,32 @@ export class Game {
     this.zonesView.flushIfDirty();
   }
 
+  /**
+   * Citizen entity under the pointer, or null. Hit-tests the pedestrian
+   * batches, which all share one slot order, so any batch resolves the walker.
+   */
+  private pickPerson(clientX: number, clientY: number): number | null {
+    const hit = this.picker.pickInstance(
+      clientX,
+      clientY,
+      this.pedestriansView.pickableBatches,
+    );
+    if (!hit) return null;
+    return this.pedestriansView.citizenAtInstance(hit.instanceId);
+  }
+
+  /**
+   * Opens the person panel. The detail is a worker round-trip (it is derived,
+   * not streamed), so the panel fills on the reply; the request id correlates
+   * it so a fast second click cannot show the first person's answer.
+   */
+  private inspectCitizen(citizen: number): void {
+    this.inspected = { kind: 'citizen', id: citizen };
+    this.inspectCoverage.hide();
+    this.citizenRequestId += 1;
+    this.send({ type: 'inspectCitizen', id: this.citizenRequestId, entity: citizen });
+  }
+
   private inspectCell(cell: Cell | null): void {
     const index = cell ? cellIndex(cell.x, cell.y) : null;
     const structureId = index === null ? undefined : this.structureCellOwner.get(index);
@@ -809,6 +851,17 @@ export class Game {
   /** Syncs the panel with the inspected object's latest view (or closes it when gone). */
   private refreshInspect(): void {
     if (this.inspected === null) return;
+    if (this.inspected.kind === 'citizen') {
+      // People change every tick, so the panel re-asks rather than re-reading
+      // a cached view like buildings do.
+      this.citizenRequestId += 1;
+      this.send({
+        type: 'inspectCitizen',
+        id: this.citizenRequestId,
+        entity: this.inspected.id,
+      });
+      return;
+    }
     if (this.inspected.kind === 'structure') {
       const view = this.structures.get(this.inspected.id);
       if (!view) {

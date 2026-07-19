@@ -1,5 +1,5 @@
 import { Raycaster, Vector2, Vector3 } from 'three';
-import type { Camera, Ray } from 'three';
+import type { Camera, InstancedMesh, Ray } from 'three';
 import { FLAT_TERRAIN_SURFACE, type TerrainSurfaceView } from './terrain-surface';
 
 const DIRECTION_EPSILON = 1e-10;
@@ -17,6 +17,35 @@ function clipAxis(
   const a = (min - origin) / direction;
   const b = (max - origin) / direction;
   return a <= b ? [a, b] : [b, a];
+}
+
+/** Which instance of which batch the pointer hit. */
+export interface PickedInstance {
+  mesh: InstancedMesh;
+  /** Index into the batch — the caller maps it back to a sim entity. */
+  instanceId: number;
+}
+
+/**
+ * Nearest instanced-batch hit along an already-configured raycaster, or null.
+ * Split from the pointer plumbing so the selection rule (nearest wins, batches
+ * with no live instances are skipped) is testable without a DOM.
+ */
+export function nearestInstanceHit(
+  raycaster: Raycaster,
+  meshes: readonly InstancedMesh[],
+): PickedInstance | null {
+  let best: PickedInstance | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const mesh of meshes) {
+    if (mesh.count === 0 || !mesh.visible) continue;
+    for (const hit of raycaster.intersectObject(mesh, false)) {
+      if (hit.instanceId === undefined || hit.distance >= bestDistance) continue;
+      bestDistance = hit.distance;
+      best = { mesh, instanceId: hit.instanceId };
+    }
+  }
+  return best;
 }
 
 /** Integer sim cell coordinates under the pointer. */
@@ -117,6 +146,20 @@ export class GroundPicker {
       }
     }
     return null;
+  }
+
+  /**
+   * Nearest instanced-batch hit under the pointer — used to click a person out
+   * of the crowd. Returns null when the pointer misses every batch, so the
+   * caller can fall back to a ground/building pick.
+   */
+  pickInstance(
+    clientX: number,
+    clientY: number,
+    meshes: readonly InstancedMesh[],
+  ): PickedInstance | null {
+    if (!this.pointerRay(clientX, clientY)) return null;
+    return nearestInstanceHit(this.raycaster, meshes);
   }
 
   private pointerRay(clientX: number, clientY: number): Ray | null {

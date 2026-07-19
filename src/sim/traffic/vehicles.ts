@@ -13,6 +13,7 @@ import {
   WORK_WAIT_VARIANCE,
 } from '../constants/traffic';
 import { signalPhase } from '../../protocol/signal-phase';
+import { pickFreeTimeActivity } from '../activities';
 import type { CitySim } from '../city';
 import type { RoadEdge } from '../road/road-graph';
 import type { CitizenComponent, CityWorld, VehicleComponent, VehicleLeg } from '../types';
@@ -130,7 +131,8 @@ function arrive(sim: CitySim, w: CityWorld, id: number, data: VehicleComponent):
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'home';
       c.waitUntil = w.tick + HOME_COOLDOWN_BASE + Math.floor(w.random() * HOME_COOLDOWN_VARIANCE);
-      c.nextActivity = 'shop';
+      // Home from work — the evening is theirs to plan.
+      c.nextActivity = pickFreeTimeActivity(w, citizen);
     });
   }
 }

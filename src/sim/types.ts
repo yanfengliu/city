@@ -127,18 +127,43 @@ export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome' | 'toShop' | 'at
 
 export type PedestrianPurpose = 'commercial-work' | 'industrial-work' | 'shopping';
 
+/**
+ * What a household does with the free-time half of its cycle. `shop` and
+ * `leisure` both walk to a commercial building — the nearest one versus one of
+ * the nearest few — and `rest` stays home, spawning no agent at all.
+ */
+export type FreeTimeActivity = 'shop' | 'leisure' | 'rest';
+
+/** The whole plan vocabulary: a commute, or one of the free-time options. */
+export type CitizenActivity = 'work' | FreeTimeActivity;
+
 export interface CitizenComponent {
   home: number;
   work: number | null;
   phase: TripPhase;
   /** Tick before which this citizen won't start the next trip leg. */
   waitUntil: number;
-  /** Defaults to work for snapshots created before pedestrian activities. */
-  nextActivity?: 'work' | 'shop';
+  /**
+   * The plan in progress: 'work' while commuting, or the free-time activity
+   * chosen on arriving home, held until that outing ends. Defaults to work for
+   * snapshots created before pedestrian activities.
+   */
+  nextActivity?: CitizenActivity;
   /** Commercial destination retained through the at-shop wait and return leg. */
   shop?: number | null;
   /** Guards the shop assignment against entity-id reuse. */
   shopGen?: number | null;
+  /**
+   * Quality of life in 0..1, recomputed on the staggered happiness cadence.
+   * Absent on snapshots predating it — read through `citizenHappiness`, which
+   * substitutes the neutral base.
+   */
+  happiness?: number;
+  /**
+   * Tick of this household's most recent unroutable trip — the per-citizen face
+   * of `disconnectedTrips`. Null (or absent) when no trip has ever failed.
+   */
+  strandedAt?: number | null;
 }
 
 /** Immutable walking route; stored separately so tick diffs do not copy the path array. */
@@ -264,6 +289,8 @@ export type CityState = {
   disconnectedTrips: number;
   /** Deterministic rotation cursor for trip candidate selection. */
   tripCursor: number;
+  /** Deterministic rotation cursor for the happiness recompute budget. */
+  happinessCursor: number;
   /** Entity id of the singleton mirror entity. */
   mirrorEntity: number;
   /** Per-zone tax rates (integer percent, default DEFAULT_TAX_RATE). */

@@ -132,16 +132,19 @@ describe('committed recorder benchmark evidence', () => {
 
   it('keeps measured city outcomes identical with and without recording', () => {
     expect(new Set(result.runs.map((run) => JSON.stringify(run.final))).size).toBe(1);
-    // Re-pinned 2026-07-17 with the T1 traffic-realism profile: headway and
-    // signals hold more cars on the road at once (85 vs 59) and slow trip
-    // turnover, while the city still clears 1,000+ population by tick 3002.
+    // Re-pinned 2026-07-18 for citizen free-time plans. `rest` keeps a share
+    // of households at home, so walkers and shopping trips fall (107 → 82,
+    // 509 → 427) — the intended cost of "staying in" being a real choice. The
+    // rest of the drift is the trajectory moving as activity selection changes
+    // how the seeded RNG is consumed; determinism itself is pinned by the
+    // identical-outcomes assertion above, not by these figures.
     expect(result.runs[0]?.final).toEqual({
       tick: 3002,
-      buildingCount: 560,
-      vehicles: 85,
-      pedestrians: 107,
-      completedShoppingTrips: 509,
-      populationPeople: 1572,
+      buildingCount: 608,
+      vehicles: 111,
+      pedestrians: 82,
+      completedShoppingTrips: 427,
+      populationPeople: 1629,
     });
     expect(result.runs.filter((run) => run.label === 'lean').every(
       (run) => run.bundleJsonBytes === 0,

@@ -1,4 +1,5 @@
 import type { PedestrianPurpose } from '../protocol/messages';
+import { PEDESTRIAN_ARM } from './constants';
 import { SIDEWALK_Y } from './road-streetscape-style';
 
 export const PEDESTRIAN_PURPOSE_TOP_PALETTES: Record<
@@ -32,6 +33,9 @@ const WIDTH_SCALES = [0.9, 1, 1.1] as const;
 const HEIGHT_SCALES = [0.92, 1, 1.08] as const;
 export const PEDESTRIAN_MAX_WIDTH_SCALE = 1.1;
 export const PEDESTRIAN_MAX_HEIGHT_SCALE = 1.08;
+/** Widest point of a walker: the arms, which hang outboard of the torso. */
+export const PEDESTRIAN_MAX_HALF_WIDTH =
+  (PEDESTRIAN_ARM.x + PEDESTRIAN_ARM.width / 2) * PEDESTRIAN_MAX_WIDTH_SCALE;
 
 /** Feet sit just above the raised sidewalk top. */
 export const PEDESTRIAN_Y = SIDEWALK_Y + 0.01;
@@ -39,10 +43,15 @@ export const PEDESTRIAN_Y = SIDEWALK_Y + 0.01;
 export interface PedestrianStyle {
   topColor: number;
   bottomColor: number;
+  /** Arms read as either a sleeve of the top or bare skin. */
+  sleeveColor: number;
   skinColor: number;
   widthScale: number;
   heightScale: number;
 }
+
+/** Divisor turning a uint32 hash into a uniform draw in [0, 1). */
+const UINT32_RANGE = 4294967296;
 
 function mix32(value: number): number {
   let hash = value | 0;
@@ -51,22 +60,39 @@ function mix32(value: number): number {
   return (hash ^ (hash >>> 16)) >>> 0;
 }
 
+/**
+ * Stable seed for one live pedestrian identity; a recycled generation reseeds
+ * every appearance axis. Shared with the gait so a walker's build and its walk
+ * come from the same identity.
+ */
+export function pedestrianIdentitySeed(id: number, generation: number): number {
+  return (
+    Math.imul((id + 1) | 0, 0x9e3779b1) ^
+    Math.imul((generation + 1) | 0, 0x85ebca6b)
+  ) | 0;
+}
+
+/** Uniform draw in [0, 1) for one salted axis of an identity. */
+export function identityDraw(seed: number, salt: number): number {
+  return mix32(seed ^ salt) / UINT32_RANGE;
+}
+
 /** Stable for one live pedestrian identity; a recycled generation gets a new outfit. */
 export function pedestrianStyle(
   id: number,
   generation: number,
   purpose: PedestrianPurpose,
 ): PedestrianStyle {
-  const base = (
-    Math.imul((id + 1) | 0, 0x9e3779b1) ^
-    Math.imul((generation + 1) | 0, 0x85ebca6b)
-  ) | 0;
+  const base = pedestrianIdentitySeed(id, generation);
   const index = (salt: number, length: number): number => mix32(base ^ salt) % length;
   const topPalette = PEDESTRIAN_PURPOSE_TOP_PALETTES[purpose];
+  const topColor = topPalette[index(0x2c1b3c6d, topPalette.length)];
+  const skinColor = PEDESTRIAN_SKIN_COLORS[index(0x7f4a7c15, PEDESTRIAN_SKIN_COLORS.length)];
   return {
-    topColor: topPalette[index(0x2c1b3c6d, topPalette.length)],
+    topColor,
     bottomColor: PEDESTRIAN_BOTTOM_COLORS[index(0x5a17d9e3, PEDESTRIAN_BOTTOM_COLORS.length)],
-    skinColor: PEDESTRIAN_SKIN_COLORS[index(0x7f4a7c15, PEDESTRIAN_SKIN_COLORS.length)],
+    sleeveColor: index(0x1c69b3f5, 2) === 0 ? topColor : skinColor,
+    skinColor,
     heightScale: HEIGHT_SCALES[index(0x35a6d12b, HEIGHT_SCALES.length)],
     widthScale: WIDTH_SCALES[index(0x68e31da4, WIDTH_SCALES.length)],
   };

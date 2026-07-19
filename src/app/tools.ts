@@ -96,6 +96,8 @@ export interface ToolHost {
   submitPipe(a: Cell, b: Cell): void;
   /** Select-tool click; null = off-grid (clears any open inspection). */
   inspect(cell: Cell | null): void;
+  /** Select-tool click that landed on a walking household. */
+  inspectPerson(citizen: number): void;
   /** validity: one flag for all-or-nothing commands; per-cell for subset painters (zone/dezone). */
   showGhost(cells: Cell[], validity: boolean | boolean[], zone?: ZoneType): void;
   clearGhost(): void;
@@ -224,6 +226,12 @@ export class Tools {
   select(cell: Cell | null): void {
     if (this.activeTool !== 'select') return;
     this.host.inspect(cell);
+  }
+
+  /** Select-tool click that landed on a person rather than the ground. */
+  selectPerson(citizen: number): void {
+    if (this.activeTool !== 'select') return;
+    this.host.inspectPerson(citizen);
   }
 
   cancelDrag(): void {
