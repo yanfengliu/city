@@ -3,12 +3,12 @@ import { UTILITY_PAD_COLOR, UTILITY_PAD_LIFT } from './utility-structure-style';
 
 /**
  * Dimensions and palette for the detailed coverage-service models (fire
- * station, police station, clinic, school, park). Rendering-only; footprints
+ * station, police station, clinic, school, park, garden). Rendering-only; footprints
  * and placement rules stay in src/sim/constants/services.ts. Lengths are world
  * units (1 = one grid cell); model-local heights are measured above the pad
  * top. Layout offsets inside the 2x2 footprint live with the geometry in
- * service-structures.ts as footprint fractions — except the park's, which are
- * a composition rather than a facade and so are tabulated here in PARK_LAYOUT.
+ * service-structures.ts as footprint fractions — except the leisure
+ * landscapes, whose compositions are tabulated here.
  */
 
 // Every service stands on the same leveled civic concrete as the utilities.
@@ -35,6 +35,8 @@ export const SERVICE_WALL_COLORS: Record<ServiceKind, number> = {
   // The park has no walls; this is its lawn, and it plays the same identity
   // role — the one colour that says "park" from the strategy camera.
   park: 0x63c455,
+  // The garden's clipped hedges carry its cooler, denser green signature.
+  garden: 0x32b28c,
 };
 
 // Fire station: cream drive-through hall, red roof and roll-up bays, hose tower.
@@ -191,6 +193,48 @@ export const PARK_LAYOUT = {
     jitter: 0.025,
     trunkSegments: 5,
     canopySegments: 7,
+  },
+} as const;
+
+// Community garden: warm gravel under formal allotment beds, a clipped-hedge
+// boundary with a south entrance, and a cream pergola over that entrance.
+export const GARDEN_COLORS = {
+  ground: 0xd6bd91,
+  path: 0xeadbbb,
+  hedge: SERVICE_WALL_COLORS.garden,
+  bedBorder: 0xa87b52,
+  soil: 0x6d4935,
+  crops: [0x8ac653, 0xe2b84f, 0xd96b58],
+  pergola: 0xf3e8ce,
+} as const;
+
+/** Formal, mirrored composition in footprint fractions and world-unit heights. */
+export const GARDEN_LAYOUT = {
+  path: { x0: 0.46, x1: 0.54, z0: 0.03, z1: 0.97, top: 0.012 },
+  bedColumns: [
+    { x0: 0.125, x1: 0.375 },
+    { x0: 0.625, x1: 0.875 },
+  ],
+  bedRows: [
+    { z0: 0.13, z1: 0.31 },
+    { z0: 0.405, z1: 0.595 },
+    { z0: 0.69, z1: 0.87 },
+  ],
+  bed: { borderTop: 0.105, soilInset: 0.025, soilTop: 0.116, cropInset: 0.06, cropTop: 0.14 },
+  hedge: { inset: 0.055, thick: 0.045, entranceLeft: 0.42, entranceRight: 0.58, top: 0.24 },
+  pergola: {
+    left: 0.41,
+    right: 0.59,
+    north: 0.81,
+    south: 0.95,
+    postHalf: 0.012,
+    postTop: 0.66,
+    beamHalf: 0.022,
+    beamBottom: 0.64,
+    beamTop: 0.71,
+    slatHalf: 0.012,
+    slatBottom: 0.7,
+    slatTop: 0.75,
   },
 } as const;
 

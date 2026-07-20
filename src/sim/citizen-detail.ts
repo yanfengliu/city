@@ -107,7 +107,7 @@ export interface CitizenDetail {
   work: CitizenPlace | null;
   /** Where they are heading; null while they are at home, at work, or at a shop. */
   destination: CitizenPlace | null;
-  /** Generation-checked live target, including service destinations such as parks. */
+  /** Generation-checked live target, including park and garden destinations. */
   destinationPlace?: CitizenActivityPlace | null;
   /** Outing venue, retained while travelling there, visiting, and returning home. */
   activityPlace: CitizenActivityPlace | null;

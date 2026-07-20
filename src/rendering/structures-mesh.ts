@@ -17,7 +17,7 @@ export interface StructureRenderView {
 }
 
 const SERVICE_KINDS: readonly ServiceKind[] = [
-  'fireStation', 'police', 'clinic', 'school', 'park',
+  'fireStation', 'police', 'clinic', 'school', 'park', 'garden',
 ];
 
 /** Flat tone for services the active coverage overlay is not about. */
@@ -25,7 +25,7 @@ const INACTIVE_SERVICE_GREY = new Color(0x9aa0a4);
 
 /**
  * Player-placed service buildings as one merged low-poly model mesh per
- * service kind (fire station, police station, clinic, school), built from the
+ * service kind (civic buildings and leisure landscapes), built from the
  * shared GeometryBuilder like the utility structures. A kind's mesh rebuilds
  * whenever any structure of that kind changes; rebuilds iterate views sorted
  * by id, so output is byte-identical for identical inputs regardless of

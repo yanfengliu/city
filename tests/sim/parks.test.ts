@@ -15,10 +15,17 @@ import { NEAR_PARK, parkTown } from './park-town';
 import { expectRejection, findWaterAnchor, stepUntil } from './helpers';
 
 describe('parks as a service', () => {
-  it('appends park to the canonical service order', () => {
+  it('keeps park before the appended garden in the canonical service order', () => {
     // The WHOLE array is the determinism contract, not just park's position:
     // reordering any of it shifts every seeded outcome and recorded session.
-    expect(SERVICE_TYPES).toEqual(['fireStation', 'police', 'clinic', 'school', 'park']);
+    expect(SERVICE_TYPES).toEqual([
+      'fireStation',
+      'police',
+      'clinic',
+      'school',
+      'park',
+      'garden',
+    ]);
   });
 
   it('prices a park as a neighbourhood amenity, not a civic institution', () => {

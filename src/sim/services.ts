@@ -49,6 +49,7 @@ const COVERAGE_FIELD_OF: Record<ServiceType, CoverageFieldName> = {
   clinic: 'healthCoverage',
   school: 'educationCoverage',
   park: 'parkCoverage',
+  garden: 'gardenCoverage',
 };
 
 /**

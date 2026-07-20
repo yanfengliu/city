@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TOOL_GROUPS, Tools, type ToolHost } from '../../src/app/tools';
+import { SERVICE_RADIUS } from '../../src/sim/constants/services';
 
 function host(overrides: Partial<ToolHost> = {}): ToolHost {
   return {
@@ -68,6 +69,30 @@ describe('select tool', () => {
     tools.selectPerson(person);
 
     expect(inspectPerson).toHaveBeenCalledWith(person);
+  });
+});
+
+describe('garden tool', () => {
+  it('advertises shortcut M and submits a community-garden service stamp', () => {
+    const garden = TOOL_GROUPS.flat().find((tool) => tool.id === 'garden');
+    expect(garden).toMatchObject({ key: 'm' });
+    expect(garden?.label).toMatch(/garden/i);
+
+    const submitPlaceService = vi.fn();
+    const showRadius = vi.fn();
+    const tools = new Tools(
+      host({
+        hasRoad: (index) => index === 2 + 4 * 8,
+        submitPlaceService,
+        showRadius,
+      }),
+    );
+    tools.setTool('garden');
+    tools.pointerDown({ x: 2, y: 2 });
+
+    expect(submitPlaceService).toHaveBeenCalledWith('garden', { x: 2, y: 2 });
+    const radius = SERVICE_RADIUS.garden;
+    expect(showRadius).toHaveBeenCalledWith(2 - radius, 2 - radius, 2 + radius, 2 + radius);
   });
 });
 

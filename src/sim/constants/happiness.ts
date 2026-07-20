@@ -42,9 +42,9 @@ export const HAPPINESS_WATERED = 0.08;
 export const HAPPINESS_UNWATERED = -0.22;
 
 /**
- * Per service (fire/police/health/education/parks) whose coverage layer reaches
- * home. A park earns its happiness the same way every other service does — by
- * covering the household — so amenities need no factor of their own.
+ * Per civic need (fire/police/health/education/green space) whose coverage
+ * reaches home. Park and garden satisfy the same need, so overlapping them
+ * cannot masquerade as two essential services.
  */
 export const HAPPINESS_PER_COVERED_SERVICE = 0.05;
 

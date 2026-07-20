@@ -6,27 +6,38 @@ import {
   TRIP_RETRY_TICKS,
 } from '../constants/traffic';
 import { GRID_WIDTH } from '../constants/map';
-import { LEISURE_NEAREST_CHOICES, LEISURE_PARK_MAX_CELLS } from '../constants/activities';
 import { CITIZEN_PRIMARY_MEMBER_ID } from '../constants/citizens';
 import { restUntil } from '../activities';
 import {
   appendCitizenLifeEvent,
   profileForCitizen,
   travellerForActivity,
+  travellerForLeisureVenue,
 } from '../citizen-profile';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type { CityWorld, PedestrianPurpose, VehicleLeg } from '../types';
 import {
-  accessCell,
-  buildingAccessCell,
   buildingAccessNode,
   findNodePath,
   findRoadCellPath,
   nodePathToLegs,
 } from './pathing';
-import { spawnPedestrian, validShop } from './pedestrians';
+import { spawnPedestrian } from './pedestrians';
+import {
+  chooseOutingDestination,
+  outingVenues,
+  type OutingVenues,
+} from './outing-venues';
 import { spawnBlocked } from './vehicles';
+
+export {
+  chooseOutingDestination,
+  gardenCandidates,
+  outingVenues,
+  parkCandidates,
+  shopCandidates,
+} from './outing-venues';
 
 /**
  * One trip gave up for want of a route. The global counter drives the HUD
@@ -47,11 +58,12 @@ function setTripTraveller(
   w: CityWorld,
   citizenId: number,
   activity: 'work' | 'shop' | 'leisure' | 'rest',
+  memberOverride?: number,
 ): number | null {
   const citizen = w.getComponent(citizenId, 'citizen');
   if (!citizen) return null;
   const profile = profileForCitizen(sim, citizenId, citizen);
-  const memberId = travellerForActivity(profile, activity);
+  const memberId = memberOverride ?? travellerForActivity(profile, activity);
   if (citizen.travellerMemberId !== memberId || (activity !== 'rest' && citizen.restUntil != null)) {
     w.patchComponent(citizenId, 'citizen', (data) => {
       data.travellerMemberId = memberId;
@@ -166,120 +178,6 @@ function routeVehicle(
   return from !== null && from === to ? cellPathToLegs(sim, cells) : graphLegs;
 }
 
-/** Every live, staffed, served, road-reachable commercial building, by id. */
-export function shopCandidates(sim: CitySim): number[] {
-  const shops: number[] = [];
-  for (const id of [...sim.world.query('building')].sort((a, b) => a - b)) {
-    if (validShop(sim.world, id) && buildingAccessCell(sim, id) !== null) shops.push(id);
-  }
-  return shops;
-}
-
-/** Every road-reachable park, by id — where an evening out would rather go. */
-export function parkCandidates(sim: CitySim): number[] {
-  const parks: number[] = [];
-  for (const id of [...sim.world.query('structure')].sort((a, b) => a - b)) {
-    if (sim.world.getComponent(id, 'structure')?.type !== 'park') continue;
-    if (accessCell(sim, id) !== null) parks.push(id);
-  }
-  return parks;
-}
-
-/** Everywhere a free-time outing can end, gathered once per trip-system run. */
-export interface OutingVenues {
-  shops: number[];
-  parks: number[];
-}
-
-export function outingVenues(sim: CitySim): OutingVenues {
-  return { shops: shopCandidates(sim), parks: parkCandidates(sim) };
-}
-
-/**
- * The `limit` venues closest to a home that share its road component and lie
- * within `maxCells` (Manhattan, between road access cells), ascending by
- * (distance, entity id). Bounded insertion rather than a full sort: `limit` is a
- * handful, so a city with hundreds of venues still costs O(venues x limit) and
- * allocates nothing proportional to its commerce.
- */
-function nearestVenues(
-  sim: CitySim,
-  home: number,
-  venues: number[],
-  limit: number,
-  maxCells = Number.POSITIVE_INFINITY,
-): number[] {
-  const homeCell = accessCell(sim, home);
-  if (homeCell === null || limit <= 0) return [];
-  const component = sim.roadGraph.cellComponent.get(homeCell);
-  if (component === undefined) return [];
-  const homeX = homeCell % GRID_WIDTH;
-  const homeY = Math.floor(homeCell / GRID_WIDTH);
-
-  const best: Array<{ venue: number; distance: number }> = [];
-  for (const venue of venues) {
-    const cell = accessCell(sim, venue);
-    if (cell === null || sim.roadGraph.cellComponent.get(cell) !== component) continue;
-    const distance =
-      Math.abs((cell % GRID_WIDTH) - homeX) + Math.abs(Math.floor(cell / GRID_WIDTH) - homeY);
-    if (distance > maxCells) continue;
-    let at = best.length;
-    while (
-      at > 0 &&
-      (best[at - 1].distance > distance ||
-        (best[at - 1].distance === distance && best[at - 1].venue > venue))
-    ) {
-      at--;
-    }
-    if (at >= limit) continue;
-    best.splice(at, 0, { venue, distance });
-    if (best.length > limit) best.pop();
-  }
-  return best.map((entry) => entry.venue);
-}
-
-/** Uniform draw over a ranked list. Consumes no RNG for zero or one candidate. */
-function pickVenue(w: CityWorld, ranked: number[]): number | null {
-  if (ranked.length === 0) return null;
-  if (ranked.length === 1) return ranked[0];
-  return ranked[Math.floor(w.random() * ranked.length)];
-}
-
-/**
- * Where a household goes on its free-time outing. A shopping run is an errand:
- * it takes the single nearest shop. An evening out is a choice: it goes to a
- * park within walking distance if the city has built one — that is what a park
- * is for — and otherwise settles for one of the nearest few shops, picking at
- * random among them either way so "going out" reads differently from "popping
- * to the shops" on the map.
- *
- * Exactly one `world.random()` call, and only when the chosen kind of venue
- * offers a real choice — a city with no park in reach draws precisely the
- * sequence it drew before parks existed.
- */
-export function chooseOutingDestination(
-  sim: CitySim,
-  w: CityWorld,
-  home: number,
-  venues: OutingVenues,
-  activity: 'shop' | 'leisure',
-): number | null {
-  if (activity === 'leisure') {
-    const parks = nearestVenues(
-      sim,
-      home,
-      venues.parks,
-      LEISURE_NEAREST_CHOICES,
-      LEISURE_PARK_MAX_CELLS,
-    );
-    if (parks.length > 0) return pickVenue(w, parks);
-  }
-  return pickVenue(
-    w,
-    nearestVenues(sim, home, venues.shops, activity === 'leisure' ? LEISURE_NEAREST_CHOICES : 1),
-  );
-}
-
 function retryLater(w: CityWorld, citizen: number): void {
   w.patchComponent(citizen, 'citizen', (data) => {
     data.waitUntil = w.tick + TRIP_RETRY_TICKS;
@@ -351,9 +249,9 @@ function startWorkLeg(
 }
 
 /**
- * One leg of a free-time outing — out to a shop or a park, or back home. Both
- * kinds walk and both park their destination in `citizen.shop`, so the return
- * leg, the cancel path, and the detail panel need no second vocabulary.
+ * One leg of a free-time outing — out to a shop or green venue, or back home.
+ * Every kind walks and stores its destination in `citizen.shop`, so the return
+ * leg, cancel path, and detail panel need no second hot-component vocabulary.
  */
 function startOutingLeg(
   sim: CitySim,
@@ -370,8 +268,8 @@ function startOutingLeg(
     // `nextActivity` holds the outing in progress, so the return leg and the
     // detail panel can still tell an evening out from a shopping run.
     const activity = citizen.nextActivity === 'leisure' ? 'leisure' : 'shop';
-    const memberId = setTripTraveller(sim, w, citizenId, activity);
-    const shop = chooseOutingDestination(sim, w, citizen.home, venues, activity);
+    const profile = profileForCitizen(sim, citizenId, citizen);
+    const shop = chooseOutingDestination(sim, w, citizen.home, venues, activity, profile);
     const cells = shop === null ? null : findRoadCellPath(sim, citizen.home, shop);
     if (shop === null || !cells) {
       w.patchComponent(citizenId, 'citizen', (data) => {
@@ -383,6 +281,16 @@ function startOutingLeg(
       });
       return;
     }
+    const structureType = w.getComponent(shop, 'structure')?.type;
+    const memberId = setTripTraveller(
+      sim,
+      w,
+      citizenId,
+      activity,
+      activity === 'leisure' && (structureType === 'park' || structureType === 'garden')
+        ? travellerForLeisureVenue(profile, structureType)
+        : undefined,
+    );
     w.patchComponent(citizenId, 'citizen', (data) => {
       data.shop = shop;
       data.shopGen = w.getEntityGeneration(shop);

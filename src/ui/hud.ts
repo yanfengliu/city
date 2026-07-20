@@ -93,6 +93,7 @@ const OVERLAYS: { id: OverlayName; label: string; title?: string }[] = [
   { id: 'healthCoverage', label: 'Health 🏥', title: COVERAGE_TITLE },
   { id: 'educationCoverage', label: 'Education 🎓', title: COVERAGE_TITLE },
   { id: 'parkCoverage', label: 'Parks 🌳', title: COVERAGE_TITLE },
+  { id: 'gardenCoverage', label: 'Gardens 🌻', title: COVERAGE_TITLE },
 ];
 /** Button order actually rendered; pinned against OVERLAY_IDS so the toggle
  * logic and the buttons can never disagree about which overlays exist. */

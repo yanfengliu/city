@@ -7,7 +7,16 @@ export interface Position {
 
 export type ZoneType = 'R' | 'C' | 'I';
 
-export type ServiceType = 'fireStation' | 'police' | 'clinic' | 'school' | 'park';
+export type ServiceType =
+  | 'fireStation'
+  | 'police'
+  | 'clinic'
+  | 'school'
+  | 'park'
+  | 'garden';
+
+/** Green destinations share one civic benefit but keep distinct outing behavior. */
+export type LeisureVenueType = 'park' | 'garden';
 
 export type PowerPlantKind = 'coal' | 'wind';
 
@@ -20,7 +29,8 @@ export type CoverageFieldName =
   | 'policeCoverage'
   | 'healthCoverage'
   | 'educationCoverage'
-  | 'parkCoverage';
+  | 'parkCoverage'
+  | 'gardenCoverage';
 
 /** Everything the overlay layer can subscribe to. */
 export type OverlayFieldName = FieldName | CoverageFieldName;
@@ -32,6 +42,7 @@ export const COVERAGE_FIELD_SERVICE: Record<CoverageFieldName, ServiceType> = {
   healthCoverage: 'clinic',
   educationCoverage: 'school',
   parkCoverage: 'park',
+  gardenCoverage: 'garden',
 };
 
 /** Both road commands take an L-path between two cells (dominant axis first). */
@@ -131,9 +142,9 @@ export type PedestrianPurpose = 'commercial-work' | 'industrial-work' | 'shoppin
 
 /**
  * What a household does with the free-time half of its cycle. `shop` walks to
- * the nearest commercial building; `leisure` walks to a park within reach, or
- * to one of the nearest few shops when no park is; `rest` stays home, spawning
- * no agent at all.
+ * the nearest commercial building; `leisure` walks to a park or community
+ * garden within reach, or to nearby shops when neither is viable; `rest` stays
+ * home, spawning no agent at all.
  */
 export type FreeTimeActivity = 'shop' | 'leisure' | 'rest';
 
@@ -216,9 +227,9 @@ export interface CitizenComponent {
    */
   nextActivity?: CitizenActivity;
   /**
-   * Where the current outing is headed — a commercial building, or the park an
-   * evening out chose — retained through the at-destination wait and the return
-   * leg. Named for the shopping run it originally served.
+   * Where the current outing is headed — a commercial building or green venue
+   * chosen for an evening out — retained through the at-destination wait and
+   * the return leg. Named for the shopping run it originally served.
    */
   shop?: number | null;
   /** Guards the outing destination against entity-id reuse. */

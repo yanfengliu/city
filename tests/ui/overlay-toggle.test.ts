@@ -40,5 +40,6 @@ describe('nextOverlay', () => {
     // so adding an overlay to one without the other fails loudly instead of
     // leaving a button the toggle logic has never been exercised against.
     expect([...OVERLAY_BUTTON_IDS]).toEqual([...OVERLAY_IDS]);
+    expect(OVERLAY_IDS).toContain('gardenCoverage');
   });
 });

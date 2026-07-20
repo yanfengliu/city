@@ -20,14 +20,15 @@ import {
   HAPPINESS_UNWATERED,
   HAPPINESS_WATERED,
 } from './constants/happiness';
-import { SERVICE_NAMES, SERVICE_TYPES } from './constants/services';
+import { SERVICE_BENEFIT_GROUPS } from './constants/services';
 import { DEFAULT_TAX_RATE } from './constants/zoning';
 import { CITIZEN_PRIMARY_MEMBER_ID } from './constants/citizens';
 import { taxRateOf } from './economy';
+import { coveredServiceBenefitsAt } from './fields';
 import { ZONE_NAMES } from './rejection';
 import type { CitySim } from './city';
 import { appendCitizenLifeEvent } from './citizen-profile';
-import type { CitizenComponent, CityWorld, ServiceType, ZoneType } from './types';
+import type { CitizenComponent, CityWorld, ZoneType } from './types';
 
 /**
  * Per-household quality of life in 0..1, derived only from state the city
@@ -110,28 +111,20 @@ function cellLabel(x: number, y: number): string {
   return `(${x}, ${y})`;
 }
 
-/** Which services cover a cell, in the canonical service order. */
-function coveringServices(sim: CitySim, x: number, y: number): ServiceType[] {
-  const covering: ServiceType[] = [];
-  for (const service of SERVICE_TYPES) {
-    if (sim.fields.coverage[service].getAt(x, y) > 0) covering.push(service);
-  }
-  return covering;
-}
-
 function list(names: string[]): string {
   if (names.length <= 1) return names.join('');
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 function serviceFactor(sim: CitySim, x: number, y: number): HappinessFactor {
-  const covering = coveringServices(sim, x, y);
-  const missing = SERVICE_TYPES.filter((service) => !covering.includes(service));
+  const covering = coveredServiceBenefitsAt(sim, x, y);
+  const missing = SERVICE_BENEFIT_GROUPS.filter((group) => !covering.includes(group));
   const label =
     covering.length === 0
-      ? `No service reaches home — ${list(missing.map((s) => SERVICE_NAMES[s]))} are all out of range`
-      : `${list(covering.map((s) => SERVICE_NAMES[s]))} ` +
-        `cover${covering.length === 1 ? 's' : ''} home (${covering.length} of ${SERVICE_TYPES.length})`;
+      ? `No service reaches home — ${list(missing.map((group) => group.name))} are all out of range`
+      : `${list(covering.map((group) => group.name))} ` +
+        `cover${covering.length === 1 ? 's' : ''} home ` +
+        `(${covering.length} of ${SERVICE_BENEFIT_GROUPS.length})`;
   return { id: 'services', label, delta: HAPPINESS_PER_COVERED_SERVICE * covering.length };
 }
 

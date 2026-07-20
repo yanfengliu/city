@@ -29,10 +29,28 @@ describe('an evening out at the park', () => {
     expect(visited.size).toBeGreaterThan(1);
   });
 
-  it('falls back to the shops when the city has no park', () => {
+  it('falls back to the shops when the city has no green venue', () => {
     const town = parkTown({ seed: 17 });
     expect(town.parks).toHaveLength(0);
+    expect(town.gardens).toHaveLength(0);
     expect(town.shops).toContain(outingPick(town, 'leisure'));
+  });
+
+  it('preserves exactly one outing RNG draw when no green venue exists', () => {
+    const chosen = parkTown({ seed: 71 });
+    const control = parkTown({ seed: 71 });
+    expect(chosen.shops).toContain(outingPick(chosen, 'leisure'));
+
+    let afterChoice = -1;
+    chosen.sim.world.runMaintenance(() => {
+      afterChoice = chosen.sim.world.random();
+    });
+    let afterOneManualDraw = -1;
+    control.sim.world.runMaintenance(() => {
+      control.sim.world.random();
+      afterOneManualDraw = control.sim.world.random();
+    });
+    expect(afterChoice).toBe(afterOneManualDraw);
   });
 
   it('falls back to the shops when the only park is too far to walk to', () => {
@@ -171,13 +189,13 @@ describe('an evening out at the park', () => {
   });
 });
 
-describe('parks in a grown city', () => {
+describe('green leisure in a grown city', () => {
   /**
    * The hand-seeded towns above prove the leisure path works when pointed at
    * it. This proves it actually fires in a city nobody arranged: real growth,
    * real employment, real free-time draws.
    */
-  it('sends households to its parks without anything being staged', { timeout: 120_000 }, () => {
+  it('sends households to parks and gardens without staging their profiles', { timeout: 120_000 }, () => {
     const sim = createCitySim({ seed: 3, fieldsEnabled: true });
     sim.world.runMaintenance(() => sim.world.setState('treasury', 10_000_000));
     const x0 = 8;
@@ -222,13 +240,28 @@ describe('parks in a grown city', () => {
     const parks = new Set(outingVenues(sim).parks);
     expect(parks.size).toBe(2);
 
+    const planted: number[] = [];
+    for (let y = y0 + 1; y < y1 && planted.length < 2; y += 4) {
+      for (let x = x0 + 1; x < x1 && planted.length < 2; x += 8) {
+        const before = new Set(sim.world.query('structure'));
+        if (!sim.world.submit('placeService', { service: 'garden', x, y })) continue;
+        sim.world.step();
+        planted.push(...[...sim.world.query('structure')].filter((id) => !before.has(id)));
+      }
+    }
+    expect(planted, 'no buildable garden site anywhere on the grid').toHaveLength(2);
+    const gardens = new Set(outingVenues(sim).gardens);
+    expect(gardens.size).toBe(2);
+
     let parkOutings = 0;
+    let gardenOutings = 0;
     for (let n = 0; n < 3_000; n++) {
       sim.world.step();
       if (n % 25 !== 0) continue;
       for (const id of [...sim.world.query('citizen')].sort((a, b) => a - b)) {
         const shop = sim.world.getComponent(id, 'citizen')?.shop;
         if (shop !== null && shop !== undefined && parks.has(shop)) parkOutings++;
+        if (shop !== null && shop !== undefined && gardens.has(shop)) gardenOutings++;
       }
     }
 
@@ -236,11 +269,13 @@ describe('parks in a grown city', () => {
     // Sampled park outings run to ~2,000 here, so this threshold is a floor
     // against the feature quietly stopping — not a tuned expectation.
     expect(parkOutings, 'households almost never chose a park').toBeGreaterThan(100);
+    expect(gardenOutings, 'households never expressed a garden preference').toBeGreaterThan(20);
     // Commerce still works: shopping runs and shop-fallback evenings still land.
     expect(sim.world.getState('completedShoppingTrips')).toBeGreaterThan(0);
     expect(sim.world.getState('disconnectedTrips')).toBe(0);
     // The parks survived the city growing up around them.
     expect(outingVenues(sim).parks).toEqual([...parks]);
+    expect(outingVenues(sim).gardens).toEqual([...gardens]);
   });
 });
 /** The one sentence the inspect panel prints for this household right now. */

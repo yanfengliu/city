@@ -73,9 +73,8 @@ export function buildingAccessCell(sim: CitySim, building: number): number | nul
 
 /**
  * Where a walker enters or leaves anywhere a citizen can go: a grown building,
- * or a player-placed service structure (a park is the only one they visit
- * today). Both must touch a road to exist, so a null answer means the road that
- * served them is gone.
+ * park, or community garden. Each must touch a road to exist, so a null answer
+ * means the road that served it is gone.
  */
 export function accessCell(sim: CitySim, entity: number): number | null {
   const building = buildingAccessCell(sim, entity);

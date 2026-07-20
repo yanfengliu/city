@@ -52,6 +52,11 @@ describe('session replay self-check', () => {
     // coverage, park access cells, walkers arriving at a structure) under the
     // determinism gate rather than only under its own unit tests.
     sim.world.submit('placeService', { service: 'park', x: base.x + 2, y: base.y + 5 });
+    // A garden beside the cross street covers the second green-space layer,
+    // its old-save mirror key, and profile-driven leisure destination path.
+    expect(
+      sim.world.submit('placeService', { service: 'garden', x: base.x + 6, y: base.y + 5 }),
+    ).toBe(true);
     sim.world.step();
     const pump = findConnectablePumpSpot(sim, { x: midX, y: base.y + 2 });
     sim.world.submit('placeWaterPump', { x: pump.x, y: pump.y });

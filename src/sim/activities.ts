@@ -40,8 +40,8 @@ export function freeTimeWeights(
   const seniorMembers = members.filter((member) => member.lifeStage === 'senior').length;
   return {
     shop: FREE_TIME_SHOP_WEIGHT,
-    // A content household goes out; children and teens add a concrete reason
-    // to use parks rather than leaving the roster as decorative panel text.
+    // A content household goes out; children and teens make leisure more
+    // likely, while venue choice later turns the roster into distinct behavior.
     leisure:
       (FREE_TIME_LEISURE_WEIGHT + youngMembers * FREE_TIME_YOUNG_LEISURE_WEIGHT) * happiness,
     // ... and stays in instead, all the more so if it could not get anywhere

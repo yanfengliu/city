@@ -37,14 +37,15 @@ export function validShop(w: CityWorld, id: number, generation?: number): boolea
 }
 
 /**
- * A park is open whenever it still stands: it has no staff to lose, no power to
- * cut, and nothing to abandon — the one thing that ends a visit is the player
- * bulldozing it.
+ * A green leisure venue is open whenever it still stands: it has no staff to
+ * lose, no power to cut, and nothing to abandon — the one thing that ends a
+ * visit is the player bulldozing it.
  */
-export function validPark(w: CityWorld, id: number, generation?: number): boolean {
+export function validLeisureVenue(w: CityWorld, id: number, generation?: number): boolean {
   if (!w.isAlive(id)) return false;
   if (generation !== undefined && w.getEntityGeneration(id) !== generation) return false;
-  return w.getComponent(id, 'structure')?.type === 'park';
+  const type = w.getComponent(id, 'structure')?.type;
+  return type === 'park' || type === 'garden';
 }
 
 export function spawnPedestrian(
@@ -82,12 +83,12 @@ function destinationValid(w: CityWorld, path: PedestrianPathComponent): boolean 
   if (w.getEntityGeneration(path.destination) !== path.destinationGen) return false;
   const citizen = w.getComponent(path.citizen, 'citizen');
   if (!citizen) return false;
-  // An outbound outing ends at a shop or at a park; only the shop case is a
+  // An outbound outing ends at a shop or green venue; only the shop case is a
   // building, so this arm is checked before anything reads `building`.
   if (path.outbound && path.purpose === 'shopping') {
     if (citizen.shop !== path.destination || citizen.shopGen !== path.destinationGen) return false;
     return (
-      validPark(w, path.destination, path.destinationGen) ||
+      validLeisureVenue(w, path.destination, path.destinationGen) ||
       validShop(w, path.destination, path.destinationGen)
     );
   }
@@ -197,9 +198,9 @@ function arrive(
       }
     }
   });
-  // An evening at the park is an outing, not a sale: only an arrival at a
+  // An evening in a green venue is an outing, not a sale: only an arrival at a
   // commercial building books retail. destinationValid has already run, so a
-  // shopping-purpose destination is either a live shop or a live park.
+  // shopping-purpose destination is either a live shop or a live green venue.
   if (path.outbound && path.purpose === 'shopping' && w.getComponent(path.destination, 'building')) {
     w.setState(
       'pendingRetailVisits',

@@ -21,7 +21,7 @@ Mayor of a growing town. Minute-to-minute: draw roads → zone → watch demand 
 - Grid-aligned roads only (freeform splines are a possible later phase; the sim design must not preclude them).
 - Low-density RCI zoning, growable 1x1–2x2 buildings, 3 building levels.
 - Agent-based traffic on the road graph with congestion feedback; target ~1–3k active vehicles+citizens.
-- Power and water networks, four coverage services, pollution/noise/land-value fields, taxes and upkeep.
+- Power and water networks, six coverage services satisfying five civic needs, pollution/noise/land-value fields, taxes and upkeep.
 - Save/load. Speed controls. Overlay views. Day/night lighting as polish.
 - Out of scope for v1: public transport, player terrain sculpting and slope-dependent gameplay, districts/policies, disasters, high-density zoning, freight economy chains, mobile.
 

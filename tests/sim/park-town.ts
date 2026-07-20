@@ -1,9 +1,13 @@
 import { expect } from 'vitest';
 import { refreshOccupancy } from '../../src/sim/buildings';
 import { createCitySim, type CitySim } from '../../src/sim/city';
-import { LEISURE_PARK_MAX_CELLS } from '../../src/sim/constants/activities';
+import {
+  LEISURE_GARDEN_MAX_CELLS,
+  LEISURE_PARK_MAX_CELLS,
+} from '../../src/sim/constants/activities';
+import { profileForCitizen } from '../../src/sim/citizen-profile';
 import { chooseOutingDestination, outingVenues } from '../../src/sim/traffic/trips';
-import type { FreeTimeActivity } from '../../src/sim/types';
+import type { CitizenProfile, FreeTimeActivity } from '../../src/sim/types';
 import { findLandBlock, seedBuilding, seedCitizen } from './helpers';
 
 /**
@@ -16,6 +20,10 @@ import { findLandBlock, seedBuilding, seedCitizen } from './helpers';
 export const NEAR_PARK = 2;
 /** Street offset putting a park's access cell past LEISURE_PARK_MAX_CELLS from home. */
 export const FAR_PARK = LEISURE_PARK_MAX_CELLS + 4;
+/** Street offset of a neighbourhood garden close enough for an evening stroll. */
+export const NEAR_GARDEN = 8;
+/** Street offset putting a garden past its deliberately shorter walking reach. */
+export const FAR_GARDEN = LEISURE_GARDEN_MAX_CELLS + 4;
 /** Street width holding the home, the shops, and the furthest park under test. */
 export const STREET = FAR_PARK + 12;
 
@@ -25,6 +33,7 @@ export interface ParkTown {
   work: number;
   shops: number[];
   parks: number[];
+  gardens: number[];
   citizen: number;
   base: { x: number; y: number };
   streetY: number;
@@ -38,7 +47,12 @@ export interface ParkTown {
  * shops" are the same scenario differing only in what the player built.
  */
 export function parkTown(
-  options: { seed?: number; activity?: FreeTimeActivity; parkOffsets?: number[] } = {},
+  options: {
+    seed?: number;
+    activity?: FreeTimeActivity;
+    parkOffsets?: number[];
+    gardenOffsets?: number[];
+  } = {},
 ): ParkTown {
   const sim = createCitySim({ seed: options.seed ?? 7, fieldsEnabled: true });
   const base = findLandBlock(sim, STREET, 6);
@@ -68,8 +82,19 @@ export function parkTown(
     expect(added, `park at offset ${offset} was not created`).toHaveLength(1);
     parks.push(added[0]);
   }
+  const gardens: number[] = [];
+  for (const offset of options.gardenOffsets ?? []) {
+    const before = new Set(sim.world.query('structure'));
+    expect(
+      sim.world.submit('placeService', { service: 'garden', x: base.x + offset, y: streetY - 2 }),
+    ).toBe(true);
+    sim.world.step();
+    const added = [...sim.world.query('structure')].filter((id) => !before.has(id));
+    expect(added, `garden at offset ${offset} was not created`).toHaveLength(1);
+    gardens.push(added[0]);
+  }
   const citizen = seedCitizen(sim, home, work, { nextActivity: options.activity ?? 'work' });
-  return { sim, home, work, shops, parks, citizen, base, streetY };
+  return { sim, home, work, shops, parks, gardens, citizen, base, streetY };
 }
 
 /** The venue an evening out would choose right now, without stepping the sim. */
@@ -82,7 +107,25 @@ export function outingPick(town: ParkTown, activity: 'shop' | 'leisure'): number
       town.home,
       outingVenues(town.sim),
       activity,
+      activity === 'leisure'
+        ? profileForCitizen(
+            town.sim,
+            town.citizen,
+            town.sim.world.getComponent(town.citizen, 'citizen')!,
+          )
+        : undefined,
     );
   });
   return chosen;
+}
+
+/** Replaces the fixture household's persistent composition for venue-choice tests. */
+export function setTownProfile(town: ParkTown, profile: CitizenProfile): void {
+  town.sim.world.runMaintenance(() => {
+    if (town.sim.world.getComponent(town.citizen, 'citizenProfile')) {
+      town.sim.world.setComponent(town.citizen, 'citizenProfile', profile);
+    } else {
+      town.sim.world.addComponent(town.citizen, 'citizenProfile', profile);
+    }
+  });
 }

@@ -22,7 +22,12 @@ import {
   POLLUTION_FALLOFF_RADIUS_BLOCKS,
   POLLUTION_PER_INDUSTRIAL_LEVEL,
 } from './constants/fields';
-import { COVERAGE_BLOCK_SIZE, SERVICE_TYPES } from './constants/services';
+import {
+  COVERAGE_BLOCK_SIZE,
+  SERVICE_BENEFIT_GROUPS,
+  SERVICE_TYPES,
+  type ServiceBenefitGroup,
+} from './constants/services';
 import { COAL_PLANT_POLLUTION } from './constants/utilities';
 import { taxDemandPenaltyOf, taxPenaltyOf } from './economy';
 import { cellIndex } from './grid';
@@ -98,6 +103,7 @@ export function createCityFields(terrain: TerrainData): CityFields {
       clinic: numberLayer(COVERAGE_BLOCK_SIZE, 0),
       school: numberLayer(COVERAGE_BLOCK_SIZE, 0),
       park: numberLayer(COVERAGE_BLOCK_SIZE, 0),
+      garden: numberLayer(COVERAGE_BLOCK_SIZE, 0),
     },
     nearWaterBlocks: computeNearWaterBlocks(terrain),
   };
@@ -113,6 +119,7 @@ export function coverageMirrorState(
     clinic: fields.coverage.clinic.getState(),
     school: fields.coverage.school.getState(),
     park: fields.coverage.park.getState(),
+    garden: fields.coverage.garden.getState(),
   };
 }
 
@@ -158,11 +165,20 @@ export function fieldScoreInputs(sim: CitySim): ScoreInputs {
   };
 }
 
-/** How many services cover the given cell (0..SERVICE_TYPES.length). */
+/** Civic needs satisfied at a cell; variants within one need never double-count. */
+export function coveredServiceBenefitsAt(
+  sim: CitySim,
+  x: number,
+  y: number,
+): ServiceBenefitGroup[] {
+  return SERVICE_BENEFIT_GROUPS.filter((group) =>
+    group.services.some((service) => sim.fields.coverage[service].getAt(x, y) > 0),
+  );
+}
+
+/** How many distinct civic needs cover the given cell (0..5). */
 export function coverageCountAt(sim: CitySim, x: number, y: number): number {
-  let count = 0;
-  for (const service of SERVICE_TYPES) count += sim.fields.coverage[service].getAt(x, y);
-  return count;
+  return coveredServiceBenefitsAt(sim, x, y).length;
 }
 
 const MIRROR_COMPONENT = {
@@ -382,13 +398,11 @@ export function landValueSystem(sim: CitySim): (w: CityWorld) => void {
     let changed = false;
     for (let by = 0; by < layer.height; by++) {
       for (let bx = 0; bx < layer.width; bx++) {
-        let coverage = 0;
-        for (const service of SERVICE_TYPES) {
-          coverage += sim.fields.coverage[service].getAt(
-            bx * LAND_VALUE_BLOCK_SIZE,
-            by * LAND_VALUE_BLOCK_SIZE,
-          );
-        }
+        const coverage = coverageCountAt(
+          sim,
+          bx * LAND_VALUE_BLOCK_SIZE,
+          by * LAND_VALUE_BLOCK_SIZE,
+        );
         const raw =
           LAND_VALUE_BASE +
           LAND_VALUE_WATER_BONUS * sim.fields.nearWaterBlocks[by * layer.width + bx] +

@@ -51,9 +51,9 @@ describe('CitizenLifeMarkers', () => {
     expect(markers.group.visible).toBe(false);
   });
 
-  it('marks a park outing even though parks are not building destinations', () => {
+  it('marks a garden outing even though leisure services are not building destinations', () => {
     const markers = new CitizenLifeMarkers();
-    const park = {
+    const garden = {
       entity: 9,
       generation: 2,
       x: 50,
@@ -61,13 +61,13 @@ describe('CitizenLifeMarkers', () => {
       w: 2,
       h: 2,
       kind: 'service' as const,
-      label: 'Park',
+      label: 'Community Garden',
     };
     markers.show({
       ...detail(),
       destination: null,
-      destinationPlace: park,
-      activityPlace: park,
+      destinationPlace: garden,
+      activityPlace: garden,
     });
 
     const activity = markers.group.getObjectByName('citizen-destination-marker');

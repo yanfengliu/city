@@ -130,16 +130,20 @@ describe('projectBuildings', () => {
 });
 
 describe('projectStructures', () => {
-  it('projects each service at its anchor with the shared footprint', () => {
+  it('projects civic and leisure services at their anchors with the shared footprint', () => {
     const sim = createCitySim({ seed: 4, utilitiesEnabled: true, fieldsEnabled: true });
     const { x, y } = district(sim);
     expect(
       sim.world.submit('placeService', { service: 'fireStation', x: x + 2, y: y + 1 }),
     ).toBe(true);
     sim.world.step();
+    expect(
+      sim.world.submit('placeService', { service: 'garden', x: x + 5, y: y + 1 }),
+    ).toBe(true);
+    sim.world.step();
 
     const views = projectStructures(sim.world);
-    expect(views).toHaveLength(1);
+    expect(views).toHaveLength(2);
     expect(views[0]).toMatchObject({
       generation: sim.world.getEntityGeneration(views[0].id),
       x: x + 2,
@@ -148,6 +152,15 @@ describe('projectStructures', () => {
       h: SERVICE_FOOTPRINT,
       kind: 'service',
       service: 'fireStation',
+    });
+    expect(views[1]).toMatchObject({
+      generation: sim.world.getEntityGeneration(views[1].id),
+      x: x + 5,
+      y: y + 1,
+      w: SERVICE_FOOTPRINT,
+      h: SERVICE_FOOTPRINT,
+      kind: 'service',
+      service: 'garden',
     });
   });
 

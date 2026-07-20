@@ -29,6 +29,7 @@ import type {
   CitizenMemberRole,
   CitizenProfile,
   CityWorld,
+  LeisureVenueType,
   ZoneType,
 } from './types';
 
@@ -375,6 +376,50 @@ export function travellerForActivity(
   }
   const senior = profile.members.find((entry) => entry.lifeStage === 'senior');
   return senior?.id ?? profile.primaryWorkerMemberId;
+}
+
+/**
+ * Youthful households seek the larger play space of a park. Otherwise a
+ * community garden is the quieter default; in mixed young/senior households,
+ * the child or teen gives the shared outing its character.
+ */
+export function leisureVenuePreference(profile: CitizenProfile): LeisureVenueType {
+  return profile.members.some(
+    (entry) => entry.lifeStage === 'child' || entry.lifeStage === 'teen',
+  )
+    ? 'park'
+    : 'garden';
+}
+
+/** Stable representative for the particular green venue a household chose. */
+export function travellerForLeisureVenue(
+  profile: CitizenProfile,
+  venue: LeisureVenueType,
+): number {
+  if (venue === 'park') return travellerForActivity(profile, 'leisure');
+
+  let oldestSenior: CitizenMemberProfile | undefined;
+  let oldestAdult: CitizenMemberProfile | undefined;
+  for (const entry of profile.members) {
+    if (entry.lifeStage === 'senior') {
+      if (
+        !oldestSenior ||
+        entry.age > oldestSenior.age ||
+        (entry.age === oldestSenior.age && entry.id < oldestSenior.id)
+      ) {
+        oldestSenior = entry;
+      }
+    } else if (entry.lifeStage === 'adult') {
+      if (
+        !oldestAdult ||
+        entry.age > oldestAdult.age ||
+        (entry.age === oldestAdult.age && entry.id < oldestAdult.id)
+      ) {
+        oldestAdult = entry;
+      }
+    }
+  }
+  return oldestSenior?.id ?? oldestAdult?.id ?? travellerForActivity(profile, 'leisure');
 }
 
 /** Returns a copy with the household's one worker role synchronized to its job. */

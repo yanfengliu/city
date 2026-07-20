@@ -28,7 +28,7 @@ Accept: scenario tests — commuters flow between R and C/I clusters; blocking t
 
 ## Phase 4 — Fields and services
 
-Pollution/noise/landValue layers with cadences + mirroring into the singleton mirror entity's components; service buildings (fire/police/clinic/school) with coverage layers; desirability wiring (`fieldsEnabled` flips on — land value + coverage now feed levels); field overlays via DataTexture; service placement UI.
+Pollution/noise/landValue layers with cadences + mirroring into the singleton mirror entity's components; service buildings (fire/police/clinic/school/park/community garden) with separate coverage layers and five grouped civic benefits; desirability wiring (`fieldsEnabled` flips on — land value + coverage now feed levels); field overlays via DataTexture; service placement UI; parks and gardens as profile-sensitive leisure destinations.
 
 Accept: scenario tests — industry raises pollution which drags neighboring land value down; a school enables level-3; overlays visibly match sim values in browser.
 

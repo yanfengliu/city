@@ -27,9 +27,9 @@ export const FREE_TIME_SENIOR_REST_WEIGHT = 0.75;
 
 /**
  * An evening out picks uniformly among this many nearest reachable venues —
- * parks first, shops when no park is in reach (a shopping run always takes the
- * single nearest shop). Bounded so a night out is a neighbourhood trip rather
- * than a walk across the whole city.
+ * a profile-preferred green venue first, shops when no green venue is in reach
+ * (a shopping run always takes the single nearest shop). Bounded so a night
+ * out is a neighbourhood trip rather than a walk across the whole city.
  */
 export const LEISURE_NEAREST_CHOICES = 6;
 
@@ -45,6 +45,12 @@ export const LEISURE_NEAREST_CHOICES = 6;
  * (24), so an evening out ranges a little further than a walk to work.
  */
 export const LEISURE_PARK_MAX_CELLS = 32;
+
+/**
+ * Community gardens are hyperlocal: residents will cross their neighbourhood
+ * for a full park, but use an allotment as a shorter evening stroll.
+ */
+export const LEISURE_GARDEN_MAX_CELLS = 16;
 
 /** Households linger longer on an evening out than on a shopping run. */
 export const LEISURE_WAIT_BASE = 96;

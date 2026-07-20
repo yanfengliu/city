@@ -138,7 +138,14 @@ describe('fieldStatus', () => {
   });
 
   it('marks coverage fields provided or neutral, never alarming', () => {
-    for (const field of ['fireCoverage', 'policeCoverage', 'healthCoverage', 'educationCoverage'] as const) {
+    for (const field of [
+      'fireCoverage',
+      'policeCoverage',
+      'healthCoverage',
+      'educationCoverage',
+      'parkCoverage',
+      'gardenCoverage',
+    ] as const) {
       expect(fieldStatus(field, 1)).toBe('provided');
       expect(fieldStatus(field, 0)).toBe('neutral');
       // Absence lowers land value but never abandons, so it never alarms.
