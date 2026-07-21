@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-07-20T05:01:36.568Z",
+  "capturedAt": "2026-07-21T17:11:28.755Z",
   "profileTicks": 3000,
   "runOrder": [
     "recorded",
@@ -11,7 +11,7 @@
   "scope": "Controlled headless sim-loop proxy: one protocol-like no-op diff listener in both modes; SessionRecorder + MemorySink only in recorded mode.",
   "sourceRef": null,
   "source": {
-    "treeSha256": "dc15c21f0bde4ea307115f4481562119001a106e01ea0b29f9c8352477e42543",
+    "treeSha256": "6b5eb5c4701ffcdaf99d899db0d7e93b25036e1a8602544c7aa74ce6a8996ecf",
     "files": [
       {
         "path": "node_modules/civ-engine/dist/ai-contract.js",
@@ -615,8 +615,8 @@
       },
       {
         "path": "src/sim/fields.ts",
-        "bytes": 15854,
-        "sha256": "db82406037f392af8086d3c64d786f3c2a6fda1d4bf7dc9bfd8e2389da54ef37"
+        "bytes": 15726,
+        "sha256": "a5272f681ab8c7f8793925411c87de2cdacf8b3c0dfa350271085b966b35bf8e"
       },
       {
         "path": "src/sim/grid.ts",
@@ -716,7 +716,7 @@
     ]
   },
   "host": {
-    "node": "v24.12.0",
+    "node": "v22.14.0",
     "platform": "win32",
     "release": "10.0.26100",
     "cpu": "13th Gen Intel(R) Core(TM) i9-13900KF"
@@ -724,27 +724,27 @@
   "aggregate": {
     "recorded": {
       "runs": 2,
-      "meanWallMs": 7327.14725,
-      "meanTicksPerSecond": 410.1000943838146,
-      "meanBundleJsonBytes": 108783751.5
+      "meanWallMs": 7053.992650000001,
+      "meanTicksPerSecond": 425.4410765502915,
+      "meanBundleJsonBytes": 108786121
     },
     "lean": {
       "runs": 2,
-      "meanWallMs": 3468.01245,
-      "meanTicksPerSecond": 866.0939229299344,
+      "meanWallMs": 3075.48045,
+      "meanTicksPerSecond": 976.3320680905665,
       "meanBundleJsonBytes": 0
     },
-    "wallMsReduction": 3859.1348,
-    "wallMsReductionPct": 52.66899474416868,
-    "throughputGain": 2.111908616434877
+    "wallMsReduction": 3978.512200000001,
+    "wallMsReductionPct": 56.400855478634504,
+    "throughputGain": 2.2948702462094164
   },
   "runs": [
     {
       "label": "recorded",
       "sequence": 1,
-      "wallMs": 7032.3595,
-      "ticksPerSecond": 426.5993511850468,
-      "bundleJsonBytes": 108783857,
+      "wallMs": 6921.5319,
+      "ticksPerSecond": 433.43006192025206,
+      "bundleJsonBytes": 108783458,
       "final": {
         "tick": 3002,
         "buildingCount": 548,
@@ -757,8 +757,8 @@
     {
       "label": "lean",
       "sequence": 2,
-      "wallMs": 3588.483400000001,
-      "ticksPerSecond": 836.0077686300567,
+      "wallMs": 2983.4251000000004,
+      "ticksPerSecond": 1005.5556615113279,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -772,8 +772,8 @@
     {
       "label": "lean",
       "sequence": 3,
-      "wallMs": 3347.5414999999994,
-      "ticksPerSecond": 896.180077229812,
+      "wallMs": 3167.5357999999997,
+      "ticksPerSecond": 947.108474669805,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -787,9 +787,9 @@
     {
       "label": "recorded",
       "sequence": 4,
-      "wallMs": 7621.9349999999995,
-      "ticksPerSecond": 393.6008375825824,
-      "bundleJsonBytes": 108783646,
+      "wallMs": 7186.453400000002,
+      "ticksPerSecond": 417.4520911803309,
+      "bundleJsonBytes": 108788784,
       "final": {
         "tick": 3002,
         "buildingCount": 548,

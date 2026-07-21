@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { footprintCells } from '../../src/sim/buildings';
-import { LAND_VALUE_TREE_BONUS } from '../../src/sim/constants/fields';
 import { createCitySim, getTreasury, rebuildDerived, type CitySim } from '../../src/sim/city';
 import { BUDGET_INTERVAL_TICKS, GRID_WIDTH } from '../../src/sim/constants/map';
 import {
@@ -149,7 +148,7 @@ describe('parks as a service', () => {
     expect(expenses).toBe(withoutPark + SERVICE_UPKEEP.park);
   });
 
-  it('leaves the trees under its own footprint standing, where a clinic paves them', () => {
+  it('paves the trees under its own footprint, exactly as a clinic does', () => {
     /** Land value on wooded ground after stamping one 2x2 service over it. */
     const onWoodedGround = (service: 'park' | 'clinic'): number => {
       const { sim, base, streetY } = parkTown();
@@ -162,9 +161,9 @@ describe('parks as a service', () => {
       for (let n = 0; n < 40; n++) sim.world.step();
       return sim.fields.landValue.getAt(anchor.x, anchor.y);
     };
-    // Same seed, same street, same buildings, same tick, and both contribute
-    // one covering service — so the whole remaining difference is the trees.
-    expect(onWoodedGround('park') - onWoodedGround('clinic')).toBe(LAND_VALUE_TREE_BONUS);
+    // A park is a special building like the rest: it bulldozes its footprint
+    // trees, so it keeps no tree bonus a clinic would not — the difference is 0.
+    expect(onWoodedGround('park')).toBe(onWoodedGround('clinic'));
   });
 
   it('does not gate building level 3 — only a school does', () => {

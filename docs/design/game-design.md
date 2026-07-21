@@ -70,7 +70,7 @@ Layer states are mirrored into components on a dedicated singleton "mirror" enti
 | Police station | 400 | 8 | 24 | same |
 | Clinic | 500 | 10 | 32 | same |
 | School | 500 | 10 | 32 | same + gates building level 3 |
-| Park | 150 | 3 | 10 | Green-space coverage and a larger leisure destination within 32 road cells. Youthful households prefer it and the youngest member represents the trip. A park is the one service that does NOT clear the trees under it. |
+| Park | 150 | 3 | 10 | Green-space coverage and a larger leisure destination within 32 road cells. Youthful households prefer it and the youngest member represents the trip. Like every special building it bulldozes the trees on its footprint and replaces them with its own landscaped grove. |
 | Community garden | 90 | 2 | 6 | Cheaper hyperlocal green infrastructure and a quieter leisure destination within 16 road cells. Households without children/teens prefer it; a senior represents the visit when present, otherwise the oldest adult. Cultivated beds clear wild trees under the footprint. Its nominal covered area per dollar is lower than a park's, so it fills local gaps rather than replacing parks. |
 
 Park and garden maintain separate layers, overlays, models, and outing identities, but they satisfy one green-space civic need: overlapping either kind never grants more than one desirability, land-value, or happiness credit at a home. Same-kind overlap is likewise binary.

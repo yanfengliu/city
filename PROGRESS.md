@@ -26,6 +26,16 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-07-19 — Parks bulldoze their footprint trees, like every special building
+
+User correction of a judgement call from the parks work: "Park placement SHOULD bulldoze trees, since parks are special buildings too." The parks commit had made a park uniquely exempt from clearing the trees on its footprint, on the reasoning that "the park bulldozed the trees" was a bad look for the one amenity that is greenery. The user's framing is the better one — a park is a special building like the rest, and consistency wins over that cosmetic worry.
+
+The renderer already cleared footprint trees for every structure including parks (no park exemption in the occupancy path), so the visual was never the gap. The inconsistency was sim-side: `paved()` in `fields.ts` returned false for a park's cells, so land value kept crediting the tree bonus for greenery the map had already removed — a phantom benefit no other building got. `paved()` is now simply "any occupant paves the cell", which also drops a special case and makes parks match community gardens (which already paved) and every civic building.
+
+TDD: the parks test that pinned "leaves the trees under its own footprint standing" is inverted to assert a park's land value on wooded ground equals a clinic's — both bulldoze. The gardens test that contrasted "a park preserves them" is rewritten to assert garden, park, and clinic all pave identically. The `game-design.md` park row, which had claimed a park is "the one service that does NOT clear the trees", now says it bulldozes its footprint and replaces it with its landscaped grove.
+
+Browser-verified on a densely wooded footprint: before, a wall of wild trees; after, the park's plaza, fountain, and lawn sit on that exact spot with the wild trees gone and the surrounding forest correctly untouched. Gates: 691 tests across 114 files, typecheck, zero-warning lint, production build; recorder benchmark re-earned because `src/sim` changed.
+
 ### 2026-07-19 — Community gardens and profile-shaped green leisure
 
 User direction: “We should also support leisure infra such as parks and gardens.” Parks already existed, but they were the only explicit leisure infrastructure and every household treated them identically. This slice adds Community Gardens as a complete second green-space choice and makes household composition visible in where people choose to spend free time.

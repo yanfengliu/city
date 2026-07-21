@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { footprintCells } from '../../src/sim/buildings';
 import { createCitySim, getTreasury, rebuildDerived, type CitySim } from '../../src/sim/city';
-import { LAND_VALUE_TREE_BONUS } from '../../src/sim/constants/fields';
 import { BUDGET_INTERVAL_TICKS, GRID_WIDTH } from '../../src/sim/constants/map';
 import {
   COVERAGE_BLOCK_SIZE,
@@ -128,7 +127,7 @@ describe('community gardens as a service', () => {
     expect(expenses).toBe(withoutGarden + SERVICE_UPKEEP.garden);
   });
 
-  it('clears wild trees for cultivated beds while a park preserves them', () => {
+  it('clears wild trees for cultivated beds, exactly as a park and a clinic do', () => {
     const valueOnWoodedGround = (service: ServiceType): number => {
       const { sim, base, streetY } = parkTown();
       const anchor = { x: base.x + 2, y: streetY - 2 };
@@ -139,10 +138,10 @@ describe('community gardens as a service', () => {
       return sim.fields.landValue.getAt(anchor.x, anchor.y);
     };
 
-    expect(valueOnWoodedGround('park') - valueOnWoodedGround('garden')).toBe(
-      LAND_VALUE_TREE_BONUS,
-    );
+    // Every special building — a garden, a park, a clinic — bulldozes the trees
+    // on its footprint, so none keeps a tree bonus the others do not.
     expect(valueOnWoodedGround('garden')).toBe(valueOnWoodedGround('clinic'));
+    expect(valueOnWoodedGround('park')).toBe(valueOnWoodedGround('clinic'));
   });
 
   it('loads an older coverage mirror with no garden key', () => {

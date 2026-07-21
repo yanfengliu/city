@@ -355,21 +355,18 @@ function averageOverBlock(layer: Layer<number>, bx: number, by: number): number 
 }
 
 /**
- * Whether a footprint has paved over this cell. A park has not: it occupies its
- * cells the way every structure does, but it is parkland — laying one over
- * wooded ground must not read as "the park bulldozed the trees". It grants no
- * new trees either; it simply leaves the ones that were there standing.
+ * Whether a footprint has paved over this cell. Any occupant paves it: a park
+ * is a special building like the rest, so it clears the trees on its footprint
+ * (the renderer removes them from the map) and does not keep crediting the
+ * land-value tree bonus for greenery that is no longer there.
  */
 function paved(sim: CitySim, cell: number): boolean {
-  const owner = sim.occupiedCells.get(cell);
-  if (owner === undefined) return false;
-  return sim.world.getComponent(owner, 'structure')?.type !== 'park';
+  return sim.occupiedCells.has(cell);
 }
 
 /**
  * Live tree proximity: the initial tree mask minus cells roads or footprints
- * have paved (buildings and service structures both live in occupiedCells;
- * `paved` exempts parks).
+ * have paved (buildings and service structures both live in occupiedCells).
  */
 function nearLiveTrees(sim: CitySim, bx: number, by: number): boolean {
   const x0 = Math.max(0, bx * LAND_VALUE_BLOCK_SIZE - LAND_VALUE_TREE_RADIUS);
