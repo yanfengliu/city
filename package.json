@@ -14,7 +14,8 @@
     "benchmark:fixture": "node scripts/generate-performance-fixture.mjs",
     "benchmark:recorder": "node scripts/benchmark-recorder.mjs",
     "playtest:llm": "node scripts/llm-visual-loop.mjs",
-    "playtest:recursive": "node scripts/playtest-recursive.mjs"
+    "playtest:recursive": "node scripts/playtest-recursive.mjs",
+    "lessons:check": "node scripts/check-lessons.mjs"
   },
   "dependencies": {
     "civ-engine": "file:../civ-engine",
