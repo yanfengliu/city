@@ -12,6 +12,18 @@ The driver always launches Chromium headless, starts loopback servers on ephemer
 
 The default `--browser-channel chrome` uses installed stable Chrome so Windows can expose its normal D3D11 GPU path; pass a different Playwright channel explicitly when comparing another browser. The selected channel and actual WebGL renderer are stored in the result.
 
+## Frame-pacing acceptance
+
+`node scripts/benchmark-frame-pacing.mjs` is the final-source 60 Hz presentation gate. Run it from the primary `city/` checkout on Node 24 with the host otherwise quiet; the OS-owned loopback lease prevents another City graphics benchmark from overlapping, but it cannot exclude unrelated browser, GPU, or sibling-repo work. The driver takes a fresh production build, loads the canonical 936-person / 453-building / 88-vehicle fixture, and measures 600 live `requestAnimationFrame` intervals at pause, 1×, and 4× for device DPR 1 and device DPR 2 rendered at the 1.5 cap.
+
+Use a unique ignored output path for the first run so an older diagnostic cannot be mistaken for the new outcome; substitute the current source ref in the filename when appropriate:
+
+```powershell
+node scripts\benchmark-frame-pacing.mjs --output output\performance\frame-pacing-e93cfb8.json
+```
+
+All six profiles must pass the thresholds recorded in the result: mean ≥58 fps, p95 ≤18.5 ms, p99 ≤25 ms, no three consecutive intervals above 20 ms, a stationary paused tick, ≥18 TPS at 1×, ≥72 TPS at 4×, exact canvas buffers, and zero browser errors. Schema 2 fingerprints the complete City, civ-engine, and voxel production inputs with CRLF-to-LF source normalization before and after the build and measurement, while the served `dist/` manifest remains a raw-byte identity. Only a passing fresh-build result is durable acceptance evidence; a red run is diagnostic evidence and must not be rerun repeatedly until scheduling luck turns green.
+
 ## Recorder profile
 
 `npm run benchmark:recorder` retains the second optimization's controlled headless proxy. It builds the same seed-3 acceptance city four times in recorded–lean–lean–recorded order, installs one protocol-like no-op diff listener in every run, steps 3,000 timed ticks, and adds `SessionRecorder` + `MemorySink` only to recorded runs. The result records raw wall times, throughput, JSON-equivalent bundle bytes, final city counts, host data, and a content manifest covering the checkout policy, driver, manifest helper, scenario, package/lockfile, every game sim source, and every executed civ-engine runtime module. Schema 2 manifest bytes and hashes canonicalize CRLF pairs to LF before fingerprinting, so Git checkout conversion is not mistaken for source drift while every other byte remains significant. This intentionally measures simulation/diff/retention overhead, not browser heap or full worker projection cost.

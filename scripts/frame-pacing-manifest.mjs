@@ -1,6 +1,7 @@
-import { createHash } from 'node:crypto';
+import { createHash } from 'crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { finishSourceManifest, sourceFileRecord } from './recorder-source-manifest.mjs';
 
 function finishManifest(files) {
   const treeSha256 = createHash('sha256')
@@ -28,12 +29,12 @@ export async function manifestPaths(paths) {
       for (const child of children) await visit(`${path}/${child.name}`);
       return;
     }
-    if (entry.isFile()) files.push(await fileRecord(path));
+    if (entry.isFile()) files.push(sourceFileRecord(path, await readFile(path)));
   };
   for (const path of [...paths].sort((left, right) => left.localeCompare(right))) {
     await visit(path);
   }
-  return finishManifest(files);
+  return finishSourceManifest(files);
 }
 
 export async function manifestDirectory(directory) {

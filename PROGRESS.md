@@ -26,6 +26,12 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-08-02 — Frame-pacing evidence now fingerprints every production input portably
+
+The final 60 Hz acceptance run had one provenance blocker before it could be trusted. The frame-pacing benchmark was created before City linked the voxel package, so its claimed complete source identity covered City and civ-engine but omitted the executed `voxel/core` and `voxel/three` distribution. Its source manifest also hashed raw checkout bytes even though the primary Windows tree currently mixes LF, CRLF, and mixed-EOL inputs. A green trace could therefore certify stale voxel code or acquire a different identity after Git line-ending conversion.
+
+Schema 2 now includes `.gitattributes`, the normalization helper, every production `file:` dependency's metadata and complete `dist/` tree, and records each linked version. Source records canonicalize only CRLF pairs to LF before hashing; the served production bundle remains a raw-byte manifest. The regressions prove LF, CRLF, and mixed copies share one source identity while semantic drift changes it, prove the served bundle retains raw-byte identity, and derive linked coverage from `package.json` so a future sibling cannot silently fall out of the gate. `benchmarks/README.md` now gives the quiet-host, unique-output procedure and makes clear that a red trace is diagnostic rather than permission to rerun until lucky. Full gates before freezing the benchmark contract: 697 tests across 115 files, typecheck, zero-warning lint, and production build (worker 148,901 / 150,000 bytes). Phase 7 remains open until the solitary final-source measurement itself passes.
+
 ### 2026-08-02 — CI builds both local dependencies on the repository's Node baseline
 
 GitHub Actions run `30763344832` proved the recorder source-identity fix reached clean Ubuntu: the old 93,122-versus-90,482-byte `package-lock.json` failure disappeared. The run then exposed an independent workflow gap. City has two `file:../` dependencies, but CI checked out and built only civ-engine; the installed voxel link pointed at no sibling checkout, so three test modules failed to resolve `voxel/core` or `voxel/three`. The same workflow still selected Node 22 even though `.nvmrc` and the fleet baseline require Node 24.

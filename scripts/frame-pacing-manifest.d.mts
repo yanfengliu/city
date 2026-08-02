@@ -1,3 +1,5 @@
+import type { RecorderSourceManifest } from './recorder-source-manifest.mjs';
+
 export interface FileManifestEntry {
   readonly path: string;
   readonly bytes: number;
@@ -9,5 +11,5 @@ export interface FileManifest {
   readonly files: readonly FileManifestEntry[];
 }
 
-export function manifestPaths(paths: readonly string[]): Promise<FileManifest>;
+export function manifestPaths(paths: readonly string[]): Promise<RecorderSourceManifest>;
 export function manifestDirectory(directory: string): Promise<FileManifest>;

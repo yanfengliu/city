@@ -6,6 +6,10 @@ import process from 'node:process';
 import { spawn } from 'node:child_process';
 import { chromium } from '@playwright/test';
 import { manifestDirectory, manifestPaths } from './frame-pacing-manifest.mjs';
+import {
+  framePacingSourcePaths,
+  linkedProductionDependencyNames,
+} from './frame-pacing-source-paths.mjs';
 import { acquireLoopbackLease, HOST_BENCHMARK_LEASE_PORT, LEASE_OWNER_READ_TIMEOUT_MS } from './frame-pacing-lease.mjs';
 import { cleanupBrowserResources } from './frame-pacing-browser-lifecycle.mjs';
 import { serveDist } from './frame-pacing-http.mjs';
@@ -50,29 +54,6 @@ const ACCEPTANCE = Object.freeze({
   missedFrameMs: 20,
   minimumTickRateBySpeed: Object.freeze({ 1: 18, 4: 72 }),
 });
-const SOURCE_PATHS = [
-  'index.html',
-  'package.json',
-  'package-lock.json',
-  'scripts/benchmark-frame-pacing.mjs',
-  'scripts/frame-pacing-browser-lifecycle.d.mts',
-  'scripts/frame-pacing-browser-lifecycle.mjs',
-  'scripts/frame-pacing-http.d.mts',
-  'scripts/frame-pacing-http.mjs',
-  'scripts/frame-pacing-lease.d.mts',
-  'scripts/frame-pacing-lease.mjs',
-  'scripts/frame-pacing-manifest.d.mts',
-  'scripts/frame-pacing-manifest.mjs',
-  'scripts/frame-pacing-support.d.mts',
-  'scripts/frame-pacing-support.mjs',
-  'scripts/check-production-bundle.mjs',
-  'src',
-  'tsconfig.json',
-  'vite.config.ts',
-  'node_modules/civ-engine/package.json',
-  'node_modules/civ-engine/dist',
-];
-
 async function buildProduction() {
   const command = process.platform === 'win32' ? 'cmd.exe' : 'npm';
   const commandArgs = process.platform === 'win32'
@@ -340,9 +321,12 @@ async function runBenchmark(args) {
       `fixture seed ${String(parsedFixture?.meta?.seed)} is not ${EXPECTED_FIXTURE_SEED}`,
     );
   }
-  const sourceBeforeBuild = await manifestPaths(SOURCE_PATHS);
+  const packageMetadata = JSON.parse(await readFile('package.json', 'utf8'));
+  const linkedDependencyNames = linkedProductionDependencyNames(packageMetadata);
+  const sourcePaths = framePacingSourcePaths(packageMetadata);
+  const sourceBeforeBuild = await manifestPaths(sourcePaths);
   if (shouldBuild) await buildProduction();
-  const source = await manifestPaths(SOURCE_PATHS);
+  const source = await manifestPaths(sourcePaths);
   assertStableTree(
     sourceBeforeBuild.treeSha256,
     source.treeSha256,
@@ -411,7 +395,23 @@ async function runBenchmark(args) {
     binaryAfter.treeSha256,
     'served dist changed during frame-pacing measurement',
   );
-  const sourceAfter = await manifestPaths(SOURCE_PATHS);
+  const finalPackageMetadata = JSON.parse(await readFile('package.json', 'utf8'));
+  const finalSourcePaths = framePacingSourcePaths(finalPackageMetadata);
+  if (JSON.stringify(finalSourcePaths) !== JSON.stringify(sourcePaths)) {
+    throw new Error(
+      'linked production dependency set changed during frame-pacing measurement; '
+      + 'rerun only after package.json and installed file dependencies are stable',
+    );
+  }
+  const dependencies = Object.fromEntries(await Promise.all(
+    linkedDependencyNames.map(async (name) => {
+      const metadata = JSON.parse(
+        await readFile(`node_modules/${name}/package.json`, 'utf8'),
+      );
+      return [name, { version: metadata.version }];
+    }),
+  ));
+  const sourceAfter = await manifestPaths(sourcePaths);
   assertStableTree(
     source.treeSha256,
     sourceAfter.treeSha256,
@@ -419,7 +419,7 @@ async function runBenchmark(args) {
   );
 
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     capturedAt: new Date().toISOString(),
     fixture: {
       path: relative(process.cwd(), fixturePath).replaceAll('\\', '/'),
@@ -429,11 +429,7 @@ async function runBenchmark(args) {
     },
     source,
     binary,
-    dependencies: {
-      civEngineVersion: JSON.parse(
-        await readFile('node_modules/civ-engine/package.json', 'utf8'),
-      ).version,
-    },
+    dependencies,
     host: {
       node: process.version,
       platform: platform(),
