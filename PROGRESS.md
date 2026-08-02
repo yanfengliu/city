@@ -26,6 +26,14 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-08-02 — Recorder benchmark re-earned after two manifest-only drifts
+
+`tests/performance/recorder-benchmark.test.ts` was failing at HEAD on `node_modules/civ-engine/package.json size drifted — expected 2428 to be 2404`. The test stops at the first mismatch, which hid that two pinned files had drifted, not one: civ-engine's `package.json` (2428 → 2404, its `ff62acb` added a `lessons:check` script) and this repo's own `package.json` (1098 → 1118, `234c847` added the same script). Neither is a recorder change and neither is an engine version bump — civ-engine is 2.4.1 on both sides, and all 93 pinned `dist/*.js` files are byte-identical, so no engine or sim code moved. The pinned 2428 matches no commit in civ-engine's history (2117 → 2349 → 2404), so the original capture read an uncommitted working-tree state in the sibling repo: that is how a pin can go stale with no commit that explains it.
+
+Re-earned on an idle machine (waited out a concurrent Playwright suite in the sibling `lego` repo first) into `benchmarks/results/2026-08-02-recorder-profile.json`; `2026-07-19` stays as history, and that history now matters, because the old profile is the Node 22 baseline while the toolchain has since pinned Node 24. Node 24 is 6–8% faster (recorded 7054 → 6480 ms, lean 3075 → 2900 ms), so throughput gain moves 2.29× → 2.23× and wall-time reduction 56.4% → 55.2% — the same conclusion, re-measured. Because no simulation input changed, the run reproduced the pinned city exactly (tick 3002, 548 buildings, 80 vehicles, 122 pedestrians, 413 shopping trips, 1611 people), identical across all four runs, so the outcome assertions were left untouched. The script's default `--output` and the benchmarks README example moved with the test; the script is itself a pinned file, so that edit had to land before the capture or the manifest would have recorded a stale copy of it.
+
+Gates: 691 tests / 114 files, typecheck, zero-warning lint, production build (worker 148,901 / 150,000 bytes). NOTE: both `npm test` and `npm run lint` had to be scoped past `.claude/worktrees/` to get an honest result — an agent worktree nested inside the repo is swept by both tools, doubling the suite and, for typescript-eslint, producing "multiple candidate TSConfigRootDirs" parse errors on all 549 files including the 278 in the real tree. Neither tool ignores `.claude/`; that config gap is not fixed here.
+
 ### 2026-07-19 — Parks bulldoze their footprint trees, like every special building
 
 User correction of a judgement call from the parks work: "Park placement SHOULD bulldoze trees, since parks are special buildings too." The parks commit had made a park uniquely exempt from clearing the trees on its footprint, on the reasoning that "the park bulldozed the trees" was a bad look for the one amenity that is greenery. The user's framing is the better one — a park is a special building like the rest, and consistency wins over that cosmetic worry.
@@ -464,11 +472,11 @@ Verification: `npm test` passed 158/158, `npm run typecheck`, `npm run lint`, an
 
 ### 2026-07-10 — Recursive playtest pass: no fix candidate
 
-Ran a targeted recorded city shift through the fleet recursive-playtest workflow with the deterministic scripted player (LLM exploration remains locked by `loop-ops/DIRECTIVES.md`). The player-surface run completed 10 steps and stopped normally with zero findings. Its persisted replay self-check passed with 1 checked segment and 0 skipped segments; the run and pass manifests agree on session/bundle `38ed0261-2389-4beb-aaf6-5dd3d0a0363e`, civ-engine `2.2.0`, and the terminal outcome `no-fix-candidate`.
+Ran a targeted recorded city shift through the fleet recursive-playtest workflow with the deterministic scripted player (LLM exploration remains locked by `fleet/DIRECTIVES.md`). The player-surface run completed 10 steps and stopped normally with zero findings. Its persisted replay self-check passed with 1 checked segment and 0 skipped segments; the run and pass manifests agree on session/bundle `38ed0261-2389-4beb-aaf6-5dd3d0a0363e`, civ-engine `2.2.0`, and the terminal outcome `no-fix-candidate`.
 
-No game, harness, test, or dependency change was justified: there is no confirmed bug class to promote or fix, and inventing a marginal change would violate the loop's evidence-first contract. Local append-only evidence lives under ignored `output/playtests-llm/2026-07-10T17-01-56-852Z/`; the remembered shift is recorded in `loop-ops/digests/2026-07-10.md` and its dashboard.
+No game, harness, test, or dependency change was justified: there is no confirmed bug class to promote or fix, and inventing a marginal change would violate the loop's evidence-first contract. Local append-only evidence lives under ignored `output/playtests-llm/2026-07-10T17-01-56-852Z/`; the remembered shift is recorded in `fleet/digests/2026-07-10.md` and its dashboard.
 
-Closeout verification: `npm test` passed 157/157, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. The build retains the pre-existing >500 kB chunk warning and exits successfully. The sibling `loop-ops` suite passed 31/31 after the shift regenerated its digest/dashboard rollups.
+Closeout verification: `npm test` passed 157/157, `npm run typecheck`, `npm run lint`, and `npm run build` all passed. The build retains the pre-existing >500 kB chunk warning and exits successfully. The sibling `fleet` suite passed 31/31 after the shift regenerated its digest/dashboard rollups.
 
 ### 2026-07-08 - Recursive loop dogfood runner
 
