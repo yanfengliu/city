@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin } from 'vite';
+import type { Plugin } from 'vite';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // civ-engine's index exports Node-only tooling (FileSink, BundleCorpus, MCP
 // helpers); these shims satisfy its node:* imports in the browser without
@@ -64,4 +65,11 @@ export default defineConfig({
   worker: { format: 'es' },
   server: { port: 5199, strictPort: true },
   build: { target: 'es2022' },
+  // An agent worktree under .claude/worktrees/ is a second full checkout of this
+  // repo, which vitest's default discovery happily sweeps: the suite silently
+  // doubles, and the duplicate runs a possibly-stale checkout's assertions from
+  // the main tree's cwd, so a lagging worktree can fail the gate over code that
+  // is not under test. Spread the installed vitest's own defaults rather than
+  // restating them, so this only ever adds .claude to whatever they are.
+  test: { exclude: [...configDefaults.exclude, '**/.claude/**'] },
 });
