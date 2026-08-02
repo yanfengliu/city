@@ -26,6 +26,16 @@ v1 GAMEPLAY COMPLETE; 60 HZ PERFORMANCE ACCEPTANCE REOPENED. The gameplay checkl
 
 ## Log
 
+### 2026-08-02 — Recorder evidence has one source identity across Windows worktrees and Linux CI
+
+The recorder gate's raw-byte manifest was not portable. The tracked Git blobs were already LF, but the long-lived Windows checkout had 239 LF, 46 CRLF, and 21 mixed files while both detached agent worktrees materialized all 306 newline-bearing files as CRLF under the machine's global `core.autocrlf=true`. Of the recorder's 46 city-owned inputs, the profile captured 21 LF, 16 CRLF, and 9 mixed working files; 25 entries differed from the canonical Git blobs by 5,954 bytes. This was broader than the first `package.json` worktree failure: clean Ubuntu CI failed the same test because the profile pinned the Windows `package-lock.json` at 93,122 bytes while the checkout contained the canonical 90,482 bytes.
+
+The repo now declares `* text=auto eol=lf` in `.gitattributes` so future checkouts materialize detected text consistently. Existing worktrees are not destructively refreshed. Instead, the recorder's schema-2 source manifest canonicalizes only CRLF byte pairs to LF before computing each byte count and SHA-256, records `source.normalization: "crlf-to-lf"`, and pins both the checkout policy and executable manifest helper among its inputs. The regression contract proves LF, CRLF, and mixed-EOL copies have the same source identity while a real content edit changes the hash. A direct comparison against the actual `charming-fermat-146033` CRLF worktree found raw drift in all 45 unchanged city inputs and zero canonical mismatches; its missing local civ-engine dependency remains a separate bootstrap concern, so the acceptance claim is source-identity portability rather than arbitrary worktree self-containment.
+
+The re-earned four-run profile reproduced the exact city outcome in every run: tick 3002, 548 buildings, 80 vehicles, 122 pedestrians, 413 completed shopping trips, and 1,611 people. Recorded runs averaged 6,400 ms and lean runs 3,089 ms on Node 24, a 51.7% wall-time reduction and 2.07× throughput gain. The performance conclusion stands; only the manifest's portable source identity changed.
+
+Final gates from `city/` with both nested worktrees still present: 692 tests across 114 files, typecheck, zero-warning lint, and production build (worker 148,901 / 150,000 bytes). `npm run lessons:check` passes with 26 remaining rules.
+
 ### 2026-08-02 — The gates ignore agent worktrees, so they are correct in the fleet's normal operating mode
 
 The previous entry recorded that both `npm test` and `npm run lint` had to be scoped past `.claude/worktrees/` by hand and left the config gap open. It is closed here. This is not a cosmetic tidy-up: an agent worktree is a second full checkout of this repo, the fleet runs with one or more of them almost always, and both gates were wrong — not merely noisy — whenever one existed.
@@ -36,7 +46,7 @@ The previous entry recorded that both `npm test` and `npm run lint` had to be sc
 
 Gates on the final source, run from `city/` with both agent worktrees present under `.claude/worktrees/`: 691 tests / 114 files (was 1,382 / 228 with one worktree, 342 files discovered with two), typecheck, zero-warning lint exiting 0 (was 820 errors), production build (worker 148,901 / 150,000 bytes, unchanged). `src/sim` is untouched, so the recorder-benchmark evidence stands.
 
-One adjacent trap found while verifying and deliberately *not* fixed here: the gates cannot pass from inside an agent worktree at all, for a reason unrelated to either bug. `core.autocrlf` is `true` globally and the repo has no `.gitattributes`, so a newly added worktree checks out CRLF while the long-lived `city/` checkout is LF — `package.json` is 1,118 bytes in `city/` and 1,154 in both worktrees, exactly +1 per line. The recorder benchmark pins main's LF sizes for ~100 files, so it can never pass in a worktree; the first mismatch merely happens to be `package.json`, which reads exactly like a stale pin. Recorded in `docs/learning/lessons.md`, because normalizing line endings would renormalize the tree and rewrite the manifest's pinned sizes — its own reviewed change, not a side effect of a lint/vitest config fix.
+One adjacent trap found while verifying and deliberately *not* fixed in `375aebe`: checkout line-ending conversion changed the recorder manifest's raw byte identity. `package.json` exposed it first at 1,118 bytes in `city/` and 1,154 in both worktrees, but the primary checkout was itself heterogeneous and the same defect broke clean Linux CI. The entry above closes that separate reviewed unit with an LF checkout policy and schema-2 canonical manifest.
 
 ### 2026-08-02 — Recorder benchmark re-earned after two manifest-only drifts
 

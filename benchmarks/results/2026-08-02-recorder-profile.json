@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "capturedAt": "2026-08-02T07:19:59.627Z",
+  "schemaVersion": 2,
+  "capturedAt": "2026-08-02T19:19:34.543Z",
   "profileTicks": 3000,
   "runOrder": [
     "recorded",
@@ -9,10 +9,16 @@
     "recorded"
   ],
   "scope": "Controlled headless sim-loop proxy: one protocol-like no-op diff listener in both modes; SessionRecorder + MemorySink only in recorded mode.",
-  "sourceRef": "a34db2fb23eef6fdbbf9ffd0e819b3b83fa14c63+working-tree",
+  "sourceRef": "375aebe+working-tree",
   "source": {
-    "treeSha256": "35f23736afddff95bafbb6c1c2616843e8b91863328687cf1da432eadea933d5",
+    "normalization": "crlf-to-lf",
+    "treeSha256": "abfbdf7702eb45d67723ccaa5649b3a26a142311c7467f250dd797078674192e",
     "files": [
+      {
+        "path": ".gitattributes",
+        "bytes": 19,
+        "sha256": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c"
+      },
       {
         "path": "node_modules/civ-engine/dist/ai-contract.js",
         "bytes": 1166,
@@ -485,8 +491,8 @@
       },
       {
         "path": "package-lock.json",
-        "bytes": 93122,
-        "sha256": "b83751a92ca19df5d681cff3f6e9357c31e7eac29d2493ef38030f4d9a6c1d6d"
+        "bytes": 90482,
+        "sha256": "bf878689e00eb459356290e4a45ffc0bdbbfb7aec071bc5d88e5394e6bbcb4f2"
       },
       {
         "path": "package.json",
@@ -495,13 +501,18 @@
       },
       {
         "path": "scripts/benchmark-recorder.mjs",
-        "bytes": 5438,
-        "sha256": "711c1836fca91ecab5411a938087589664e8ff640ade2051d4e4567f6c5d26a9"
+        "bytes": 5315,
+        "sha256": "bcde407b6290c409414831cdd89cef518b857f36e2b0a8a8d1a0966ae3f73697"
       },
       {
         "path": "scripts/performance-scenario.mjs",
         "bytes": 1368,
         "sha256": "f84870076d071fc0e3e68e245e5d942a2166f6950ad4eece6597f47469c9bb30"
+      },
+      {
+        "path": "scripts/recorder-source-manifest.mjs",
+        "bytes": 1072,
+        "sha256": "28528655243240617ba5742a6fb13c111762c4f6b61f3764a1fbe3a82d720251"
       },
       {
         "path": "src/sim/activities.ts",
@@ -510,8 +521,8 @@
       },
       {
         "path": "src/sim/buildings.ts",
-        "bytes": 11153,
-        "sha256": "b4f4d37b9828f136456102d97f9b34463277f9fffe8645969e6aea6610e138ae"
+        "bytes": 10835,
+        "sha256": "b67d30f8c58c4b5b14254ee7e76de4fee4def2fec3231ca438d3a3f57e18f158"
       },
       {
         "path": "src/sim/citizen-detail.ts",
@@ -525,13 +536,13 @@
       },
       {
         "path": "src/sim/citizens.ts",
-        "bytes": 3182,
-        "sha256": "0fccfe8d153678c794d71e63a7d34075207e10c681277847171f4c0735066840"
+        "bytes": 3127,
+        "sha256": "8c107e7654b6b7cdbcee7c5638469452b94e73332a3e9716a829cd6afb5ddad3"
       },
       {
         "path": "src/sim/city.ts",
-        "bytes": 14896,
-        "sha256": "e7ab0c1701a8e92a124137e59930674a1fd4e5a5e3f8aa50e89ced5734c51728"
+        "bytes": 14488,
+        "sha256": "b76df0c98d97b8d99b7e0a45e4f80023ac60d6fb065187fabb0b4a4c9d04461d"
       },
       {
         "path": "src/sim/constants/activities.ts",
@@ -545,13 +556,13 @@
       },
       {
         "path": "src/sim/constants/economy.ts",
-        "bytes": 1415,
-        "sha256": "db2480757c966954a6b1b9fb817c71517d7ef7709d11b824a03074299c542d9e"
+        "bytes": 1389,
+        "sha256": "1841cd0ff4d6887f0240d568077e08d67108f488ae51d737a4325ee792b7129f"
       },
       {
         "path": "src/sim/constants/fields.ts",
-        "bytes": 2184,
-        "sha256": "6d07f5dcf1a9b035a7f1f26c9dd41039136636fcb1943c8476579a9759e6f249"
+        "bytes": 2140,
+        "sha256": "1861d2bc4c831885271b514801f0717cc68034a95d95880652fd8b5c04dd7f5b"
       },
       {
         "path": "src/sim/constants/happiness.ts",
@@ -565,38 +576,38 @@
       },
       {
         "path": "src/sim/constants/map.ts",
-        "bytes": 449,
-        "sha256": "63138ca02ce3852082f785d288abf2861a358bee8be9eb65705c55e55f85cba1"
+        "bytes": 440,
+        "sha256": "24e4eebe19e598699054a20fa447996c2fef5f8eeed5fb3c8e679d01ccc23c18"
       },
       {
         "path": "src/sim/constants/services.ts",
-        "bytes": 3787,
-        "sha256": "a142041d6068ab0a14d6566dd428cb5ef9aff1698e242564ed23fe9ccefc6cae"
+        "bytes": 3727,
+        "sha256": "d05de4879c95e8f8af75bfc89633c58cc6fd1ff59598f65c82b63a82fb95de64"
       },
       {
         "path": "src/sim/constants/terrain.ts",
-        "bytes": 620,
-        "sha256": "abf6560f1454b23a1c55368579a24f503023129e80a6c06ef719b111b9101aea"
+        "bytes": 608,
+        "sha256": "046df981cb027414f2c95b8f7c5deb3997424e0abecc5196aa60a7f2a33f62a0"
       },
       {
         "path": "src/sim/constants/traffic.ts",
-        "bytes": 2446,
-        "sha256": "56dac53ef55d1aac03c797ef882f15f41c49b9322c49b0249d4a2401b49f3dd3"
+        "bytes": 2393,
+        "sha256": "fcfade9499e58d233666ba6d433b17b8018692a6255e6865d62fed4481c94aba"
       },
       {
         "path": "src/sim/constants/utilities.ts",
-        "bytes": 1730,
-        "sha256": "9318cae221b528871ce3394115a16e951b83f2ff094592ac5e9726f3f6e301d0"
+        "bytes": 1677,
+        "sha256": "04bdfcd0470d8dcb81ef785e8f2cc6d654892e31232d537628090e499ceab43a"
       },
       {
         "path": "src/sim/constants/zoning.ts",
-        "bytes": 2520,
-        "sha256": "59cfe18ed98b65519c61dab15bffeeaa843c8f1b7882b3975370941146003a1d"
+        "bytes": 2458,
+        "sha256": "d641b345ddc2cd7b9e033257de6c8ad90488f59a39f4807901071b1dfa276cda"
       },
       {
         "path": "src/sim/demand.ts",
-        "bytes": 2086,
-        "sha256": "4322961bebfe7a6ad782ace67750e4eeae31c000fd19c1fd5d70b7590d7975df"
+        "bytes": 2032,
+        "sha256": "bdb4927196bf9be0618a7cc86cc0c1773456828d90848bad680d0144efa14085"
       },
       {
         "path": "src/sim/demolition.ts",
@@ -605,23 +616,23 @@
       },
       {
         "path": "src/sim/economy.ts",
-        "bytes": 5144,
-        "sha256": "4bbe503c6ac2fdb5f6017282aa7a021db8cac2e8681bcf2a675d2d5a6f0ddc10"
+        "bytes": 5009,
+        "sha256": "460b3f4bdfd322e1e6b867ce5fde2579015c0ea5c5b7ddbbee0c95606113031e"
       },
       {
         "path": "src/sim/employment.ts",
-        "bytes": 5327,
-        "sha256": "d38fdc9454ba0c3e6a1ef46d1b7475022fecf90e3f491201a8252fdcb7b144d1"
+        "bytes": 5259,
+        "sha256": "594bd1c1171e8bbdb40fc70735e829aa88681c53ae9d9ca099c3598f84c6cf7d"
       },
       {
         "path": "src/sim/fields.ts",
-        "bytes": 15726,
-        "sha256": "a5272f681ab8c7f8793925411c87de2cdacf8b3c0dfa350271085b966b35bf8e"
+        "bytes": 15307,
+        "sha256": "31d0b12c1842e59c6c0e0fcd3f7efeed2a31038c1969461eb1bea06be143eddd"
       },
       {
         "path": "src/sim/grid.ts",
-        "bytes": 1447,
-        "sha256": "21f543741d822a1d731c3ced61ff031973ec9008a6eed192435fbccc266c881f"
+        "bytes": 1392,
+        "sha256": "47abc7d483b3a02678e9b446d1999b036476949d56dac796a34a0e0ab5a7a3b5"
       },
       {
         "path": "src/sim/happiness.ts",
@@ -635,13 +646,13 @@
       },
       {
         "path": "src/sim/road/commands.ts",
-        "bytes": 11868,
-        "sha256": "ae8d9ccb3163ed7bfc589f773e77083181dd9b3fded68da29ba622424870518e"
+        "bytes": 11568,
+        "sha256": "c576d5009c6d4d424df0867520d12d96e7de8107d204ad764e4b77a9478780d1"
       },
       {
         "path": "src/sim/road/road-graph.ts",
-        "bytes": 4957,
-        "sha256": "a6caae5cce7a0df0287d750d98c9b315c7b12aa4aa4ec322956651dedf2cedad"
+        "bytes": 4820,
+        "sha256": "05e4bc008ba040d2442d09d4fcc35f4ee8bed424d6be2d8bddfaac37f59e0269"
       },
       {
         "path": "src/sim/services.ts",
@@ -655,13 +666,13 @@
       },
       {
         "path": "src/sim/terrain.ts",
-        "bytes": 3444,
-        "sha256": "2b32e11936827d870df63e7a819918fe41df018e0a01b3fb8aacd79c4f96e551"
+        "bytes": 3360,
+        "sha256": "c56ab505d2a2983b6ca1dc7b9e0026b55245ce2fb709f1ea0ad9d75db5b4d860"
       },
       {
         "path": "src/sim/traffic/congestion.ts",
-        "bytes": 2529,
-        "sha256": "b688a101694529f20d3e530ea80a9abe285602eaab8537a3df17637a4b277054"
+        "bytes": 2467,
+        "sha256": "19a6fb5822a251894cb8a3b0dba89e28e69aed8913efaca2619423ca147bd7fb"
       },
       {
         "path": "src/sim/traffic/outing-venues.ts",
@@ -670,8 +681,8 @@
       },
       {
         "path": "src/sim/traffic/pathing.ts",
-        "bytes": 7056,
-        "sha256": "37c629cb8ea592ef8fa14e9f2cb0f9e539493ae543d6ed7f2e545e8bd72d92be"
+        "bytes": 6859,
+        "sha256": "0caa640f34034d428190e7d141654b84d614cc56723603f03e2adcea6518063e"
       },
       {
         "path": "src/sim/traffic/pedestrians.ts",
@@ -680,8 +691,8 @@
       },
       {
         "path": "src/sim/traffic/topology.ts",
-        "bytes": 3012,
-        "sha256": "f2aaec394eb349d5a9d54e7a8509908b39e126452e11e2668cd0952756d84619"
+        "bytes": 2933,
+        "sha256": "0ce5a78a9cd71d6c407cb0983ac2cf5afa88a02d631d6211417095e334bb0a37"
       },
       {
         "path": "src/sim/traffic/trips.ts",
@@ -700,8 +711,8 @@
       },
       {
         "path": "src/sim/utilities.ts",
-        "bytes": 17319,
-        "sha256": "82ca63b52c4d66e5ce771fb636ec4bf6f4f2995e8db481292e496865534c8338"
+        "bytes": 16864,
+        "sha256": "70e0623a7c8f7fbc96023c7a35120f351a69f1b5b3a584fef4836b607f014368"
       },
       {
         "path": "src/sim/utility-placement.ts",
@@ -710,13 +721,13 @@
       },
       {
         "path": "src/sim/zoning.ts",
-        "bytes": 6541,
-        "sha256": "443ac9b5d8f3417386afc93cc51e8ff1215ffcf19b718844a93647463fdac700"
+        "bytes": 6372,
+        "sha256": "645cf3fdb12c04520835040ef0e7206926d320d5b8b8eceb848d32e17d1dfbd0"
       }
     ]
   },
   "host": {
-    "node": "v24.18.1",
+    "node": "v24.12.0",
     "platform": "win32",
     "release": "10.0.26100",
     "cpu": "13th Gen Intel(R) Core(TM) i9-13900KF"
@@ -724,27 +735,27 @@
   "aggregate": {
     "recorded": {
       "runs": 2,
-      "meanWallMs": 6479.7749,
-      "meanTicksPerSecond": 463.0155398306521,
-      "meanBundleJsonBytes": 108784246.5
+      "meanWallMs": 6400.43085,
+      "meanTicksPerSecond": 468.8954972790345,
+      "meanBundleJsonBytes": 108784335.5
     },
     "lean": {
       "runs": 2,
-      "meanWallMs": 2900.062999999999,
-      "meanTicksPerSecond": 1034.74977421716,
+      "meanWallMs": 3089.4824,
+      "meanTicksPerSecond": 972.4494353505403,
       "meanBundleJsonBytes": 0
     },
-    "wallMsReduction": 3579.711900000001,
-    "wallMsReductionPct": 55.24438665299933,
-    "throughputGain": 2.2348057142868676
+    "wallMsReduction": 3310.94845,
+    "wallMsReductionPct": 51.73008704562444,
+    "throughputGain": 2.0739150642170627
   },
   "runs": [
     {
       "label": "recorded",
       "sequence": 1,
-      "wallMs": 6537.3021,
-      "ticksPerSecond": 458.9049051289828,
-      "bundleJsonBytes": 108783480,
+      "wallMs": 6524.8024000000005,
+      "ticksPerSecond": 459.784038823919,
+      "bundleJsonBytes": 108783388,
       "final": {
         "tick": 3002,
         "buildingCount": 548,
@@ -757,8 +768,8 @@
     {
       "label": "lean",
       "sequence": 2,
-      "wallMs": 2851.5558999999994,
-      "ticksPerSecond": 1052.0572295286236,
+      "wallMs": 3207.249,
+      "ticksPerSecond": 935.3810695708379,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -772,8 +783,8 @@
     {
       "label": "lean",
       "sequence": 3,
-      "wallMs": 2948.570099999999,
-      "ticksPerSecond": 1017.4423189056963,
+      "wallMs": 2971.7158,
+      "ticksPerSecond": 1009.5178011302427,
       "bundleJsonBytes": 0,
       "final": {
         "tick": 3002,
@@ -787,9 +798,9 @@
     {
       "label": "recorded",
       "sequence": 4,
-      "wallMs": 6422.247700000002,
-      "ticksPerSecond": 467.12617453232133,
-      "bundleJsonBytes": 108785013,
+      "wallMs": 6276.059299999999,
+      "ticksPerSecond": 478.00695573415,
+      "bundleJsonBytes": 108785283,
       "final": {
         "tick": 3002,
         "buildingCount": 548,

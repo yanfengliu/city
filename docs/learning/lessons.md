@@ -36,4 +36,3 @@ When a lesson becomes a gate — a test, a lint rule, a fixed command — delete
 - A browser performance fixture must share the boot world's seed ([evidence](lessons-evidence.md#a-browser-performance-fixture-must-share-the-boot-worlds-seed))
 - Visual bathymetry must read raw elevation before the land-surface projection ([evidence](lessons-evidence.md#visual-bathymetry-must-read-raw-elevation-before-the-land-surface-projection))
 - Water motion should animate lighting before it animates the mechanical plane ([evidence](lessons-evidence.md#water-motion-should-animate-lighting-before-it-animates-the-mechanical-plane))
-- Gates cannot pass from inside an agent worktree because CRLF inflates every pinned byte size ([evidence](lessons-evidence.md#gates-cannot-pass-from-inside-an-agent-worktree-because-crlf-inflates-every-pinned-byte-size))

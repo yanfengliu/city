@@ -1,7 +1,9 @@
-// Bare specifiers on purpose: vite.config.ts aliases the node:* forms to browser shims.
-import { createHash } from 'crypto';
 import { readdirSync, readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
+import {
+  finishSourceManifest,
+  sourceFileRecord,
+} from '../../scripts/recorder-source-manifest.mjs';
 
 interface SourceFile {
   path: string;
@@ -29,7 +31,11 @@ interface RecorderResult {
   schemaVersion: number;
   profileTicks: number;
   runOrder: string[];
-  source: { treeSha256: string; files: SourceFile[] };
+  source: {
+    normalization: 'crlf-to-lf';
+    treeSha256: string;
+    files: SourceFile[];
+  };
   aggregate: {
     recorded: Aggregate;
     lean: Aggregate;
@@ -67,15 +73,18 @@ function filesInTree(root: string, suffix: string): string[] {
 
 describe('committed recorder benchmark evidence', () => {
   it('pins the measured source tree and alternating protocol', () => {
-    expect(result.schemaVersion).toBe(1);
+    expect(result.schemaVersion).toBe(2);
+    expect(result.source.normalization).toBe('crlf-to-lf');
     expect(result.profileTicks).toBe(3_000);
     expect(result.runOrder).toEqual(['recorded', 'lean', 'lean', 'recorded']);
     expect(result.runs.map((run) => run.label)).toEqual(result.runOrder);
     expect(result.runs.map((run) => run.sequence)).toEqual([1, 2, 3, 4]);
 
     const expectedPaths = [
+      '.gitattributes',
       'scripts/benchmark-recorder.mjs',
       'scripts/performance-scenario.mjs',
+      'scripts/recorder-source-manifest.mjs',
       'package.json',
       'package-lock.json',
       'node_modules/civ-engine/package.json',
@@ -87,22 +96,41 @@ describe('committed recorder benchmark evidence', () => {
 
     const files = result.source.files.map((entry) => {
       const bytes = readFileSync(entry.path);
+      const actual = sourceFileRecord(entry.path, bytes);
       // Name the file in the failure: a bare "expected 8614 to be 10074"
-      // across ~100 pinned sources says nothing about which one drifted.
+      // across the whole pinned tree says nothing about which one drifted.
       expect(entry.bytes, `${entry.path} size drifted — re-earn with npm run benchmark:recorder`)
-        .toBe(bytes.byteLength);
+        .toBe(actual.bytes);
       expect(
         entry.sha256,
         `${entry.path} content drifted — re-earn with npm run benchmark:recorder`,
-      ).toBe(createHash('sha256').update(bytes).digest('hex'));
-      return entry;
+      ).toBe(actual.sha256);
+      return actual;
     });
-    const treeInput = files
-      .map((file) => `${file.path}\0${file.bytes}\0${file.sha256}\n`)
-      .join('');
-    expect(result.source.treeSha256).toBe(
-      createHash('sha256').update(treeInput).digest('hex'),
+    expect(result.source.treeSha256).toBe(finishSourceManifest(files).treeSha256);
+  });
+
+  it('keeps checkout line-ending conversion outside the source identity', () => {
+    const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
+    const lf = sourceFileRecord('example.ts', encode('const value = 1;\nexport { value };\n'));
+    const crlf = sourceFileRecord(
+      'example.ts',
+      encode('const value = 1;\r\nexport { value };\r\n'),
     );
+    const mixed = sourceFileRecord(
+      'example.ts',
+      encode('const value = 1;\r\nexport { value };\n'),
+    );
+    const changed = sourceFileRecord(
+      'example.ts',
+      encode('const value = 2;\nexport { value };\n'),
+    );
+
+    expect(crlf).toEqual(lf);
+    expect(mixed).toEqual(lf);
+    expect(changed.sha256).not.toBe(lf.sha256);
+    expect(readFileSync('.gitattributes', 'utf8').replaceAll('\r\n', '\n'))
+      .toBe('* text=auto eol=lf\n');
   });
 
   it('derives every reported aggregate from the raw runs', () => {

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { cpus, platform, release } from 'node:os';
 import { dirname, relative, resolve } from 'node:path';
@@ -6,11 +5,14 @@ import process from 'node:process';
 import { MemorySink, SessionRecorder } from 'civ-engine';
 import { createServer } from 'vite';
 import { cityCounts, setupPerformanceCity } from './performance-scenario.mjs';
+import { finishSourceManifest, sourceFileRecord } from './recorder-source-manifest.mjs';
 
 const PROFILE_TICKS = 3_000;
 const SOURCE_FILES = [
+  '.gitattributes',
   'scripts/benchmark-recorder.mjs',
   'scripts/performance-scenario.mjs',
+  'scripts/recorder-source-manifest.mjs',
   'package.json',
   'package-lock.json',
   'node_modules/civ-engine/package.json',
@@ -56,18 +58,9 @@ async function sourceManifest() {
   const files = [];
   for (const file of sourceFiles) {
     const bytes = await readFile(resolve(file));
-    files.push({
-      path: file,
-      bytes: bytes.byteLength,
-      sha256: createHash('sha256').update(bytes).digest('hex'),
-    });
+    files.push(sourceFileRecord(file, bytes));
   }
-  return {
-    treeSha256: createHash('sha256')
-      .update(files.map((file) => `${file.path}\0${file.bytes}\0${file.sha256}\n`).join(''))
-      .digest('hex'),
-    files,
-  };
+  return finishSourceManifest(files);
 }
 
 function aggregate(runs, label) {
@@ -134,7 +127,7 @@ try {
 const recorded = aggregate(runs, 'recorded');
 const lean = aggregate(runs, 'lean');
 const result = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   capturedAt: new Date().toISOString(),
   profileTicks: PROFILE_TICKS,
   runOrder: order,
