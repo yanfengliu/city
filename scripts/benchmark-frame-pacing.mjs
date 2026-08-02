@@ -14,6 +14,11 @@ import { acquireLoopbackLease, HOST_BENCHMARK_LEASE_PORT, LEASE_OWNER_READ_TIMEO
 import { cleanupBrowserResources } from './frame-pacing-browser-lifecycle.mjs';
 import { serveDist } from './frame-pacing-http.mjs';
 import {
+  PERFORMANCE_FIXTURE_POST_ADVANCE_STATE as EXPECTED_STATE,
+  PERFORMANCE_FIXTURE_SEED as EXPECTED_FIXTURE_SEED,
+  PERFORMANCE_FIXTURE_SHA256 as EXPECTED_FIXTURE_SHA256,
+} from './performance-fixture-contract.mjs';
+import {
   assertFreshBuildOutput,
   assertStableTree,
   freshBuildGateAccepted,
@@ -38,14 +43,6 @@ const CLEANUP_TIMEOUT_MS = 10_000;
 const CONNECT_TIMEOUT_MS = 30_000;
 const CASE_TIMEOUT_MS = 90_000;
 const MAX_EXPECTED_RENDER_PIXEL_RATIO = 1.5;
-const EXPECTED_FIXTURE_SEED = 12_345;
-const EXPECTED_FIXTURE_SHA256 = '2f4823cfb03bd38deea97a3b6aae0491c1ca97b9aa6b60c1c8e582285190c7ec';
-const EXPECTED_STATE = Object.freeze({
-  tick: 1203,
-  populationPeople: 936,
-  buildingCount: 453,
-  vehiclesOnScreen: 88,
-});
 const ACCEPTANCE = Object.freeze({
   minimumMeanFps: 58,
   maximumP95IntervalMs: 18.5,
@@ -76,6 +73,19 @@ async function buildProduction() {
 }
 
 async function loadFixture(page, url, fixture) {
+  const fixtureTick = JSON.parse(fixture)?.snapshot?.tick;
+  if (!Number.isSafeInteger(fixtureTick)) {
+    throw new Error(
+      `frame-pacing fixture snapshot tick ${String(fixtureTick)} is not a safe integer`,
+    );
+  }
+  const expectedTick = fixtureTick + 1;
+  if (EXPECTED_STATE.tick !== expectedTick) {
+    throw new Error(
+      `frame-pacing fixture contract expects tick ${EXPECTED_STATE.tick}, but snapshot tick `
+      + `${fixtureTick} advances once to ${expectedTick}; re-earn the shared fixture contract`,
+    );
+  }
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
@@ -120,12 +130,36 @@ async function loadFixture(page, url, fixture) {
     );
   }
   await page.evaluate(() => window.advanceTime(50));
-  await page.waitForFunction(({ expected }) => {
-    const state = JSON.parse(window.render_game_to_text());
-    return state.tick === expected.tick
-      && state.populationPeople === expected.populationPeople
-      && state.vehiclesOnScreen === expected.vehiclesOnScreen;
-  }, { expected: EXPECTED_STATE }, { timeout: 30_000 });
+  let actualState;
+  try {
+    await page.waitForFunction(({ targetTick }) => {
+      if (typeof window.render_game_to_text !== 'function') return false;
+      return JSON.parse(window.render_game_to_text()).tick >= targetTick;
+    }, { targetTick: expectedTick }, { timeout: 30_000 });
+    actualState = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+  } catch (error) {
+    actualState = await page.evaluate(() => (
+      typeof window.render_game_to_text === 'function'
+        ? JSON.parse(window.render_game_to_text())
+        : null
+    ));
+    throw new Error(
+      `frame-pacing fixture state mismatch after advance: ${String(error)}\n`
+      + JSON.stringify({ expectedState: EXPECTED_STATE, actualState, errors }),
+    );
+  }
+  if (
+    actualState.tick !== EXPECTED_STATE.tick
+    || actualState.populationPeople !== EXPECTED_STATE.populationPeople
+    || actualState.buildingCount !== EXPECTED_STATE.buildingCount
+    || actualState.vehiclesOnScreen !== EXPECTED_STATE.vehiclesOnScreen
+    || actualState.pedestriansOnScreen !== EXPECTED_STATE.pedestriansOnScreen
+  ) {
+    throw new Error(
+      'frame-pacing fixture state mismatch after advance: expected the canonical '
+      + `${JSON.stringify(EXPECTED_STATE)}, received ${JSON.stringify(actualState)}`,
+    );
+  }
   return errors;
 }
 

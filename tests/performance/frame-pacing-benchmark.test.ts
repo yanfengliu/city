@@ -19,6 +19,10 @@ const browserLifecycleSource = readFileSync(
 const httpSource = readFileSync('scripts/frame-pacing-http.mjs', 'utf8');
 const leaseSource = readFileSync('scripts/frame-pacing-lease.mjs', 'utf8');
 const manifestSource = readFileSync('scripts/frame-pacing-manifest.mjs', 'utf8');
+const fixtureContractSource = readFileSync(
+  'scripts/performance-fixture-contract.mjs',
+  'utf8',
+);
 const recorderSourceManifestSource = readFileSync(
   'scripts/recorder-source-manifest.mjs',
   'utf8',
@@ -33,6 +37,7 @@ const source = [
   httpSource,
   leaseSource,
   manifestSource,
+  fixtureContractSource,
   recorderSourceManifestSource,
   supportSource,
 ].join('\n');
@@ -70,6 +75,7 @@ describe('frame-pacing benchmark contract', () => {
     expect(paths).toContain('.gitattributes');
     expect(paths).toContain('scripts/recorder-source-manifest.mjs');
     expect(paths).toContain('scripts/frame-pacing-source-paths.mjs');
+    expect(paths).toContain('scripts/performance-fixture-contract.mjs');
     for (const name of names) {
       expect(paths).toContain(`node_modules/${name}/package.json`);
       expect(paths).toContain(`node_modules/${name}/dist`);
@@ -125,9 +131,15 @@ describe('frame-pacing benchmark contract', () => {
     expect(source).toContain('minimumTickRateBySpeed');
     expect(source).toContain('EXPECTED_FIXTURE_SHA256');
     expect(source).toContain('populationPeople: 936');
-    expect(source).toContain('state.populationPeople === expected.populationPeople');
+    expect(source).toContain('vehiclesOnScreen: 81');
+    expect(source).toContain('pedestriansOnScreen: 17');
+    expect(source).toContain('frame-pacing fixture state mismatch after advance');
+    expect(source).toContain('actualState');
     expect(benchmarkSource.indexOf('window.advanceTime(50)')).toBeLessThan(
-      benchmarkSource.indexOf('state.populationPeople === expected.populationPeople'),
+      benchmarkSource.indexOf('actualState.populationPeople !== EXPECTED_STATE.populationPeople'),
+    );
+    expect(source).toContain(
+      'actualState.pedestriansOnScreen !== EXPECTED_STATE.pedestriansOnScreen',
     );
     expect(source).toContain('is not canonical');
     expect(source).toContain('tickRate >= minimumTickRate');

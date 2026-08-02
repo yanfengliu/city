@@ -16,6 +16,8 @@ const STATIC_SOURCE_PATHS = Object.freeze([
   'scripts/frame-pacing-source-paths.mjs',
   'scripts/frame-pacing-support.d.mts',
   'scripts/frame-pacing-support.mjs',
+  'scripts/performance-fixture-contract.d.mts',
+  'scripts/performance-fixture-contract.mjs',
   'scripts/recorder-source-manifest.d.mts',
   'scripts/recorder-source-manifest.mjs',
   'scripts/check-production-bundle.mjs',

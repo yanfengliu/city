@@ -1,5 +1,5 @@
 import { MemorySink, SessionRecorder, snapshotAtTick, type SessionBundle } from 'civ-engine';
-import { createCitySim, getTreasury, rebuildDerived, type CitySimConfig } from '../sim/city';
+import { createCitySim, getTreasury, rebuildDerived } from '../sim/city';
 import { cityFindingToMarker, findingsFromMarkers } from '../harness/findings';
 import { selfCheckBundle } from '../harness/inspect';
 import { simSummary } from '../sim/summary';
@@ -17,6 +17,7 @@ import {
   projectZoneCells,
 } from './entity-projection';
 import { MovingAgentMessageSync } from './pedestrian-projection';
+import { CITY_WORKER_SIM_FLAGS } from './sim-config';
 import { simFailureMessage, unknownCommandRejection } from './failure-reporting';
 import { inspectCitizenResponse, inspectHomeResidentResponse } from './citizen-inspection';
 import type {
@@ -51,13 +52,8 @@ function post(message: WorkerToClient): void {
 
 // Fields drive desirability; power/water gate buildings. The sim is swappable:
 // loadSnapshot builds a fresh one and re-runs the boot sync.
-const SIM_FLAGS: Omit<CitySimConfig, 'seed'> = {
-  fieldsEnabled: true,
-  utilitiesEnabled: true,
-  highwayEnabled: true,
-};
 let currentSeed = 12345;
-let sim = createCitySim({ seed: currentSeed, ...SIM_FLAGS });
+let sim = createCitySim({ seed: currentSeed, ...CITY_WORKER_SIM_FLAGS });
 let world = sim.world;
 
 // Opt-in playtest harness (docs/harness.md): a recorder-named dev worker treats
@@ -87,7 +83,7 @@ function swapWorld(snapshot: Parameters<typeof world.applySnapshot>[0], seed: nu
   recorder?.disconnect();
   world.stop();
   currentSeed = seed;
-  sim = createCitySim({ seed: currentSeed, ...SIM_FLAGS });
+  sim = createCitySim({ seed: currentSeed, ...CITY_WORKER_SIM_FLAGS });
   world = sim.world;
   world.applySnapshot(snapshot);
   rebuildDerived(sim);
@@ -435,7 +431,7 @@ addEventListener('message', (event) => {
         const end = bundle.metadata.endTick ?? start;
         const tick = Math.max(start, Math.min(end, message.tick));
         const snap = snapshotAtTick(bundle, tick);
-        const probe = createCitySim({ seed: currentSeed, ...SIM_FLAGS });
+        const probe = createCitySim({ seed: currentSeed, ...CITY_WORKER_SIM_FLAGS });
         probe.world.applySnapshot(snap as Parameters<typeof probe.world.applySnapshot>[0]);
         rebuildDerived(probe);
         post({ type: 'inspection', id: message.id, tick, summary: simSummary(probe.world) });
@@ -464,7 +460,10 @@ addEventListener('message', (event) => {
         // selfCheck (which walks snapshot PAIRS) would skip every tick after the
         // last one. Take a terminal snapshot to close the final segment.
         recorder.takeSnapshot();
-        const result = selfCheckBundle(recordedBundle(), { seed: currentSeed, ...SIM_FLAGS });
+        const result = selfCheckBundle(recordedBundle(), {
+          seed: currentSeed,
+          ...CITY_WORKER_SIM_FLAGS,
+        });
         post({ type: 'selfCheckResult', id: message.id, result });
       } catch (e) {
         post({ type: 'selfCheckResult', id: message.id, result: null, error: String(e) });

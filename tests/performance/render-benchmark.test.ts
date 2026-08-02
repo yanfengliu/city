@@ -2,6 +2,7 @@
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
+import { PERFORMANCE_FIXTURE_POST_ADVANCE_STATE } from '../../scripts/performance-fixture-contract.mjs';
 
 interface BenchmarkRun {
   label: 'before' | 'after';
@@ -71,6 +72,17 @@ describe('committed render benchmark evidence', () => {
     expect(benchmarkSource).toContain('PHASE_TIMEOUT_MS');
     expect(benchmarkSource).toContain('before bundle changed during GPU render benchmark');
     expect(benchmarkSource).toContain('after bundle changed during GPU render benchmark');
+    expect(benchmarkSource).toContain('PERFORMANCE_FIXTURE_POST_ADVANCE_STATE');
+    expect(benchmarkSource).toContain(
+      'actualState.pedestriansOnScreen !== EXPECTED_STATE.pedestriansOnScreen',
+    );
+    expect(benchmarkSource).toContain(
+      'JSON.stringify({ expectedState: EXPECTED_STATE, actualState, pageErrors })',
+    );
+    expect(PERFORMANCE_FIXTURE_POST_ADVANCE_STATE).toMatchObject({
+      vehiclesOnScreen: 81,
+      pedestriansOnScreen: 17,
+    });
     expect(benchmarkSource).toContain('lease.release()');
     expect(benchmarkSource).toContain('page.close()');
   });

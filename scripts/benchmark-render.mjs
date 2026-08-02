@@ -13,6 +13,11 @@ import {
 } from './frame-pacing-lease.mjs';
 import { manifestDirectory } from './frame-pacing-manifest.mjs';
 import {
+  PERFORMANCE_FIXTURE_POST_ADVANCE_STATE as EXPECTED_STATE,
+  PERFORMANCE_FIXTURE_SEED as EXPECTED_FIXTURE_SEED,
+  PERFORMANCE_FIXTURE_SHA256 as EXPECTED_FIXTURE_SHA256,
+} from './performance-fixture-contract.mjs';
+import {
   assertStableTree,
   parseNamedArgs,
   summarize,
@@ -24,9 +29,6 @@ const SAMPLE_FRAMES = 600;
 const CLEANUP_TIMEOUT_MS = 10_000;
 const CONNECT_TIMEOUT_MS = 30_000;
 const PHASE_TIMEOUT_MS = 120_000;
-const EXPECTED_FIXTURE_SEED = 12345;
-const EXPECTED_STATE = Object.freeze({ tick: 1203, buildingCount: 453, vehiclesOnScreen: 88 });
-
 function required(args, name) {
   const value = args.get(name);
   if (!value) throw new Error(`--${name} is required`);
@@ -40,6 +42,17 @@ function distribution(values) {
 }
 
 async function loadFixture(page, url, save) {
+  const fixtureTick = JSON.parse(save)?.snapshot?.tick;
+  if (!Number.isSafeInteger(fixtureTick)) {
+    throw new Error(`render fixture snapshot tick ${String(fixtureTick)} is not a safe integer`);
+  }
+  const expectedTick = fixtureTick + 1;
+  if (EXPECTED_STATE.tick !== expectedTick) {
+    throw new Error(
+      `render fixture contract expects tick ${EXPECTED_STATE.tick}, but snapshot tick `
+      + `${fixtureTick} advances once to ${expectedTick}; re-earn the shared fixture contract`,
+    );
+  }
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(String(error)));
   page.on('console', (message) => {
@@ -79,10 +92,36 @@ async function loadFixture(page, url, save) {
     throw new Error(`fixture did not settle: ${String(error)}\n${JSON.stringify({ diagnostic, pageErrors })}`);
   }
   await page.evaluate(() => window.advanceTime(50));
-  await page.waitForFunction(({ expected }) => {
-    const state = JSON.parse(window.render_game_to_text());
-    return state.tick === expected.tick && state.vehiclesOnScreen === expected.vehiclesOnScreen;
-  }, { expected: EXPECTED_STATE }, { timeout: 30_000 });
+  let actualState;
+  try {
+    await page.waitForFunction(({ targetTick }) => {
+      if (typeof window.render_game_to_text !== 'function') return false;
+      return JSON.parse(window.render_game_to_text()).tick >= targetTick;
+    }, { targetTick: expectedTick }, { timeout: 30_000 });
+    actualState = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+  } catch (error) {
+    actualState = await page.evaluate(() => (
+      typeof window.render_game_to_text === 'function'
+        ? JSON.parse(window.render_game_to_text())
+        : null
+    ));
+    throw new Error(
+      `render fixture state mismatch after advance: ${String(error)}\n`
+      + JSON.stringify({ expectedState: EXPECTED_STATE, actualState, pageErrors }),
+    );
+  }
+  if (
+    actualState.tick !== EXPECTED_STATE.tick
+    || actualState.populationPeople !== EXPECTED_STATE.populationPeople
+    || actualState.buildingCount !== EXPECTED_STATE.buildingCount
+    || actualState.vehiclesOnScreen !== EXPECTED_STATE.vehiclesOnScreen
+    || actualState.pedestriansOnScreen !== EXPECTED_STATE.pedestriansOnScreen
+  ) {
+    throw new Error(
+      'render fixture state mismatch after advance:\n'
+      + JSON.stringify({ expectedState: EXPECTED_STATE, actualState, pageErrors }),
+    );
+  }
 }
 
 async function measure(page, label, sequence) {
@@ -91,8 +130,10 @@ async function measure(page, label, sequence) {
     if (
       state.speed !== 0
       || state.tick !== expected.tick
+      || state.populationPeople !== expected.populationPeople
       || state.buildingCount !== expected.buildingCount
       || state.vehiclesOnScreen !== expected.vehiclesOnScreen
+      || state.pedestriansOnScreen !== expected.pedestriansOnScreen
     ) {
       throw new Error(`unexpected benchmark state: ${JSON.stringify(state)}`);
     }
@@ -190,6 +231,12 @@ async function runBenchmark(args, resources) {
   const browserChannel = args.get('browser-channel') ?? 'chrome';
   const fixture = await readFile(fixturePath, 'utf8');
   const fixtureSave = JSON.parse(fixture);
+  const fixtureSha256 = createHash('sha256').update(fixture).digest('hex');
+  if (fixtureSha256 !== EXPECTED_FIXTURE_SHA256) {
+    throw new Error(
+      `fixture SHA ${fixtureSha256} is not canonical ${EXPECTED_FIXTURE_SHA256}`,
+    );
+  }
   if (fixtureSave?.meta?.seed !== EXPECTED_FIXTURE_SEED) {
     throw new Error(
       `fixture seed ${String(fixtureSave?.meta?.seed)} `
@@ -273,7 +320,7 @@ async function runBenchmark(args, resources) {
     sampleFrames: SAMPLE_FRAMES,
     fixture: {
       path: relative(process.cwd(), fixturePath).replaceAll('\\', '/'),
-      sha256: createHash('sha256').update(fixture).digest('hex'),
+      sha256: fixtureSha256,
       expectedState: EXPECTED_STATE,
       seed: EXPECTED_FIXTURE_SEED,
     },

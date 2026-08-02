@@ -9,7 +9,20 @@ const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
   args.set(process.argv[index].replace(/^--/, ''), process.argv[index + 1]);
 }
-const output = resolve(args.get('output') ?? 'benchmarks/fixtures/performance-city-save.json');
+const canonicalOutput = resolve('benchmarks/fixtures/performance-city-save.json');
+const output = resolve(
+  args.get('output') ?? 'output/performance/performance-city-save-candidate.json',
+);
+const targetsCanonicalFixture = process.platform === 'win32'
+  ? output.toLowerCase() === canonicalOutput.toLowerCase()
+  : output === canonicalOutput;
+if (targetsCanonicalFixture && args.get('allow-canonical-overwrite') !== 'true') {
+  throw new Error(
+    `refusing to overwrite SHA-pinned fixture "${output}"; generate a candidate under output/ `
+    + 'and re-earn the fixture, shared contract, tests, and evidence together, or pass '
+    + '--allow-canonical-overwrite true for that reviewed change',
+  );
+}
 const seed = Number(args.get('seed') ?? 12345);
 const ticks = Number(args.get('ticks') ?? 1200);
 if (!Number.isSafeInteger(seed)) {
@@ -28,8 +41,11 @@ const vite = await createServer({
 });
 
 try {
-  const { createCitySim } = await vite.ssrLoadModule('/src/sim/city.ts');
-  const sim = createCitySim({ seed, fieldsEnabled: true });
+  const [{ createCitySim }, { CITY_WORKER_SIM_FLAGS }] = await Promise.all([
+    vite.ssrLoadModule('/src/sim/city.ts'),
+    vite.ssrLoadModule('/src/worker/sim-config.ts'),
+  ]);
+  const sim = createCitySim({ seed, ...CITY_WORKER_SIM_FLAGS });
   setupPerformanceCity(sim);
   for (let index = 0; index < ticks; index++) sim.world.step();
   const save = {
