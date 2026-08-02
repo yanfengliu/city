@@ -28,7 +28,7 @@ Cars keep right, preserve headway, obey deterministic junction signals, and reta
 ## Develop
 
 ```bash
-npm test           # Vitest contracts, scenarios, replay, and committed evidence
+npm test           # Vitest contracts, scenarios, replay, and benchmark contracts
 npm run typecheck  # TypeScript strict mode
 npm run lint       # ESLint with zero warnings
 npm run build      # typecheck + production Vite build + worker budget

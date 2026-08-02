@@ -148,5 +148,8 @@ vite.config.ts.timestamp-*
 # Playtest artifacts (append-only local history; never committed)
 output/
 
+# Legacy benchmark-result location; generated evidence stays local under output/.
+benchmarks/results/
+
 # Local Playwright CLI snapshots and session metadata
 .playwright-cli/
