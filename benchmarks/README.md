@@ -17,5 +17,5 @@ The default `--browser-channel chrome` uses installed stable Chrome so Windows c
 `npm run benchmark:recorder` retains the second optimization's controlled headless proxy. It builds the same seed-3 acceptance city four times in recorded–lean–lean–recorded order, installs one protocol-like no-op diff listener in every run, steps 3,000 timed ticks, and adds `SessionRecorder` + `MemorySink` only to recorded runs. The result records raw wall times, throughput, JSON-equivalent bundle bytes, final city counts, host data, and a content manifest covering the driver, scenario, package/lockfile, every game sim source, and every executed civ-engine runtime module. This intentionally measures simulation/diff/retention overhead, not browser heap or full worker projection cost.
 
 ```powershell
-npm.cmd run benchmark:recorder -- --source-ref <sha-or-working-tree> --output benchmarks\results\2026-07-12-recorder-profile.json
+npm.cmd run benchmark:recorder -- --source-ref <sha-or-working-tree> --output benchmarks\results\2026-08-02-recorder-profile.json
 ```
