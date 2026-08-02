@@ -22,7 +22,9 @@ Use a unique ignored output path for the first run so an older diagnostic cannot
 node scripts\benchmark-frame-pacing.mjs --output output\performance\frame-pacing-e93cfb8.json
 ```
 
-All six profiles must pass the thresholds recorded in the result: mean ≥58 fps, p95 ≤18.5 ms, p99 ≤25 ms, no three consecutive intervals above 20 ms, a stationary paused tick, ≥18 TPS at 1×, ≥72 TPS at 4×, exact canvas buffers, and zero browser errors. Schema 2 fingerprints the complete City, civ-engine, and voxel production inputs with CRLF-to-LF source normalization before and after the build and measurement, while the served `dist/` manifest remains a raw-byte identity. Only a passing fresh-build result is durable acceptance evidence; a red run is diagnostic evidence and must not be rerun repeatedly until scheduling luck turns green.
+All six profiles must pass the thresholds recorded in the result: mean ≥58 fps, p95 ≤18.5 ms, p99 ≤25 ms, no three consecutive intervals above 20 ms, a stationary paused tick, ≥18 TPS at 1×, ≥72 TPS at 4×, exact canvas buffers, and zero browser errors. Schema 2 fingerprints the complete City, civ-engine, and voxel production inputs with CRLF-to-LF source normalization before and after the build and measurement, while the served `dist/` manifest remains a raw-byte identity. Only a passing fresh-build run may support durable acceptance; its concise outcome and provenance belong in tracked project docs, while the raw result stays ignored and is cleaned after audit. A red run is diagnostic evidence and must not be rerun repeatedly until scheduling luck turns green.
+
+The accepted 2026-08-02 final-source run used a fresh production build and passed all six profiles with the exact canonical fixture state, DPR buffers, simulation throughput, and zero browser errors. Its concise measurements and source/binary provenance are recorded in `PROGRESS.md`; the raw per-frame result remained task-local under ignored `output/performance/` for audit and was removed afterward rather than committed as repository content.
 
 ## Recorder profile
 

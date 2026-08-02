@@ -1,6 +1,6 @@
 # Vehicle presentation motion
 
-Status: implemented and locally verified on 2026-07-13. The correctness gates are green; two production frame-pacing runs meet 60 Hz throughput at p95 but do not consistently pass the stricter tail-jitter gate.
+Status: implemented and locally verified on 2026-07-13. The July frame-pacing findings below are preserved as historical evidence; final-source Phase 7 acceptance later passed all six profiles on 2026-08-02.
 
 ## Boundary
 
@@ -28,3 +28,4 @@ This behavior remains City-owned. AoE units use exact simulation-tick history pl
 - The canonical 453-building / 936-population / 88-vehicle fixture was sampled for 600 frames per profile in Chrome 150 on Windows 11, an i9-13900KF, and an RTX 4090 at 1280x720. Across two fresh-build runs, all six DPR/speed profiles measured 59.2-60.0 FPS with p95 frame intervals of 16.8-17.5 ms and p95 render-callback work of 0.9-1.1 ms.
 - Neither complete run passed every strict tail gate. The first rejected only DPR 2 / 1x for three consecutive intervals above 20 ms. The repeat rejected three profiles at p99 25.4-25.9 ms or four consecutive misses, with most rejected intervals carrying less than 1.1 ms of measured render work. This proves the named renderer has ample ordinary-frame budget, but it does **not** prove an unconditional 60 FPS floor or zero scheduler/GPU/OS jitter.
 - The concise durable measurement record is `vehicle-presentation-evidence.json`; raw local traces remain under ignored `output/performance/`.
+- Current closure is recorded in the [2026-08-02 Phase 7 progress entry](../../PROGRESS.md): the fresh-build final-source run passed all six pause/1×/4× profiles at device DPR 1 and 2 with mean cadence 228.46–240.05 fps, p95 4.3–4.8 ms, p99 4.4–5.1 ms, exact 1280×720 / capped 1920×1080 buffers, 20.00–20.40 TPS at 1×, 79.96–80.26 TPS at 4×, and zero browser errors. Its raw trace stayed ignored and was cleaned after audit. This supersedes only the old acceptance status, not the historical measurements above.

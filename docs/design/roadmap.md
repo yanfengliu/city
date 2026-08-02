@@ -48,6 +48,8 @@ Accept: save → reload reproduces the city (hash of serialize output stable); a
 
 Full-suite pass; determinism gate (recorded-session replay + SessionReplayer.selfCheck) in CI (shipped: .github/workflows/ci.yml); simulation acceptance check at ≥1,000 population plus the SHA-pinned render fixture (936 people, 453 buildings, 81 cars, and 17 pedestrians after its controlled load tick; active cases grow through 1,000) at nominal 20 TPS and 60 Hz presentation using the game-design pacing tolerances; adversarial review sweep over the whole codebase; fix findings; final automated playthrough (agent builds a city from scratch via browser) recorded in PROGRESS.md; README updated.
 
+Status: complete on 2026-08-02. The fresh-build final-source frame-pacing run passes all six pause/1×/4× profiles at device DPR 1 and 2; `PROGRESS.md` records the concise provenance, measurements, quality, errors, and cleanup outcome, while the raw trace was kept under ignored task output and removed after audit.
+
 Accept: the game-design doc's "Definition of fully functioning" checklist passes end to end.
 
 ## Later (explicitly out of v1)
