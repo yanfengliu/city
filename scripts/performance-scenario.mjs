@@ -32,6 +32,23 @@ export function setupPerformanceCity(sim) {
   sim.world.step();
 }
 
+/** Runs one controlled recorder/lean phase with setup outside the timed window. */
+export function runPerformancePhase(
+  sim,
+  { recorder = null, ticks, now = () => performance.now(), setup = setupPerformanceCity },
+) {
+  sim.world.onDiff(() => {});
+  recorder?.connect();
+  try {
+    setup(sim);
+    const start = now();
+    for (let tick = 0; tick < ticks; tick++) sim.world.step();
+    return now() - start;
+  } finally {
+    recorder?.disconnect();
+  }
+}
+
 export function cityCounts(sim) {
   return {
     tick: sim.world.tick,

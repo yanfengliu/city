@@ -5,6 +5,10 @@ const workflow = readFileSync('.github/workflows/ci.yml', 'utf8').replaceAll('\r
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
   dependencies: Record<string, string>;
 };
+const artifactPolicy = JSON.parse(readFileSync('config/git-artifact-policy.json', 'utf8')) as {
+  historyEpoch: string;
+};
+const ARTIFACT_HISTORY_EPOCH = '0dbda4f4bd1a86f4e86140bd943c4da985ccd4bf';
 const CHECKOUT_ACTION =
   'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2';
 const SETUP_NODE_ACTION =
@@ -46,7 +50,7 @@ describe('CI workflow contracts', () => {
         'persist-credentials: false',
       ]);
     }
-    expectStepLines('Checkout city', ['path: city']);
+    expectStepLines('Checkout city', ['path: city', 'fetch-depth: 0']);
     expectStepLines('Setup Node 24', [
       `uses: ${SETUP_NODE_ACTION}`,
       'node-version-file: city/.nvmrc',
@@ -55,6 +59,22 @@ describe('CI workflow contracts', () => {
       .map((match) => match[1]);
     expect(actionRefs.length).toBeGreaterThan(0);
     for (const ref of actionRefs) expect(ref).toMatch(/^[^@\s]+@[a-f0-9]{40}$/);
+  });
+
+  it('fetches full history and scans from the fixed clean epoch as the first repository gate', () => {
+    expect(artifactPolicy.historyEpoch).toBe(ARTIFACT_HISTORY_EPOCH);
+    expectStepLines('Check Git artifact history', [
+      'working-directory: city',
+      `ARTIFACT_BASE: ${ARTIFACT_HISTORY_EPOCH}`,
+      'run: |',
+      'npm run git:artifacts:range -- "$ARTIFACT_BASE" HEAD',
+    ]);
+    expectStepBefore('Setup Node 24', 'Check Git artifact history');
+    expectStepBefore('Check Git artifact history', 'Install civ-engine dependencies');
+    expectStepBefore('Check Git artifact history', 'Install voxel dependencies');
+    expectStepBefore('Check Git artifact history', 'Install city dependencies');
+    expectStepBefore('Check Git artifact history', 'Test (includes the SessionReplayer.selfCheck determinism gate)');
+    expect(workflow).toContain('on:\n  push:\n  pull_request:');
   });
 
   it('checks out and builds every local file dependency before city installs', () => {

@@ -34,6 +34,8 @@ npm run lint       # ESLint with zero warnings
 npm run build      # typecheck + production Vite build + worker budget
 ```
 
+Run `npm run hooks:install` once per clone to activate the tracked pre-commit artifact gate. It inspects staged Git objects before a normal commit; CI independently scans every commit after the fixed clean policy epoch on every pushed branch and pull request, including an oversized or evidence blob that a later commit deletes. City's exact thresholds, reviewed fixture allowance, and the client-hook/server-admission boundary are recorded in [the local policy](docs/policies/local-rules.md).
+
 Project references: [game design](docs/design/game-design.md) · [simulation realism](docs/design/simulation-realism.md) · [architecture](docs/architecture/architecture.md) · [roadmap](docs/design/roadmap.md) · [progress log](PROGRESS.md) · [benchmark procedure and evidence](benchmarks/README.md). Conventions for agents and humans live in [AGENTS.md](AGENTS.md).
 
 Automated playtesting exposes `window.render_game_to_text()` for bounded JSON state, `window.advanceTime(ms)` for deterministic fast-forward, and `window.__game` for the test driver. WebGL uses `preserveDrawingBuffer` so browser screenshots capture the rendered city.

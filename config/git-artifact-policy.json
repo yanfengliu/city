@@ -1,0 +1,35 @@
+{
+  "historyEpoch": "0dbda4f4bd1a86f4e86140bd943c4da985ccd4bf",
+  "reviewBlobBytes": 262144,
+  "absoluteBlobBytes": 524288,
+  "forbiddenPaths": [
+    "output/**",
+    "benchmarks/results/**",
+    ".shots/**",
+    ".playwright-cli/**",
+    "tmp/review-runs/**",
+    "coverage/**",
+    ".nyc_output/**",
+    "test-results/**",
+    "playwright-report/**",
+    "logs/**",
+    "*.log",
+    "*.lcov",
+    "npm-debug.log*",
+    "yarn-debug.log*",
+    "yarn-error.log*",
+    "lerna-debug.log*",
+    "report.*.json",
+    "evidence/**",
+    "recordings/**",
+    "traces/**"
+  ],
+  "repositoryInputs": {
+    "benchmarks/fixtures/performance-city-save.json": {
+      "kind": "reviewed-deterministic-input",
+      "format": "text",
+      "maxBytes": 450000,
+      "reason": "SHA-pinned deterministic save required by the performance benchmark and its contract tests; it is a repository input, not task-run evidence."
+    }
+  }
+}

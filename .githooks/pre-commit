@@ -1,0 +1,10 @@
+#!/bin/sh
+if ! git ls-files --error-unmatch -- .githooks/pre-commit scripts/check-git-artifacts.mjs config/git-artifact-policy.json >/dev/null 2>&1; then
+  echo "Artifact gate files must all exist in the staged index; restore and stage the hook, scanner, and policy together." >&2
+  exit 1
+fi
+if ! git diff --quiet -- .githooks/pre-commit scripts/check-git-artifacts.mjs config/git-artifact-policy.json; then
+  echo "Artifact gate files have unstaged changes; stage or revert them so the hook checks one coherent policy." >&2
+  exit 1
+fi
+exec node scripts/check-git-artifacts.mjs --staged

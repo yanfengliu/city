@@ -153,3 +153,11 @@ benchmarks/results/
 
 # Local Playwright CLI snapshots and session metadata
 .playwright-cli/
+
+# Multi-review captures and other task-local evidence sinks
+tmp/review-runs/
+test-results/
+playwright-report/
+evidence/
+recordings/
+traces/

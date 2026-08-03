@@ -13,6 +13,9 @@
     "benchmark:render": "node scripts/benchmark-render.mjs",
     "benchmark:fixture": "node scripts/generate-performance-fixture.mjs",
     "benchmark:recorder": "node scripts/benchmark-recorder.mjs",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "git:artifacts:staged": "node scripts/check-git-artifacts.mjs --staged",
+    "git:artifacts:range": "node scripts/check-git-artifacts.mjs --range",
     "playtest:llm": "node scripts/llm-visual-loop.mjs",
     "playtest:recursive": "node scripts/playtest-recursive.mjs",
     "lessons:check": "node scripts/check-lessons.mjs"

@@ -2,7 +2,6 @@ name: ci
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -17,6 +16,7 @@ jobs:
         with:
           path: city
           persist-credentials: false
+          fetch-depth: 0
 
       # Both file:../ sibling dependencies deliberately track main: local dev
       # consumes the live sibling repos, and the fleet co-evolves in lockstep.
@@ -48,6 +48,13 @@ jobs:
             city/package-lock.json
             civ-engine/package-lock.json
             voxel/package-lock.json
+
+      - name: Check Git artifact history
+        working-directory: city
+        env:
+          ARTIFACT_BASE: 0dbda4f4bd1a86f4e86140bd943c4da985ccd4bf
+        run: |
+          npm run git:artifacts:range -- "$ARTIFACT_BASE" HEAD
 
       - name: Install civ-engine dependencies
         working-directory: civ-engine

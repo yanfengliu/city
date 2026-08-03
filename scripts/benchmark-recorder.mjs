@@ -4,7 +4,7 @@ import { dirname, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { MemorySink, SessionRecorder } from 'civ-engine';
 import { createServer } from 'vite';
-import { cityCounts, setupPerformanceCity } from './performance-scenario.mjs';
+import { cityCounts, runPerformancePhase } from './performance-scenario.mjs';
 import { finishSourceManifest, sourceFileRecord } from './recorder-source-manifest.mjs';
 
 const PROFILE_TICKS = 3_000;
@@ -94,16 +94,10 @@ try {
     const label = order[sequence];
     console.log(`recorder phase ${sequence + 1}/${order.length}: ${label}`);
     const sim = createCitySim({ seed: 3, fieldsEnabled: true });
-    sim.world.onDiff(() => {});
     const recorder = label === 'recorded'
       ? new SessionRecorder({ world: sim.world, sink: new MemorySink() })
       : null;
-    recorder?.connect();
-    setupPerformanceCity(sim);
-    const start = performance.now();
-    for (let tick = 0; tick < PROFILE_TICKS; tick++) sim.world.step();
-    const wallMs = performance.now() - start;
-    recorder?.disconnect();
+    const wallMs = runPerformancePhase(sim, { recorder, ticks: PROFILE_TICKS });
     const bundleJsonBytes = recorder
       ? Buffer.byteLength(JSON.stringify(recorder.toBundle()))
       : 0;
