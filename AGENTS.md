@@ -4,7 +4,7 @@
 
 A browser city-building game inspired by Cities: Skylines — cloning the core simulation behavior (roads, RCI zoning, growable buildings, agent-based traffic, utilities, services, pollution/land value, economy) with a 3D presentation. Grid-aligned roads for now (freeform splines are a possible later phase); its own implementation and visual identity, not an asset/source clone.
 
-The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless deterministic ECS engine — it provides ECS, pathfinding, layers, occupancy, commands/events, and serialization; game rules are game code here. Read Known traps below before touching sim code.
+The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless deterministic ECS engine — it provides ECS, pathfinding, layers, occupancy, commands/events, and serialization; game rules are game code here. Read `docs/architecture/architecture.md` § "Sim internals worth pinning" and `docs/design/game-design.md` before touching sim code — they own the engine contracts this game builds on.
 
 Stack: Vite + TypeScript (strict) + Three.js + civ-engine + Vitest. Desktop browser only; single primary canvas; the first screen is the playable game, not a landing page.
 
@@ -40,6 +40,8 @@ Read `PROGRESS.md`, `docs/architecture/architecture.md`, and `docs/policies/loca
 
 - Layout: `src/app` (bootstrap, worker wiring, render loop, input → commands) · `src/sim` (pure simulation on civ-engine: `constants/` domain files, one file per system plus `road/` and `traffic/` domain subdirs, world assembly and component registration in `city.ts` — keep registration order identical for determinism) · `src/worker` (Web Worker hosting the sim; protocol glue only) · `src/protocol` (typed worker↔main messages) · `src/rendering` (Three.js scene, meshes, instancing, camera, picking, interpolation) · `src/ui` (DOM HUD, tool palette, panels) · `src/persistence` (versioned save/load) · `src/harness` (LLM playtest harness) · `src/shims`.
 - `sim/` and `protocol/` must not import Three.js or touch the DOM. `rendering/` consumes protocol snapshots/diffs only — never the World directly. `ui/` dispatches commands, never mutates state. `persistence/` serializes explicit versioned state.
+- Every sim component write goes through `setComponent` / `patchComponent` / `setPosition`. `getComponent` hands back the store's own object and marks nothing dirty, so mutating it in place never reaches a `TickDiff` and skips the spatial-grid resync `setPosition` performs — the write lands in memory and is invisible to the renderer, the recorder, and the replay gate.
+- Sim work budgets are counts — path resolutions per tick, entities scanned — never milliseconds. A wall-clock budget makes tick output depend on the machine and the moment, which is the one thing replay cannot survive.
 - TDD for sim behavior: write the failing contract test first, scenario-level where possible ("after N ticks of X, Y holds"); test the contract, not the implementation.
 - No magic numbers — tunable gameplay values live in `src/sim/constants/` domain files.
 - Files under 500 LOC. 2-space indentation.
@@ -47,18 +49,6 @@ Read `PROGRESS.md`, `docs/architecture/architecture.md`, and `docs/policies/loca
 - Game testing loop for meaningful gameplay changes: implement a small behavior with its headless test → dev server → drive the game in a real browser → check `render_game_to_text()` output, screenshots, and controls agree → fix and repeat. Verify before calling the game complete: road place/bulldoze, zone paint/erase, service and utility placement, camera orbit/pan/zoom, overlays, speed/pause, save/load/reset, demand meter and budget reacting to play, traffic visibly flowing and congesting.
 - Do not edit the civ-engine repo unless the user asks; if an engine bug or missing feature blocks the game, note it in `PROGRESS.md` and work around it here. The engine is pinned as `file:../civ-engine`.
 - Repo review lenses for adversarial passes: correctness, sim-determinism, engine-contract, rendering/perf.
-
-## Known traps
-
-civ-engine usage rules — hard-won; violating these causes silent breakage:
-
-- Keep `strict: true` (default). Route all mutations through systems/commands; randomness through `world.random()` only. Never `Math.random()`/`Date.now()` in sim code.
-- Always write components via `setComponent`/`patchComponent`/`setPosition` — in-place mutation is invisible to the spatial grid and the diff system.
-- Positions are integers on a fixed-size grid chosen at construction. Smooth motion is renderer-side interpolation; vehicles parametrize as `(edgeId, t)` in a component and the renderer samples the road geometry.
-- `Layer<T>`, `OccupancyGrid`, and path-queue state are NOT serialized by `world.serialize()`. Persist layers by mirroring `layer.getState()` into a component on a dedicated singleton "mirror" entity — one component per layer, written only on that layer's recompute cadence; rebuild with `fromState` on load. Never mirror layers into `world.setState(...)`: world-state values are JSON-fingerprinted twice per tick by the engine, while component diffs are dirty-flag-only. OccupancyGrid and other derived maps are never mirrored — `rebuildDerived` reconstructs them from entities. Pending path requests live as plain data in components/world state, never only inside a queue instance.
-- Route traffic on the road **graph** (nodes/edges), not the cell grid. Cache paths keyed by (fromNode, toNode) against a single monotonic pathVersion (bump on topology change or congestion-epoch change; `clearCache()` on topology change); congestion enters via periodic repaths, not per-tick cost churn.
-- Heavy systems declare `interval`/`intervalOffset` and stagger; work budgets are counts, never milliseconds.
-- Determinism gate: replayable scenario bundles use `capacity: Number.MAX_SAFE_INTEGER, captureCommandPayloads: true, captureInitialSnapshot: true`; CI (`.github/workflows/ci.yml`) runs the recorded-session determinism gate (`tests/sim/replay.test.ts` asserts `SessionReplayer.selfCheck().ok`) as part of `npm test`, building the sibling civ-engine first.
 
 ## Conventions
 

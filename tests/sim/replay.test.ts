@@ -11,11 +11,11 @@ import {
 import type { CityCommands, CityEvents } from '../../src/sim/types';
 
 /**
- * The project determinism gate (AGENTS.md § civ-engine usage rules): record a
- * real play session — commands, growth, citizens, traffic, a mid-run road
- * edit — and verify the engine's 3-stream replay self-check. This catches
- * closure-state leaks, Map-iteration nondeterminism, and derived caches not
- * restored by rebuildDerived.
+ * The project determinism gate (architecture.md § "Sim internals worth
+ * pinning"): record a real play session — commands, growth, citizens,
+ * traffic, a mid-run road edit — and verify the engine's 3-stream replay
+ * self-check. This catches closure-state leaks, Map-iteration
+ * nondeterminism, and derived caches not restored by rebuildDerived.
  */
 describe('session replay self-check', () => {
   it('replays a recorded session identically', { timeout: 60_000 }, () => {
