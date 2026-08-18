@@ -7,8 +7,6 @@ import {
   FREE_TIME_REST_WEIGHT,
   FREE_TIME_SHOP_WEIGHT,
   FREE_TIME_YOUNG_LEISURE_WEIGHT,
-  REST_BASE_TICKS,
-  REST_VARIANCE_TICKS,
 } from './constants/activities';
 import { citizenHappiness, recentlyStranded } from './happiness';
 import { hasStoredCitizenProfile } from './citizen-profile';
@@ -72,9 +70,4 @@ export function pickFreeTimeActivity(
   }
   // Float accumulation can leave `roll` a hair past the last boundary.
   return FREE_TIME_ACTIVITIES[FREE_TIME_ACTIVITIES.length - 1];
-}
-
-/** How long a household stays in before its next commute. */
-export function restUntil(w: CityWorld): number {
-  return w.tick + REST_BASE_TICKS + Math.floor(w.random() * REST_VARIANCE_TICKS);
 }

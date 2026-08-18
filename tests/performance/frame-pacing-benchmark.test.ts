@@ -131,8 +131,8 @@ describe('frame-pacing benchmark contract', () => {
     expect(source).toContain('minimumTickRateBySpeed');
     expect(source).toContain('EXPECTED_FIXTURE_SHA256');
     expect(source).toContain('populationPeople: 936');
-    expect(source).toContain('vehiclesOnScreen: 81');
-    expect(source).toContain('pedestriansOnScreen: 17');
+    expect(source).toContain('vehiclesOnScreen: 77');
+    expect(source).toContain('pedestriansOnScreen: 2');
     expect(source).toContain('frame-pacing fixture state mismatch after advance');
     expect(source).toContain('actualState');
     expect(benchmarkSource.indexOf('window.advanceTime(50)')).toBeLessThan(

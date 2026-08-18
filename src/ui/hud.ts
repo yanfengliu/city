@@ -23,6 +23,8 @@ export type { OverlayName } from './overlay-toggle';
 export interface HudState<TTool extends string> {
   /** In-game day number (player-facing time; raw tick/fps stay in the automation state only). */
   day: number;
+  /** Civic clock time "HH:MM" from the shared city clock — the sun and the routines run on it. */
+  clockTime: string;
   speed: GameSpeed;
   treasury: number;
   /** Display population (citizens × people-per-citizen, computed by the app layer). */
@@ -118,7 +120,7 @@ export const STAT_SLOT_CH = {
   cityTitle: 11,
   traffic: 7,
   utility: 7,
-  day: 9,
+  day: 15,
 } as const;
 
 /**
@@ -413,7 +415,7 @@ export class Hud<TTool extends string> {
     } else {
       this.warningEl.style.display = 'none';
     }
-    this.statsEl.textContent = `Day ${state.day}`;
+    this.statsEl.textContent = `Day ${state.day} · ${state.clockTime}`;
     for (const bar of DEMAND_BARS) {
       const fill = this.demandFills.get(bar.key);
       if (fill) fill.style.height = `${Math.round(Math.max(0, state.demand[bar.key]) * 100)}%`;

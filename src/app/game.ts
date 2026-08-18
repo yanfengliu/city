@@ -32,7 +32,8 @@ import { BudgetPanel } from '../ui/budget-panel';
 import { InspectPanel } from '../ui/inspect-panel';
 import { citizenInspectData } from './citizen-inspect';
 import { AdvisorPanel, type Advisory } from '../ui/advisor';
-import { GRID_HEIGHT, GRID_WIDTH, TICKS_PER_DAY, TICK_MS } from '../sim/constants/map';
+import { GRID_HEIGHT, GRID_WIDTH, TICK_MS } from '../sim/constants/map';
+import { cityClock, clockTime } from '../protocol/city-clock';
 import { HIGHWAY_CELL_SET, HIGHWAY_COLUMN, HIGHWAY_LENGTH } from '../sim/constants/highway';
 import { SERVICE_RADIUS } from '../sim/constants/services';
 import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
@@ -91,13 +92,6 @@ import { CitizenInspectionState } from './citizen-inspection-state';
 const HUD_REFRESH_MS = 250;
 /** Citizen detail stays visibly live without scaling worker/DOM churn with game speed. */
 const CITIZEN_INSPECT_REFRESH_MS = 500;
-/**
- * Render-side phase offset for the day/night cycle so a fresh game (tick 0)
- * boots in bright late morning instead of at midnight (0 = midnight, 0.5 = noon)
- * — the boot-in-the-dark problem that first got the cycle disabled. Purely
- * visual: the "Day N" counter derives from the raw tick, unaffected.
- */
-const DAY_START_FRACTION = 0.4;
 const ZONE_LABELS: Record<ZoneType, string> = {
   R: 'Residential',
   C: 'Commercial',
@@ -375,9 +369,9 @@ export class Game {
       // Day/night cycle: the sun orbits with game time (phase-offset so boot is
       // daytime), and the buildings' warm window-glow ramps up as it darkens so
       // a night city stays lit and readable.
-      const daylight = this.scene.setDayFraction(
-        (this.tick / TICKS_PER_DAY + DAY_START_FRACTION) % 1,
-      );
+      // The shared civic clock decides the sun — the same function the sim's
+      // routine windows read, so daylight and behavior stay in step.
+      const daylight = this.scene.setDayFraction(cityClock(this.tick).dayFraction);
       this.buildingsView.setNightGlow(1 - daylight);
       // Last, so Voxel stages against the pose and view data this frame will
       // actually draw with.
@@ -1079,7 +1073,8 @@ export class Game {
       );
     }
     this.hud.update({
-      day: Math.floor(this.tick / TICKS_PER_DAY) + 1,
+      day: cityClock(this.tick).day,
+      clockTime: clockTime(this.tick),
       speed: this.speed,
       treasury: this.treasury,
       populationPeople,
@@ -1273,7 +1268,9 @@ export class Game {
     return {
       ready: this.ready,
       tick: this.tick,
-      day: Math.floor(this.tick / TICKS_PER_DAY) + 1,
+      day: cityClock(this.tick).day,
+      clockTime: clockTime(this.tick),
+      routineWindow: cityClock(this.tick).window,
       speed: this.speed,
       fps: this.scene.getFps(),
       advisories: this.advisor.current(),

@@ -42,10 +42,6 @@ export const CONGESTION_INTERVAL_OFFSET = 12;
 /** Path cost = length x (1 + factor x bucket). */
 export const EDGE_COST_BUCKET_FACTOR = 0.5;
 
-export const WORK_WAIT_BASE = 64;
-export const WORK_WAIT_VARIANCE = 64;
-export const HOME_COOLDOWN_BASE = 256;
-export const HOME_COOLDOWN_VARIANCE = 256;
 export const SHOP_WAIT_BASE = 48;
 export const SHOP_WAIT_VARIANCE = 32;
 export const TRIP_RETRY_TICKS = 128;

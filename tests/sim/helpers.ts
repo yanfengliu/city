@@ -1,4 +1,9 @@
 import { expect } from 'vitest';
+import {
+  TICKS_PER_DAY,
+  windowAt,
+  type RoutineWindow,
+} from '../../src/protocol/city-clock';
 import type { CitySim } from '../../src/sim/city';
 import { cellIndex, lPathCells } from '../../src/sim/grid';
 import type { CitizenComponent, CityCommands, ZoneType } from '../../src/sim/types';
@@ -295,4 +300,13 @@ export function findConnectablePumpSpot(
     }
   }
   throw new Error('no connectable pump spot');
+}
+
+/** Steps until the shared civic clock reaches `window` (≤ one full day). */
+export function stepToWindow(sim: CitySim, window: RoutineWindow): void {
+  for (let i = 0; i <= TICKS_PER_DAY; i++) {
+    if (windowAt(sim.world.tick) === window) return;
+    sim.world.step();
+  }
+  throw new Error(`window ${window} not reached within a full day`);
 }

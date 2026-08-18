@@ -20,7 +20,9 @@ import {
   setTownProfile,
   type ParkTown,
 } from './park-town';
-import { agentsFor, citizenOf, stepUntil } from './helpers';
+import { agentsFor, citizenOf, stepUntil,
+  stepToWindow,
+} from './helpers';
 
 describe('community-garden leisure outings', () => {
   it('lets household composition choose between parks and gardens', () => {
@@ -93,6 +95,8 @@ describe('community-garden leisure outings', () => {
     const { sim, citizen } = town;
     setTownProfile(town, profileWithStages(town, ['adult', 'adult', 'senior']));
 
+    // The outing plan waits out the boot morning; it departs in the day window.
+    stepToWindow(sim, 'day');
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
     expect(citizenOf(sim, citizen).shop).toBe(town.gardens[0]);
     expect(citizenOf(sim, citizen).travellerMemberId).toBe(2);

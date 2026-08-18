@@ -7,13 +7,20 @@ import {
 } from '../constants/traffic';
 import { GRID_WIDTH } from '../constants/map';
 import { CITIZEN_PRIMARY_MEMBER_ID } from '../constants/citizens';
-import { restUntil } from '../activities';
 import {
   appendCitizenLifeEvent,
   profileForCitizen,
   travellerForActivity,
   travellerForLeisureVenue,
 } from '../citizen-profile';
+import {
+  departureOffsets,
+  homeDepartureAt,
+  outingAllowed,
+  restUntilTick,
+  workDepartureAt,
+} from '../routine';
+import { windowAt, windowStart } from '../../protocol/city-clock';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type { CityWorld, PedestrianPurpose, VehicleLeg } from '../types';
@@ -185,11 +192,20 @@ function retryLater(w: CityWorld, citizen: number): void {
 }
 
 /**
- * A night in: no agent, just a cooldown at home. The plan flips back to work
- * as it starts, so a resting household can never sit at home indefinitely.
+ * A night in: no agent, just the household at home until its own morning
+ * commute moment. The plan flips back to work as the rest starts, so a
+ * resting household can never sit at home indefinitely.
  */
 function restAtHome(sim: CitySim, w: CityWorld, citizenId: number): void {
-  const until = restUntil(w);
+  const citizen = w.getComponent(citizenId, 'citizen');
+  if (!citizen) return;
+  const offsets = departureOffsets(
+    sim.seed,
+    citizenId,
+    w.getEntityGeneration(citizenId),
+    citizen.home,
+  );
+  const until = restUntilTick(w.tick, offsets.morning);
   // `nextActivity` flips to work below to prevent an endless rest loop, but
   // the person currently represented remains the one taking the night in.
   setTripTraveller(sim, w, citizenId, 'rest');
@@ -363,15 +379,47 @@ export function tripSystem(sim: CitySim): (w: CityWorld) => void {
       const citizen = w.getComponent(id, 'citizen');
       if (!citizen || citizen.work === null) continue;
       const activity = citizen.nextActivity ?? 'work';
+      // The clock gate lives here, at the single decision point, so however
+      // `waitUntil` was produced — arrival settle, retry, legacy save — no leg
+      // starts outside its routine window (simulation-realism.md § Daily
+      // routines). A blocked leg parks `waitUntil` at its scheduled moment.
+      const offsets = departureOffsets(sim.seed, id, w.getEntityGeneration(id), citizen.home);
       if (citizen.phase === 'atWork') {
+        const at = homeDepartureAt(w.tick, offsets.evening);
+        if (at > w.tick) {
+          w.patchComponent(id, 'citizen', (data) => {
+            data.waitUntil = at;
+          });
+          continue;
+        }
         startWorkLeg(sim, w, id, citizen.work, citizen.home, false, capacity);
       } else if (citizen.phase === 'atShop') {
         startOutingLeg(sim, w, id, false, venues, capacity);
       } else if (activity === 'rest') {
         restAtHome(sim, w, id);
       } else if (activity === 'shop' || activity === 'leisure') {
+        if (!outingAllowed(w.tick)) {
+          // Night converts a planned outing into a night in (restAtHome flips
+          // the plan to work, so the errand is dropped, not queued); a morning
+          // plan simply waits out the commute window and goes mid-morning.
+          if (windowAt(w.tick) === 'night') {
+            restAtHome(sim, w, id);
+          } else {
+            w.patchComponent(id, 'citizen', (data) => {
+              data.waitUntil = windowStart(w.tick, 'day');
+            });
+          }
+          continue;
+        }
         startOutingLeg(sim, w, id, true, venues, capacity);
       } else {
+        const at = workDepartureAt(w.tick, offsets.morning);
+        if (at > w.tick) {
+          w.patchComponent(id, 'citizen', (data) => {
+            data.waitUntil = at;
+          });
+          continue;
+        }
         startWorkLeg(sim, w, id, citizen.home, citizen.work, true, capacity);
       }
     }

@@ -55,7 +55,3 @@ export const LEISURE_GARDEN_MAX_CELLS = 16;
 /** Households linger longer on an evening out than on a shopping run. */
 export const LEISURE_WAIT_BASE = 96;
 export const LEISURE_WAIT_VARIANCE = 96;
-
-/** A night in: no agent spawns, the household simply stays home this long. */
-export const REST_BASE_TICKS = 192;
-export const REST_VARIANCE_TICKS = 192;

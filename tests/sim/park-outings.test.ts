@@ -5,7 +5,9 @@ import { SERVICE_FOOTPRINT } from '../../src/sim/constants/services';
 import { outingVenues } from '../../src/sim/traffic/trips';
 import type { TripPhase } from '../../src/sim/types';
 import { FAR_PARK, NEAR_PARK, outingPick, parkTown } from './park-town';
-import { agentsFor, citizenOf, stepUntil } from './helpers';
+import { agentsFor, citizenOf, stepUntil,
+  stepToWindow,
+} from './helpers';
 
 const TRANSITIONAL: TripPhase[] = ['toWork', 'toShop', 'toHome'];
 
@@ -80,6 +82,8 @@ describe('an evening out at the park', () => {
     const town = parkTown({ seed: 17, parkOffsets: [NEAR_PARK], activity: 'leisure' });
     const { sim, citizen } = town;
 
+    // The outing plan waits out the boot morning; it departs in the day window.
+    stepToWindow(sim, 'day');
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
     expect(citizenOf(sim, citizen).shop).toBe(town.parks[0]);
     expect(agentsFor(sim, citizen)).toHaveLength(1);
@@ -101,6 +105,8 @@ describe('an evening out at the park', () => {
     const { sim, citizen, base, streetY } = town;
     const where = `the park at (${base.x + NEAR_PARK}, ${streetY - 2})`;
 
+    // The outing plan waits out the boot morning; it departs in the day window.
+    stepToWindow(sim, 'day');
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
     expect(detailStatus(sim, citizen)).toBe(`Walking out for the evening to ${where}`);
     expect(citizenDetail(sim, citizen)?.destination).toBeNull();

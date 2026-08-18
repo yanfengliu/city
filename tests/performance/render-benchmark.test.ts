@@ -25,8 +25,8 @@ describe('render benchmark contract', () => {
       'JSON.stringify({ expectedState: EXPECTED_STATE, actualState, pageErrors })',
     );
     expect(PERFORMANCE_FIXTURE_POST_ADVANCE_STATE).toMatchObject({
-      vehiclesOnScreen: 81,
-      pedestriansOnScreen: 17,
+      vehiclesOnScreen: 77,
+      pedestriansOnScreen: 2,
     });
     expect(benchmarkSource).toContain('lease.release()');
     expect(benchmarkSource).toContain('page.close()');

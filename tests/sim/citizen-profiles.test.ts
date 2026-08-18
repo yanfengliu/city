@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { WINDOW_START_LOCAL_TICKS } from '../../src/protocol/city-clock';
 import { freeTimeWeights } from '../../src/sim/activities';
 import { refreshOccupancy } from '../../src/sim/buildings';
 import { citizenDetail } from '../../src/sim/citizen-detail';
@@ -27,6 +28,7 @@ import {
   seedBuilding,
   seedCitizen,
   stepUntil,
+  stepToWindow,
 } from './helpers';
 
 function moveInTown(seed = 7): { sim: CitySim; home: number; citizen: number } {
@@ -565,6 +567,8 @@ describe('profile consequences', () => {
       });
     });
 
+    // The outing plan waits out the boot morning; it departs in the day window.
+    stepToWindow(sim, 'day');
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
     const travelling = citizenOf(sim, citizen);
     expect(travelling.travellerMemberId).toBe(2);
@@ -637,13 +641,16 @@ describe('profile consequences', () => {
       sim.world.patchComponent(citizen, 'citizen', (data) => {
         data.work = home;
         data.nextActivity = 'rest';
+        // Hold the household home through the day: rest is the night's
+        // activity, so the plan takes effect when the night window opens.
+        data.waitUntil = WINDOW_START_LOCAL_TICKS.night;
       });
     });
 
     stepUntil(
       sim,
       () => (citizenOf(sim, citizen).restUntil ?? -1) > sim.world.tick,
-      32,
+      WINDOW_START_LOCAL_TICKS.night + 64,
     );
     const resting = citizenOf(sim, citizen);
     expect(resting.nextActivity).toBe('work');
@@ -679,12 +686,14 @@ describe('profile consequences', () => {
       sim.world.patchComponent(citizen, 'citizen', (data) => {
         data.work = work;
         data.nextActivity = 'rest';
+        // Hold the household home through the day (see the rest test above).
+        data.waitUntil = WINDOW_START_LOCAL_TICKS.night;
       });
     });
     stepUntil(
       sim,
       () => (citizenOf(sim, citizen).restUntil ?? -1) > sim.world.tick,
-      32,
+      WINDOW_START_LOCAL_TICKS.night + 64,
     );
     const restEnd = citizenOf(sim, citizen).restUntil;
 

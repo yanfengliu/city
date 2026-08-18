@@ -4,8 +4,9 @@ import { createCitySim, rebuildDerived, type CitySim } from '../../src/sim/city'
 import { BUDGET_INTERVAL_TICKS } from '../../src/sim/constants/map';
 import { cellIndex } from '../../src/sim/grid';
 import { buildingAccessCell, findRoadCellPath } from '../../src/sim/traffic/pathing';
+import { chooseOutingDestination, outingVenues } from '../../src/sim/traffic/trips';
 import type { BudgetReport, CitizenComponent, ZoneType } from '../../src/sim/types';
-import { findLandBlock } from './helpers';
+import { findLandBlock, stepToWindow } from './helpers';
 
 interface BuildingOptions {
   x: number;
@@ -277,20 +278,26 @@ describe('purposeful pedestrians', () => {
 
     for (const scenario of invalidShops) {
       const { sim, citizen } = purposefulTown({ nextActivity: 'shop', shop: scenario.shop });
-      let selectedInvalidShop = false;
-      for (let i = 0; i < 24; i++) {
-        const data = citizenOf(sim, citizen);
-        if (data.phase === 'toShop' || data.phase === 'atShop' || data.shop !== null) {
-          selectedInvalidShop = true;
+      // The selection is the contract, so drive the chooser directly: outings
+      // now wait for the day window, and by then growth can heal a seeded
+      // defect (an abandoned shop recovers in ~48 ticks), so live stepping
+      // would race recovery instead of testing rejection.
+      const venues = outingVenues(sim);
+      const home = citizenOf(sim, citizen).home;
+      sim.world.runMaintenance(() => {
+        for (let i = 0; i < 24; i++) {
+          expect(
+            chooseOutingDestination(sim, sim.world, home, venues, 'shop'),
+            scenario.label,
+          ).toBeNull();
         }
-        sim.world.step();
-      }
-      expect(selectedInvalidShop, scenario.label).toBe(false);
+      });
       expect(stateCount(sim, 'pendingRetailVisits'), scenario.label).toBe(0);
       expect(stateCount(sim, 'completedShoppingTrips'), scenario.label).toBe(0);
     }
 
     const { sim, citizen, commercial } = purposefulTown({ nextActivity: 'shop' });
+    stepToWindow(sim, 'day');
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
     expect(citizenOf(sim, citizen).shop).toBe(commercial);
     expect(citizenOf(sim, citizen).shopGen).toBe(sim.world.getEntityGeneration(commercial));
@@ -298,6 +305,7 @@ describe('purposeful pedestrians', () => {
 
   it('records a retail visit only when the shopper reaches the commercial building', () => {
     const { sim, citizen, commercial } = purposefulTown({ nextActivity: 'shop' });
+    stepToWindow(sim, 'day');
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
 
     expect(stateCount(sim, 'pendingRetailVisits')).toBe(0);
@@ -312,6 +320,7 @@ describe('purposeful pedestrians', () => {
 
   it('does not credit a shop entity id recycled during the outbound walk', () => {
     const { sim, citizen, commercial } = purposefulTown({ nextActivity: 'shop' });
+    stepToWindow(sim, 'day');
     stepUntil(
       sim,
       () => citizenOf(sim, citizen).phase === 'toShop' && walkerFor(sim, citizen) !== null,
@@ -352,6 +361,7 @@ describe('purposeful pedestrians', () => {
 
   it('cancels a severed walking route without creating a retail visit', () => {
     const { sim, citizen } = purposefulTown({ nextActivity: 'shop' });
+    stepToWindow(sim, 'day');
     stepUntil(
       sim,
       () =>
@@ -403,6 +413,7 @@ describe('purposeful pedestrians', () => {
   it('converges after save/load from the middle of a walking trip', () => {
     const seed = 23;
     const { sim, citizen } = purposefulTown({ seed, nextActivity: 'shop' });
+    stepToWindow(sim, 'day');
     stepUntil(
       sim,
       () =>

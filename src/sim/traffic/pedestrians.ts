@@ -1,19 +1,17 @@
 import { GRID_WIDTH } from '../constants/map';
 import {
-  HOME_COOLDOWN_BASE,
-  HOME_COOLDOWN_VARIANCE,
   PEDESTRIAN_BASE_SPEED,
   PEDESTRIAN_MIN_GAP_CELLS,
   SHOP_WAIT_BASE,
   SHOP_WAIT_VARIANCE,
   TRIP_RETRY_TICKS,
-  WORK_WAIT_BASE,
-  WORK_WAIT_VARIANCE,
 } from '../constants/traffic';
 import { LEISURE_WAIT_BASE, LEISURE_WAIT_VARIANCE } from '../constants/activities';
+import { HOME_SETTLE_TICKS } from '../constants/routine';
 import { CITIZEN_PRIMARY_MEMBER_ID } from '../constants/citizens';
 import { pickFreeTimeActivity } from '../activities';
 import { profileForCitizen, travellerForActivity } from '../citizen-profile';
+import { departureOffsets, homeDepartureAt } from '../routine';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type {
@@ -182,10 +180,19 @@ function arrive(
         : randomWait(w, SHOP_WAIT_BASE, SHOP_WAIT_VARIANCE);
     } else if (path.outbound) {
       data.phase = 'atWork';
-      data.waitUntil = randomWait(w, WORK_WAIT_BASE, WORK_WAIT_VARIANCE);
+      // The workday runs to this household's own evening departure moment;
+      // the trip system re-gates, so this is the schedule, not a cooldown.
+      const offsets = departureOffsets(
+        sim.seed,
+        path.citizen,
+        path.citizenGen,
+        owner.home,
+      );
+      data.waitUntil = homeDepartureAt(w.tick, offsets.evening);
     } else {
       data.phase = 'home';
-      data.waitUntil = randomWait(w, HOME_COOLDOWN_BASE, HOME_COOLDOWN_VARIANCE);
+      // A short settle, then the trip system plans what follows on the clock.
+      data.waitUntil = w.tick + HOME_SETTLE_TICKS;
       if (path.purpose === 'shopping') {
         data.nextActivity = 'work';
         data.shop = null;

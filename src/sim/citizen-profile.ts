@@ -71,7 +71,7 @@ function mix(value: number): number {
   return (mixed ^ (mixed >>> 16)) >>> 0;
 }
 
-function identityWord(
+export function identityWord(
   seed: number,
   citizen: number,
   generation: number,

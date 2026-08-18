@@ -1,20 +1,19 @@
 import { GRID_WIDTH } from '../constants/map';
 import {
   CONGESTION_SLOWDOWN_PER_BUCKET,
-  HOME_COOLDOWN_BASE,
-  HOME_COOLDOWN_VARIANCE,
   MIN_SPEED_FACTOR,
   SIGNAL_MIN_APPROACHES,
+  TRIP_RETRY_TICKS,
   VEHICLE_BASE_SPEED,
   VEHICLE_EDGE_HOLD_T,
   VEHICLE_HEADWAY_CELLS,
   VEHICLE_STOP_LINE_CELLS,
-  WORK_WAIT_BASE,
-  WORK_WAIT_VARIANCE,
 } from '../constants/traffic';
+import { HOME_SETTLE_TICKS } from '../constants/routine';
 import { signalPhase } from '../../protocol/signal-phase';
 import { pickFreeTimeActivity } from '../activities';
 import { profileForCitizen, travellerForActivity } from '../citizen-profile';
+import { departureOffsets, homeDepartureAt } from '../routine';
 import type { CitySim } from '../city';
 import type { RoadEdge } from '../road/road-graph';
 import type { CitizenComponent, CityWorld, VehicleComponent, VehicleLeg } from '../types';
@@ -117,9 +116,18 @@ function arrive(sim: CitySim, w: CityWorld, id: number, data: VehicleComponent):
   if (!citizen) return;
   const profile = profileForCitizen(sim, data.citizen, citizen);
   if (data.toWork && validOutboundDestination(w, citizen, data)) {
+    // The workday runs to this household's own evening departure moment
+    // (simulation-realism.md § Daily routines); the trip system re-gates, so
+    // this dwell is the schedule itself, not a cooldown.
+    const offsets = departureOffsets(
+      sim.seed,
+      data.citizen,
+      w.getEntityGeneration(data.citizen),
+      citizen.home,
+    );
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'atWork';
-      c.waitUntil = w.tick + WORK_WAIT_BASE + Math.floor(w.random() * WORK_WAIT_VARIANCE);
+      c.waitUntil = homeDepartureAt(w.tick, offsets.evening);
       c.travellerMemberId = travellerForActivity(profile, 'work');
     });
   } else if (data.toWork) {
@@ -127,14 +135,15 @@ function arrive(sim: CitySim, w: CityWorld, id: number, data: VehicleComponent):
     // newer assignment intact, but return the citizen to the work stage.
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'home';
-      c.waitUntil = w.tick + HOME_COOLDOWN_BASE + Math.floor(w.random() * HOME_COOLDOWN_VARIANCE);
+      c.waitUntil = w.tick + TRIP_RETRY_TICKS;
       c.nextActivity = 'work';
       c.travellerMemberId = travellerForActivity(profile, 'work');
     });
   } else {
     w.patchComponent(data.citizen, 'citizen', (c) => {
       c.phase = 'home';
-      c.waitUntil = w.tick + HOME_COOLDOWN_BASE + Math.floor(w.random() * HOME_COOLDOWN_VARIANCE);
+      // A short settle, then the trip system plans the evening on the clock.
+      c.waitUntil = w.tick + HOME_SETTLE_TICKS;
       // Home from work — the evening is theirs to plan.
       c.nextActivity = pickFreeTimeActivity(w, citizen, profile);
       c.travellerMemberId = travellerForActivity(profile, c.nextActivity);

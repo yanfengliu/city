@@ -16,6 +16,7 @@ import {
   seedBuilding,
   seedCitizen,
   stepUntil,
+  stepToWindow,
 } from './helpers';
 
 const TRANSITIONAL: TripPhase[] = ['toWork', 'toShop', 'toHome'];
@@ -156,6 +157,9 @@ describe('free-time plans', () => {
   it('walks an evening out to a live shop and brings the household home', () => {
     const { sim, citizen, shops } = freeTimeTown({ seed: 17, activity: 'leisure' });
 
+    // Boot is mid-morning; the outing plan waits out the commute window and
+    // departs once the day window opens.
+    stepToWindow(sim, 'day');
     stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toShop', 64);
     const chosen = citizenOf(sim, citizen).shop;
     expect(shops).toContain(chosen);
@@ -174,13 +178,20 @@ describe('free-time plans', () => {
   it('keeps a resting household at home with no agent, then sends it back to work', () => {
     const { sim, citizen } = freeTimeTown({ seed: 23, activity: 'rest' });
 
-    stepUntil(sim, () => citizenOf(sim, citizen).nextActivity === 'work', 32);
+    // Rest is the night's activity: seeded mid-morning it collapses into the
+    // commute, so the household works its day first and rests after dark.
+    stepToWindow(sim, 'night');
+    stepUntil(
+      sim,
+      () => citizenOf(sim, citizen).phase === 'home' && agentsFor(sim, citizen).length === 0,
+      2_000,
+    );
     const resting = citizenOf(sim, citizen);
-    expect(resting.phase).toBe('home');
+    expect(resting.nextActivity).toBe('work');
     expect(resting.waitUntil).toBeGreaterThan(sim.world.tick);
     expect(agentsFor(sim, citizen)).toHaveLength(0);
 
-    stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toWork', 1_000);
+    stepUntil(sim, () => citizenOf(sim, citizen).phase === 'toWork', 3_000);
     expect(agentsFor(sim, citizen)).toHaveLength(1);
   });
 
