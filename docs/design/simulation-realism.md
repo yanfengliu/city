@@ -2,6 +2,8 @@
 
 Direction set 2026-07-17 (user): cars must not drive through each other, must follow traffic laws, must keep to the right side of the road, must take up real space, must visibly differ, and must have a purpose; pedestrians likewise. This doc is the deeper think: what "realism" means for this game, what we have, the target model, and a phased plan with acceptance criteria.
 
+Direction set 2026-08-17 (user): rush hour and school runs are never scripted — they appear organically because actual people live in their assigned houses and follow daily routines (working, going home, going to school, buying groceries in the commercial zone, relaxing in the park), anchored to buildings the player actually placed. The traffic pattern is the emergent sum of those routines. The phased plan is § Daily routines (D1–D3) below.
+
 Read with `game-design.md` (Traffic section holds the current tuned values) and `vision.md` (pillars 1–3: alive, trustworthy, readable). This doc governs the traffic/agent simulation; presentation-only work (building models, HUD stability) is tracked in PROGRESS.md, not here.
 
 ## Principles
@@ -42,6 +44,20 @@ Selection is identity-safe end to end. Worker pedestrian views include the ownin
 
 Biography semantics stay conservative. `outingDeparted` means a named person left home for the stated activity and does not imply arrival or completion; a successful shopping arrival continues to be proven separately by retail counters. This keeps the visible life story aligned with events the sim actually observed.
 
+### Daily routines — lives on a clock (direction 2026-08-17; phases D1–D3, next)
+
+The sim is currently clock-blind: `TICKS_PER_DAY` exists, but only the renderer (day/night lighting) and HUD (day counter) read it, and trip pacing is pure cooldown — a household alternates work and free time at any hour, so 3 AM streets are as busy as 8 AM streets. The destinations are already real (assigned workplace, staffed shop with arrival counters, reachable park/garden), so what routines need is the when (a clock the sim obeys) and the who (members living simultaneously), not new trip kinds.
+
+The clock is one shared pure function, on the `signalPhase` precedent: `cityClock(tick)` in `src/protocol/` returns day number, day fraction, and the routine window — night, morning, day, evening — with window boundaries in `src/sim/constants/`. The sim times routines by it, the renderer aligns day/night lighting to it (folding the app-side `DAY_START_FRACTION` offset into the shared function so "looks like morning" and "behaves like morning" cannot disagree), and the HUD derives a clock display from it. No new worker messages.
+
+**D1 — routines on the clock (household scale, no new save state).** Keep the one-active-traveller invariant and replace cooldown alternation with window-anchored routine: the work commute departs inside the morning window and returns in the evening window, shopping and leisure fill day/evening free-time slots through the existing weighted choice, night is rest at home. Each person's departure tick offsets deterministically inside their window by identity hash (the profile-generation precedent — consumes no sim RNG), so a district's departures shade across the window instead of spiking on one tick while still massing into a visible rush. Everything derives from tick + identity + existing components: no save-format change, and the replay gate must stay untouched.
+
+**D2 — simultaneous member lives (versioned save addition).** Per-member activity slots: up to all three members out at once, each with their own generation-guarded anchor (home, work, school, venue, or in transit), ending the one-trip-per-household boundary named above. School attendance lands here, because it needs simultaneity: children walk to the covering school in the morning window and return mid-afternoon, so placing a school is what creates school runs — a child cannot displace the worker's commute from the single trip slot. Inspection follows: the citizen panel and `render_game_to_text()` report each member's own current place, and selection resolves to the member. Per-member state is a versioned save addition; legacy saves default members to at-home and map an in-flight household trip onto its stored traveller. Persistence and migration risk makes this phase a multi-cli-review unit at implementation time. Budgets stay counts: cap trip starts per tick and concurrent trips per household (≤ 3); the windows spread demand naturally.
+
+**D3 — routines feed back.** Attendance counters prove school arrivals (the retail-counter precedent) and gate education progression; grocery access — a reachable staffed shop actually visited — joins the happiness inputs; venue visits already credit leisure. Feedback makes routine failure diagnosable like stranded trips already are: a child with no reachable school and a household with no reachable shop each surface in the inspect panel and advisories rather than silently degrading.
+
+Contracts that define done for D1: scenario — over one full simulated day in a working city, every employed household's work departure falls inside the morning window, offsets are non-degenerate (not all members of a district on one tick), and order is replay-stable; emergent — the morning-window active-vehicle peak exceeds the night-window baseline by a tuned factor in the acceptance-scale city, and evening shows the return peak; clock — `cityClock` is pure, its windows partition the day exactly, and renderer lighting consumes the same function the sim does; determinism — the recorded-session replay self-check stays green with no `Math.random`/`Date.now` in new paths; performance — 20 TPS holds at acceptance scale. D2 adds: a worker at work while the household's child is at school simultaneously, save → load round-trips per-member state exactly, and legacy saves restore without fabricated member history.
+
 ### Phase T1 — occupancy, right-hand traffic, signals, identity (implemented at the defined depth)
 
 Right-hand driving (presentation): a car's world pose offsets perpendicular-right of its travel direction by a lane half-gap, mirroring the pedestrian curb-lane precedent; opposing flows therefore occupy separate parallel lanes and can no longer intersect. The sim keeps `(edge, t, reverse)` untouched.
@@ -74,7 +90,7 @@ Vehicle classes: purpose-typed bodies (commuter cars, delivery vans for C, box t
 
 ### Phase T3 — the city that trades and responds
 
-Freight and service trips as first-class purposes (I→C goods runs, deliveries), emergency vehicles with signal preemption from the existing service buildings, and activity schedules that shift trip mix across the day/night cycle already present in the renderer.
+Freight and service trips as first-class purposes (I→C goods runs, deliveries) and emergency vehicles with signal preemption from the existing service buildings. Activity schedules moved out of this phase: the daily-routines direction above owns them, as emergent per-person routine rather than a trip-mix curve.
 
 Transit remains out of scope per `roadmap.md` (post-v1).
 

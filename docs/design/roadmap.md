@@ -52,6 +52,16 @@ Status: complete on 2026-08-02. The fresh-build final-source frame-pacing run pa
 
 Accept: the game-design doc's "Definition of fully functioning" checklist passes end to end.
 
+## v1.1 — Living Days (next)
+
+Direction 2026-08-17 (user): rush hour and school runs appear organically from actual people living daily routines against the buildings the player placed — never from scripted traffic-mix curves. The model and contracts live in `simulation-realism.md` § Daily routines; this section only orders the phases.
+
+D1 — the shared pure city clock and window-anchored routines at household scale (no save change): commutes mass into the morning window, returns into the evening, nights go quiet under the existing night lighting. Accept: the D1 contract set in simulation-realism.md — window-correct departures with non-degenerate offsets, morning/evening vehicle peaks over the night baseline at acceptance scale, replay and TPS gates green, and a browser-verified morning rush plus empty small-hours streets.
+
+D2 — simultaneous member lives (versioned save addition; multi-cli-review at implementation): up to three members out at once, children attend the covering school, per-member inspection. Accept: worker at work while the child is at school, exact save round-trip, legacy saves default safely, count budgets hold at acceptance scale.
+
+D3 — routines feed back: attendance counters gate education progression, grocery access joins happiness, unreachable school/shop surfaces like stranded trips. Accept: counters prove arrivals; routine failures are diagnosable in the inspect panel.
+
 ## Later (explicitly out of v1)
 
 Freeform spline roads (design must stay compatible: graph + rasterization already abstract over cell geometry), public transport, districts/policies, fires/crime/health incidents, high density, freight chains, player terrain sculpting and slope gameplay, milestones/unlock progression, ambient audio.
