@@ -104,6 +104,7 @@ function detail(overrides: Partial<CitizenDetail> = {}): CitizenDetail {
     waitUntil: 0,
     strandedAt: null,
     commuteCells: 34,
+    memberWhereabouts: [],
     ...overrides,
   };
 }

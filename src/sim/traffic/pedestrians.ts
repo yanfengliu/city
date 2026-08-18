@@ -12,6 +12,7 @@ import { CITIZEN_PRIMARY_MEMBER_ID } from '../constants/citizens';
 import { pickFreeTimeActivity } from '../activities';
 import { profileForCitizen, travellerForActivity } from '../citizen-profile';
 import { departureOffsets, homeDepartureAt } from '../routine';
+import { handleSchoolArrival, handleSchoolCancel } from './schools';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type {
@@ -53,6 +54,7 @@ export function spawnPedestrian(
   destination: number,
   purpose: PedestrianPurpose,
   outbound: boolean,
+  memberId?: number,
 ): number {
   const walker = w.createEntity();
   const start = cells[0];
@@ -60,8 +62,11 @@ export function spawnPedestrian(
   w.addComponent(walker, 'pedestrianPath', {
     citizen,
     citizenGen: w.getEntityGeneration(citizen),
+    // A member trip names its own person; household trips walk the traveller.
     memberId:
-      w.getComponent(citizen, 'citizen')?.travellerMemberId ?? CITIZEN_PRIMARY_MEMBER_ID,
+      memberId ??
+      w.getComponent(citizen, 'citizen')?.travellerMemberId ??
+      CITIZEN_PRIMARY_MEMBER_ID,
     cells,
     destination,
     destinationGen: w.getEntityGeneration(destination),
@@ -81,6 +86,15 @@ function destinationValid(w: CityWorld, path: PedestrianPathComponent): boolean 
   if (w.getEntityGeneration(path.destination) !== path.destinationGen) return false;
   const citizen = w.getComponent(path.citizen, 'citizen');
   if (!citizen) return false;
+  // A school run ends at the school going out and at the child's home coming
+  // back; neither reads household work/shop state.
+  if (path.purpose === 'school') {
+    if (path.outbound) {
+      return w.getComponent(path.destination, 'structure')?.type === 'school';
+    }
+    const homeBuilding = w.getComponent(path.destination, 'building');
+    return citizen.home === path.destination && homeBuilding?.zone === 'R' && !homeBuilding.abandoned;
+  }
   // An outbound outing ends at a shop or green venue; only the shop case is a
   // building, so this arm is checked before anything reads `building`.
   if (path.outbound && path.purpose === 'shopping') {
@@ -104,6 +118,10 @@ export function cancelPedestrian(
   disconnected: boolean,
 ): void {
   w.destroyEntity(walker);
+  if (path.purpose === 'school') {
+    handleSchoolCancel(w, path, disconnected);
+    return;
+  }
   const citizen = w.getComponent(path.citizen, 'citizen');
   if (
     !citizen ||
@@ -145,6 +163,16 @@ function arrive(
   path: PedestrianPathComponent,
 ): void {
   w.destroyEntity(walker);
+  // A member trip lands in its member slot; household fields stay untouched,
+  // which is what lets the worker be at work while the child is at school.
+  if (path.purpose === 'school') {
+    if (destinationValid(w, path)) {
+      handleSchoolArrival(sim, w, path);
+    } else {
+      handleSchoolCancel(w, path, false);
+    }
+    return;
+  }
   const component = w.getComponent(path.citizen, 'citizen');
   const owner =
     component !== undefined &&

@@ -8,10 +8,11 @@
  * Offsets are identity-hashed like citizen profiles — zero world-RNG draws —
  * so a district's departures shade deterministically across a window.
  */
-import { windowAt, windowStart } from '../protocol/city-clock';
+import { localTick, TICKS_PER_DAY, windowAt, windowStart } from '../protocol/city-clock';
 import {
   EVENING_DEPART_SPREAD_TICKS,
   MORNING_DEPART_SPREAD_TICKS,
+  SCHOOL_RETURN_LOCAL_TICK,
 } from './constants/routine';
 import { identityWord } from './citizen-profile';
 
@@ -81,4 +82,45 @@ export function outingAllowed(tick: number): boolean {
 export function restUntilTick(tick: number, morningOffset: number): number {
   if (windowAt(tick) === 'day') return windowStart(tick, 'morning') + morningOffset;
   return workDepartureAt(tick, morningOffset);
+}
+
+const SCHOOL_SALT = 0x5c400157;
+
+/**
+ * A named member's own schedule offset — the household hash re-salted by the
+ * member, so siblings leave at different moments. Zero world-RNG draws.
+ */
+export function memberOffset(
+  seed: number,
+  citizen: number,
+  generation: number,
+  home: number,
+  memberId: number,
+  spread: number,
+): number {
+  return (
+    identityWord(seed, citizen, generation, home, SCHOOL_SALT ^ Math.imul(memberId + 1, 0x9e3779b1)) %
+    spread
+  );
+}
+
+/**
+ * School departures belong strictly to the morning: a child past today's
+ * moment goes now; outside the morning window the next chance is tomorrow.
+ * No day-window late start — miss the morning, stay home (D3 will surface
+ * chronic misses; a load at noon simply starts attending tomorrow).
+ */
+export function schoolDepartureAt(tick: number, offset: number): number {
+  if (windowAt(tick) === 'morning') {
+    return Math.max(tick, windowStart(tick, 'morning') + offset);
+  }
+  return windowStart(tick, 'morning') + offset;
+}
+
+/** Dismissal: the 15:00 bell plus this child's own dawdle, next occurrence ≥ tick. */
+export function schoolReturnAt(tick: number, offset: number): number {
+  const local = localTick(tick);
+  const bell = SCHOOL_RETURN_LOCAL_TICK + offset;
+  const into = local <= bell ? bell - local : bell + TICKS_PER_DAY - local;
+  return tick + into;
 }

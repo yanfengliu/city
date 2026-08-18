@@ -224,6 +224,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
   // Rare-write citizen data is appended for snapshot/replay registration compatibility.
   world.registerComponent('citizenProfile');
   world.registerComponent('citizenLife');
+  world.registerComponent('memberTrip');
 
   // -- world state --
   world.setState('treasury', STARTING_TREASURY);
@@ -231,6 +232,7 @@ export function createCitySim(config: CitySimConfig): CitySim {
   world.setState('population', 0);
   world.setState('disconnectedTrips', 0);
   world.setState('tripCursor', 0);
+  world.setState('memberTripCursor', 0);
   world.setState('happinessCursor', 0);
   world.setState('taxRates', { r: DEFAULT_TAX_RATE, c: DEFAULT_TAX_RATE, i: DEFAULT_TAX_RATE });
   world.setState('pendingRetailVisits', 0);

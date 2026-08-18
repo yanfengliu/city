@@ -18,6 +18,11 @@ export const PEDESTRIAN_PURPOSE_TOP_PALETTES: Record<
     0xb4548c, 0x8f4a70, 0xa65d7c, 0x76558f,
     0xc26472, 0x8d547c, 0x9b4d55, 0x6d567d,
   ],
+  // Bright backpack-and-raincoat colors: school runs read as kids at a glance.
+  school: [
+    0xe8b93c, 0xd94f4f, 0x4fa3d9, 0x67b35c,
+    0xe07f3e, 0x9a6bc9, 0x3fb8a6, 0xd9628f,
+  ],
 };
 
 /** Wardrobe palette selected by stable person identity, never by the current trip. */

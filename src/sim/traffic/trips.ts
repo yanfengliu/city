@@ -22,6 +22,15 @@ import {
 } from '../routine';
 import { windowAt, windowStart } from '../../protocol/city-clock';
 import { markStranded } from '../happiness';
+import { SCHOOL_DEPART_SPREAD_TICKS } from '../constants/routine';
+import { memberOffset, schoolDepartureAt } from '../routine';
+import { hasStoredCitizenProfile } from '../citizen-profile';
+import {
+  memberSlots,
+  schoolFor,
+  upsertMemberSlot,
+  dropMemberSlot,
+} from './schools';
 import type { CitySim } from '../city';
 import type { CityWorld, PedestrianPurpose, VehicleLeg } from '../types';
 import {
@@ -350,8 +359,85 @@ function startOutingLeg(
 }
 
 /**
+ * The member half of one household's turn (D2): start a due school run for
+ * each child/teen member, and walk a dismissed child home. Shares the turn's
+ * walker budget, and profiles only materialize once a run actually starts.
+ */
+function considerSchoolRuns(
+  sim: CitySim,
+  w: CityWorld,
+  citizenId: number,
+  capacity: { walkers: number; vehicles: number },
+): void {
+  const citizen = w.getComponent(citizenId, 'citizen');
+  if (!citizen) return;
+  const slots = memberSlots(w, citizenId);
+
+  // Due walks home first — dismissal is slot-scheduled, not window-gated.
+  for (const slot of slots) {
+    if (slot.purpose !== 'school' || slot.phase !== 'atPlace' || slot.waitUntil > w.tick) continue;
+    if (capacity.walkers >= MAX_PEDESTRIANS) return;
+    if (
+      !w.isAlive(slot.place) ||
+      w.getEntityGeneration(slot.place) !== slot.placeGen ||
+      w.getComponent(slot.place, 'structure')?.type !== 'school'
+    ) {
+      // The school died while class was in: the child is simply home.
+      dropMemberSlot(w, citizenId, slot.memberId);
+      continue;
+    }
+    const cells = findRoadCellPath(sim, slot.place, citizen.home);
+    if (!cells) {
+      countDisconnected(w, citizenId);
+      dropMemberSlot(w, citizenId, slot.memberId);
+      continue;
+    }
+    spawnPedestrian(w, citizenId, cells, citizen.home, 'school', false, slot.memberId);
+    upsertMemberSlot(w, citizenId, { ...slot, phase: 'toHome' });
+    capacity.walkers++;
+  }
+
+  // New departures only in the morning window. The stored-profile check runs
+  // before any materialization so the scan itself writes nothing.
+  if (windowAt(w.tick) !== 'morning') return;
+  const profile = w.getComponent(citizenId, 'citizenProfile');
+  const members = hasStoredCitizenProfile(profile)
+    ? profile.members
+    : profileForCitizen(sim, citizenId, citizen).members;
+  for (const member of members) {
+    if (member.lifeStage !== 'child' && member.lifeStage !== 'teen') continue;
+    if (memberSlots(w, citizenId).some((s) => s.memberId === member.id)) continue;
+    if (capacity.walkers >= MAX_PEDESTRIANS) return;
+    const offset = memberOffset(
+      sim.seed,
+      citizenId,
+      w.getEntityGeneration(citizenId),
+      citizen.home,
+      member.id,
+      SCHOOL_DEPART_SPREAD_TICKS,
+    );
+    if (schoolDepartureAt(w.tick, offset) > w.tick) continue;
+    const school = schoolFor(sim, citizen.home);
+    if (school === null) return; // no covering school: nobody in this home attends
+    const cells = findRoadCellPath(sim, citizen.home, school);
+    if (!cells) continue; // covered but unroutable today; tomorrow retries
+    spawnPedestrian(w, citizenId, cells, school, 'school', true, member.id);
+    upsertMemberSlot(w, citizenId, {
+      memberId: member.id,
+      phase: 'toPlace',
+      place: school,
+      placeGen: w.getEntityGeneration(school),
+      purpose: 'school',
+      waitUntil: w.tick,
+    });
+    capacity.walkers++;
+  }
+}
+
+/**
  * Starts bounded, rotating work and free-time legs for employed households.
- * Transitional phases are excluded, so each citizen owns at most one agent.
+ * Transitional phases are excluded, so each citizen owns at most one agent —
+ * the household's own agent; member slots add their own walkers (D2).
  */
 export function tripSystem(sim: CitySim): (w: CityWorld) => void {
   return (w) => {
@@ -369,6 +455,35 @@ export function tripSystem(sim: CitySim): (w: CityWorld) => void {
         eligible.push(id);
       }
     }
+
+    // Member lives run on their own eligibility: a household whose primary is
+    // mid-commute (or parked on a long dwell) still sends its child to school.
+    const memberEligible: number[] = [];
+    for (const id of [...w.query('citizen')].sort((a, b) => a - b)) {
+      const citizen = w.getComponent(id, 'citizen');
+      if (!citizen) continue;
+      const slots = memberSlots(w, id);
+      const hasDue = slots.some(
+        (s) => s.phase === 'atPlace' && s.waitUntil <= w.tick,
+      );
+      // Morning departures need a scan; other windows only service due slots.
+      // No employment gate: a jobless household's children still attend.
+      if (hasDue || windowAt(w.tick) === 'morning') {
+        memberEligible.push(id);
+      }
+    }
+    const memberCursor =
+      ((w.getState('memberTripCursor') as number | undefined) ?? 0) %
+      Math.max(1, memberEligible.length);
+    const memberConsidered = Math.min(TRIPS_PER_RUN, memberEligible.length);
+    for (let n = 0; n < memberConsidered; n++) {
+      const id = memberEligible[(memberCursor + n) % memberEligible.length];
+      considerSchoolRuns(sim, w, id, capacity);
+    }
+    if (memberEligible.length > 0) {
+      w.setState('memberTripCursor', memberCursor + memberConsidered);
+    }
+
     if (eligible.length === 0) return;
 
     const venues = outingVenues(sim);

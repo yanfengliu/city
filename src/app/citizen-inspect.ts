@@ -95,6 +95,12 @@ function topReasons(detail: CitizenDetail): string[] {
     });
 }
 
+const WHEREABOUTS_LABELS: Record<string, string> = {
+  toSchool: 'walking to school',
+  atSchool: 'at school',
+  walkingHome: 'walking home from school',
+};
+
 function memberSummary(
   member: CitizenMemberProfile,
   detail: CitizenDetail,
@@ -103,6 +109,15 @@ function memberSummary(
   if (member.id === detail.selectedMemberId) markers.push('selected');
   if (member.id === detail.activeTravellerMemberId) {
     markers.push(detail.agent ? 'active traveller' : 'activity representative');
+  }
+  // A member out on their own trip says so — the D2 "worker at work while
+  // the child is at school" read, one glance at the roster.
+  const whereabouts = detail.memberWhereabouts.find((entry) => entry.memberId === member.id);
+  const ownTrip = whereabouts ? WHEREABOUTS_LABELS[whereabouts.status] : undefined;
+  if (ownTrip) {
+    markers.push(
+      whereabouts?.place ? `${ownTrip} — ${whereabouts.place.label}` : ownTrip,
+    );
   }
   const marker = markers.length > 0 ? ` (${markers.join(', ')})` : '';
   return `${member.givenName}, ${member.age} — ${LIFE_STAGE_LABELS[member.lifeStage]} · ${ROLE_LABELS[member.role]} · ${EDUCATION_LABELS[member.education]}${marker}`;

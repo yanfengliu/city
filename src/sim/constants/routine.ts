@@ -1,3 +1,5 @@
+import { localTickOfFraction } from '../../protocol/city-clock';
+
 /**
  * Daily-routine pacing (docs/design/simulation-realism.md § Daily routines).
  * The window boundaries themselves live in `src/protocol/city-clock.ts`
@@ -26,3 +28,17 @@ export const EVENING_DEPART_SPREAD_TICKS = 512;
  * routine clock owns all daily timing.
  */
 export const HOME_SETTLE_TICKS = 32;
+
+
+/**
+ * How far into the morning window a child's school departure can fall.
+ * Narrower than the commute spread: the school day starts together-ish.
+ */
+export const SCHOOL_DEPART_SPREAD_TICKS = 384;
+
+/** School lets out at 15:00; children walk home through the afternoon. */
+export const SCHOOL_RETURN_FRACTION = 0.625;
+export const SCHOOL_RETURN_LOCAL_TICK = localTickOfFraction(SCHOOL_RETURN_FRACTION);
+
+/** Dismissal shades over a short span so the walk home is a stream, not a spike. */
+export const SCHOOL_RETURN_SPREAD_TICKS = 96;

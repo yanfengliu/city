@@ -33,8 +33,8 @@ export const WINDOW_START_FRACTIONS: Readonly<Record<RoutineWindow, number>> = {
   night: 0.92, // 22:04 — the city sleeps
 };
 
-/** A window's start as a tick offset inside the day cycle (tick 0 = fraction 0.4). */
-function localTickOf(fraction: number): number {
+/** A day fraction as a tick offset inside the day cycle (tick 0 = fraction 0.4). */
+export function localTickOfFraction(fraction: number): number {
   const local = (((fraction - DAY_START_FRACTION) % 1) + 1) % 1;
   return Math.round(local * TICKS_PER_DAY) % TICKS_PER_DAY;
 }
@@ -45,10 +45,10 @@ function localTickOf(fraction: number): number {
  * night 2130, morning 3482 (wrapping through the day boundary to 82).
  */
 export const WINDOW_START_LOCAL_TICKS: Readonly<Record<RoutineWindow, number>> = {
-  morning: localTickOf(WINDOW_START_FRACTIONS.morning),
-  day: localTickOf(WINDOW_START_FRACTIONS.day),
-  evening: localTickOf(WINDOW_START_FRACTIONS.evening),
-  night: localTickOf(WINDOW_START_FRACTIONS.night),
+  morning: localTickOfFraction(WINDOW_START_FRACTIONS.morning),
+  day: localTickOfFraction(WINDOW_START_FRACTIONS.day),
+  evening: localTickOfFraction(WINDOW_START_FRACTIONS.evening),
+  night: localTickOfFraction(WINDOW_START_FRACTIONS.night),
 };
 
 /** Tick folded into [0, TICKS_PER_DAY), safe for any integer tick. */

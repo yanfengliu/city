@@ -99,6 +99,11 @@ export interface CitizenDetail {
    */
   breakdown: HappinessBreakdown;
   phase: TripPhase;
+  /**
+   * Where each named person is right now (D2 simultaneous member lives):
+   * out on their own member trip, out as the household's traveller, or home.
+   */
+  memberWhereabouts: MemberWhereabouts[];
   /** The plan in progress: commuting, or which free-time outing they chose. */
   activity: CitizenActivity;
   /** One sentence describing what this household is doing right now. */
@@ -142,6 +147,19 @@ function place(w: CityWorld, entity: number | null | undefined): CitizenPlace | 
     h: building.h,
   };
 }
+
+export interface MemberWhereabouts {
+  memberId: number;
+  status: 'home' | 'household' | 'toSchool' | 'atSchool' | 'walkingHome';
+  /** The generation-checked venue of a member trip (the school), else null. */
+  place: CitizenActivityPlace | null;
+}
+
+const SLOT_STATUS: Record<'toPlace' | 'atPlace' | 'toHome', MemberWhereabouts['status']> = {
+  toPlace: 'toSchool',
+  atPlace: 'atSchool',
+  toHome: 'walkingHome',
+};
 
 function activityAnchor(
   w: CityWorld,
@@ -409,6 +427,23 @@ export function citizenDetail(
       : profile.members.find((member) => member.id === selectedMemberId);
   if (!selectedMember) return null;
   const life = citizenLifeHistory(w.getComponent(entity, 'citizenLife'));
+  const slots = w.getComponent(entity, 'memberTrip')?.slots ?? [];
+  const memberWhereabouts: MemberWhereabouts[] = profile.members.map((member) => {
+    const slot = slots.find((candidate) => candidate.memberId === member.id);
+    if (slot) {
+      return {
+        memberId: member.id,
+        status: SLOT_STATUS[slot.phase],
+        place: activityAnchor(w, entityAtGeneration(w, slot.place, slot.placeGen)),
+      };
+    }
+    return {
+      memberId: member.id,
+      status:
+        member.id === activeTravellerMemberId && agent !== null ? 'household' : 'home',
+      place: null,
+    };
+  });
 
   return {
     entity,
@@ -428,6 +463,7 @@ export function citizenDetail(
     happiness: citizenHappiness(citizen),
     breakdown,
     phase: citizen.phase,
+    memberWhereabouts,
     activity,
     status: describe({
       phase: citizen.phase,

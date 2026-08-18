@@ -53,6 +53,7 @@ function detailFor(person: CitizenMemberRef): CitizenDetail {
     waitUntil: 0,
     strandedAt: null,
     commuteCells: null,
+    memberWhereabouts: [],
   };
 }
 

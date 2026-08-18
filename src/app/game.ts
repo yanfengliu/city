@@ -236,6 +236,7 @@ export class Game {
     'commercial-work': 0,
     'industrial-work': 0,
     shopping: 0,
+    school: 0,
   };
   /** Last celebrated city rank (index into CITY_TITLES); -1 until first refresh. */
   private lastRank = -1;
@@ -558,7 +559,7 @@ export class Game {
       case 'pedestrians':
         this.pedestriansView.setPedestrians(message.list);
         this.pedestriansOnScreen = this.pedestriansView.count;
-        this.pedestrianPurposes = { 'commercial-work': 0, 'industrial-work': 0, shopping: 0 };
+        this.pedestrianPurposes = { 'commercial-work': 0, 'industrial-work': 0, shopping: 0, school: 0 };
         for (const pedestrian of message.list) this.pedestrianPurposes[pedestrian.purpose]++;
         break;
       case 'traffic': {

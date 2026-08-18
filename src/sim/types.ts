@@ -138,7 +138,7 @@ export interface BudgetReport {
 
 export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome' | 'toShop' | 'atShop';
 
-export type PedestrianPurpose = 'commercial-work' | 'industrial-work' | 'shopping';
+export type PedestrianPurpose = 'commercial-work' | 'industrial-work' | 'shopping' | 'school';
 
 /**
  * What a household does with the free-time half of its cycle. `shop` walks to
@@ -264,6 +264,28 @@ export interface PedestrianPathComponent {
   outbound: boolean;
 }
 
+/**
+ * One non-primary member out living their own simultaneous life (D2,
+ * simulation-realism.md § Daily routines). A slot exists only while that
+ * member is away or dwelling — no slot means home — so ordinary tick diffs
+ * stay small and legacy snapshots (no component at all) mean everyone home.
+ */
+export interface MemberTripSlot {
+  memberId: number;
+  /** Home is slot absence, so phases only cover being out. */
+  phase: 'toPlace' | 'atPlace' | 'toHome';
+  place: number;
+  /** Guards the place against entity-id recycling, like citizen.shopGen. */
+  placeGen: number;
+  purpose: 'school';
+  /** Next scheduled transition (dwell end); walker arrivals drive the rest. */
+  waitUntil: number;
+}
+
+export interface MemberTripComponent {
+  slots: MemberTripSlot[];
+}
+
 /** Small per-tick walking state for the segment between pathIndex and pathIndex + 1. */
 export interface PedestrianComponent {
   segmentIndex: number;
@@ -337,6 +359,7 @@ export type CityComponents = {
   /** Appended rare-write components; order is a save/replay registration contract. */
   citizenProfile: CitizenProfile;
   citizenLife: CitizenLifeComponent;
+  memberTrip: MemberTripComponent;
 };
 
 export type CityCommands = {
