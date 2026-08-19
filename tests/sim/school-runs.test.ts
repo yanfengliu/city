@@ -14,6 +14,8 @@ import { createCitizenProfile } from '../../src/sim/citizen-profile';
 import { citizenDetail } from '../../src/sim/citizen-detail';
 import type { CitizenLifeStage, CitizenProfile } from '../../src/sim/types';
 import { citizenOf, seedBuilding, seedCitizen } from './helpers';
+import { accessCell, buildingAccessCell } from '../../src/sim/traffic/pathing';
+import { schoolFor } from '../../src/sim/traffic/schools';
 
 /** A staged roster: primary adult worker plus the given stages for members 1/2. */
 function stagedProfile(base: CitizenProfile, stages: [CitizenLifeStage, CitizenLifeStage]): CitizenProfile {
@@ -230,6 +232,117 @@ describe('school runs (D2)', () => {
       }
     }
     expect(checked, 'saw the worker and the child out at the same time').toBe(true);
+  });
+
+  it('sends the child whenever the education overlay says the home is covered', { timeout: 60_000 }, () => {
+    // A diagonal home: Chebyshev (the coverage metric the player sees, and the
+    // one growth's `educated` reads) puts it well inside the radius, while
+    // Manhattan between access cells does not. The two must not disagree.
+    const sim = createCitySim({ seed: 21 });
+    const homeX = 20, homeY = 60, schoolX = 42, schoolY = 42;
+    for (let x = 18; x <= 46; x++) {
+      for (let y = 40; y <= 62; y++) {
+        const cell = cellIndex(x, y);
+        sim.terrain.water[cell] = 0;
+        sim.terrain.trees[cell] = 0;
+        sim.terrain.elevation[cell] = sim.terrain.seaLevel;
+      }
+    }
+    // An L of road so the two are genuinely connected by pavement.
+    expect(sim.world.submit('placeRoad', { ax: homeX, ay: homeY, bx: schoolX, by: homeY })).toBe(true);
+    sim.world.step();
+    expect(sim.world.submit('placeRoad', { ax: schoolX, ay: homeY, bx: schoolX, by: schoolY })).toBe(true);
+    sim.world.step();
+
+    const home = seedBuilding(sim, { x: homeX, y: homeY + 1, zone: 'R', residents: 1 });
+    const work = seedBuilding(sim, { x: homeX + 2, y: homeY + 1, zone: 'I', jobsFilled: 1 });
+    expect(sim.world.submit('placeService', { service: 'school', x: schoolX + 1, y: schoolY })).toBe(true);
+    sim.world.step();
+    rebuildDerived(sim);
+
+    // The gate: the overlay paints this home covered.
+    expect(sim.fields.coverage.school.getAt(homeX, homeY + 1), 'overlay says covered').toBeGreaterThan(0);
+    // Guard the instrument: this fixture must genuinely straddle the two
+    // metrics, or the test proves nothing.
+    const homeAccessCell = buildingAccessCell(sim, home)!;
+    const schoolEntity = [...sim.world.query('structure')].find(
+      (id) => sim.world.getComponent(id, 'structure')?.type === 'school',
+    )!;
+    const schoolAccessCell = accessCell(sim, schoolEntity)!;
+    const manhattan =
+      Math.abs((homeAccessCell % 128) - (schoolAccessCell % 128)) +
+      Math.abs(Math.floor(homeAccessCell / 128) - Math.floor(schoolAccessCell / 128));
+    expect(manhattan, 'fixture is Manhattan-far (the old gate would reject it)').toBeGreaterThan(32);
+
+    const citizen = seedCitizen(sim, home, work);
+    const base = createCitizenProfile(sim.seed, citizen, sim.world.getEntityGeneration(citizen), home);
+    const profile = stagedProfile(base, ['adult', 'child']);
+    sim.world.runMaintenance(() => {
+      sim.world.addComponent(citizen, 'citizenProfile', profile);
+    });
+    const childMemberId = profile.members.find((m) => m.lifeStage === 'child')!.id;
+
+    let attended = false;
+    for (let i = 0; i < TICKS_PER_DAY && !attended; i++) {
+      sim.world.step();
+      const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId);
+      if (slot) attended = true;
+    }
+    expect(attended, 'covered home sent its child to school').toBe(true);
+  });
+
+  it('does not let a nearer unreachable school shadow a reachable one', { timeout: 60_000 }, () => {
+    const { sim, citizen, home, school, childMemberId } = schoolTown({ seed: 13 });
+    // A second school NEARER by Manhattan but on its own isolated road stub —
+    // no pavement joins it to the home's component.
+    const stubY = 64;
+    for (let x = 17; x <= 26; x++) {
+      for (const row of [stubY, stubY + 1, stubY + 2]) {
+        const cell = cellIndex(x, row);
+        sim.terrain.water[cell] = 0;
+        sim.terrain.trees[cell] = 0;
+        sim.terrain.elevation[cell] = sim.terrain.seaLevel;
+      }
+    }
+    expect(sim.world.submit('placeRoad', { ax: 17, ay: stubY, bx: 26, by: stubY })).toBe(true);
+    sim.world.step();
+    expect(sim.world.submit('placeService', { service: 'school', x: 19, y: stubY + 1 })).toBe(true);
+    sim.world.step();
+    rebuildDerived(sim);
+
+    const homeAccess = buildingAccessCell(sim, home)!;
+    const homeComponent = sim.roadGraph.cellComponent.get(homeAccess);
+    const decoy = [...sim.world.query('structure')].find(
+      (id) => sim.world.getComponent(id, 'structure')?.type === 'school' && id !== school,
+    )!;
+    const dist = (cell: number) =>
+      Math.abs((homeAccess % 128) - (cell % 128)) +
+      Math.abs(Math.floor(homeAccess / 128) - Math.floor(cell / 128));
+    // Guard the instrument: unless the decoy is genuinely nearer AND genuinely
+    // on another component, this test cannot detect the shadowing it targets.
+    expect(dist(accessCell(sim, decoy)!), 'decoy is nearer').toBeLessThan(
+      dist(accessCell(sim, school!)!),
+    );
+    expect(
+      sim.roadGraph.cellComponent.get(accessCell(sim, decoy)!),
+      'decoy is on another road component',
+    ).not.toBe(homeComponent);
+
+    // Assert the choice itself: routing through the trip system cannot see this
+    // (an unreachable pick simply produces no walker, which is indistinguishable
+    // from "not morning yet" and made an earlier version of this test vacuous).
+    expect(schoolFor(sim, home), 'chose the reachable school, not the nearer decoy').toBe(school);
+
+    let attended = false;
+    for (let i = 0; i < TICKS_PER_DAY && !attended; i++) {
+      sim.world.step();
+      const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId);
+      if (slot?.place != null) {
+        expect(slot.place, 'walked to the reachable school').toBe(school);
+        attended = true;
+      }
+    }
+    expect(attended, 'child still attended the reachable school').toBe(true);
   });
 
   it('round-trips a mid-walk school run through save/load exactly', { timeout: 60_000 }, () => {

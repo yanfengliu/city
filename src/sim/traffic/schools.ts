@@ -12,7 +12,6 @@
  * owns school choice, slot mutation, and walker arrival/cancel consequences,
  * so pedestrians.ts → schools.ts stays a one-way import.
  */
-import { SERVICE_RADIUS } from '../constants/services';
 import { SCHOOL_RETURN_SPREAD_TICKS } from '../constants/routine';
 import { memberOffset, schoolReturnAt } from '../routine';
 import { markStranded } from '../happiness';
@@ -34,21 +33,43 @@ function cellDistance(width: number, a: number, b: number): number {
 }
 
 /**
- * The school this home attends: nearest road-served school within the school
- * service radius, by access-cell Manhattan distance with id as tie-break —
- * the ranking `nearestVenues` uses, so "covered" and "attends" agree.
+ * The school this home attends.
+ *
+ * The gate is the coverage layer itself — the very field the education overlay
+ * paints and that growth's `educated` reads — rather than a third re-derivation
+ * of the radius. Re-deriving it is what made "covered" and "attends" disagree:
+ * coverage is CHEBYSHEV from the school's anchor cell (SERVICE_RADIUS), so a
+ * diagonal home 22 east and 22 north read as solidly covered on the overlay
+ * while an access-cell Manhattan gate of 32 rejected it at 44, and no child in
+ * that home ever attended. Consuming the published field makes the three agree
+ * by construction instead of by two implementations that happen to match.
+ *
+ * Among covered homes the choice is the nearest school SHARING THE HOME'S ROAD
+ * COMPONENT, by access-cell Manhattan with id as tie-break — the ranking and
+ * the reachability filter `nearestVenues` uses. Without the component filter a
+ * nearer school across an unbridged river permanently shadowed a reachable one
+ * and the child simply never went.
+ *
+ * A home covered only by a school on another road component still returns null:
+ * that school is genuinely unwalkable, and D3 surfaces it as a diagnosable
+ * "no reachable school" rather than pretending attendance.
  */
 export function schoolFor(sim: CitySim, home: number): number | null {
+  const position = sim.world.getComponent(home, 'position');
+  if (!position || sim.fields.coverage.school.getAt(position.x, position.y) <= 0) return null;
   const homeAccess = buildingAccessCell(sim, home);
   if (homeAccess === null) return null;
+  const component = sim.roadGraph.cellComponent.get(homeAccess);
+  if (component === undefined) return null;
   let best: number | null = null;
   let bestDistance = Infinity;
   for (const id of [...sim.world.query('structure')].sort((a, b) => a - b)) {
     if (sim.world.getComponent(id, 'structure')?.type !== 'school') continue;
     const schoolAccess = accessCell(sim, id);
     if (schoolAccess === null) continue;
+    if (sim.roadGraph.cellComponent.get(schoolAccess) !== component) continue;
     const distance = cellDistance(sim.terrain.width, homeAccess, schoolAccess);
-    if (distance <= SERVICE_RADIUS.school && distance < bestDistance) {
+    if (distance < bestDistance) {
       best = id;
       bestDistance = distance;
     }
