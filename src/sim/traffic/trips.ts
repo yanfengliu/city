@@ -1,4 +1,5 @@
 import {
+  MAX_MEMBER_WALKERS,
   MAX_PEDESTRIANS,
   MAX_VEHICLES,
   PEDESTRIAN_WORK_MAX_CELLS,
@@ -415,7 +416,10 @@ function considerSchoolRuns(
   for (const member of members) {
     if (member.lifeStage !== 'child' && member.lifeStage !== 'teen') continue;
     if (memberSlots(w, citizenId).some((s) => s.memberId === member.id)) continue;
-    if (capacity.walkers >= MAX_PEDESTRIANS) return;
+    // Reserved headroom, not the whole pool: the member pass runs first each
+    // trip run, so an unreserved cap lets school runs shut commutes out of a
+    // large city's morning entirely (measured: 256/256 school walkers).
+    if (capacity.walkers >= MAX_MEMBER_WALKERS) return;
     const offset = memberOffset(
       sim.seed,
       citizenId,

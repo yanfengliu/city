@@ -2,6 +2,24 @@ export const MAX_VEHICLES = 600;
 /** Bounded visible household-member walkers; independent of vehicle capacity. */
 export const MAX_PEDESTRIANS = 256;
 
+/**
+ * Share of the walker pool the member pass (school runs) may occupy.
+ *
+ * The member pass runs before the household pass every trip run, so without a
+ * reservation it wins the race for the shared pool systematically rather than
+ * occasionally. Measured on a 494-household grid town where every home is
+ * school-covered: school walkers alone reached all 256 slots and the pool sat
+ * full for 8% of morning ticks, during which no commute or errand could start
+ * at all. Rosters average about one school-age member per household, so any
+ * large city hits this every single morning.
+ *
+ * Reserving a quarter of the pool for household legs keeps a rush hour visibly
+ * mixed — children AND commuters — instead of a morning that is all children.
+ * Bounded either way: whatever cannot start simply retries.
+ */
+export const MEMBER_WALKER_SHARE = 0.75;
+export const MAX_MEMBER_WALKERS = Math.floor(MAX_PEDESTRIANS * MEMBER_WALKER_SHARE);
+
 export const TRIP_INTERVAL = 8;
 export const TRIP_INTERVAL_OFFSET = 2;
 /** Trip-start candidates considered per system run. */

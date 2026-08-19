@@ -17,7 +17,7 @@ import { citizenDetail } from '../../src/sim/citizen-detail';
 import type { CitizenLifeStage, CitizenProfile } from '../../src/sim/types';
 import { citizenOf, seedBuilding, seedCitizen } from './helpers';
 import { accessCell, buildingAccessCell } from '../../src/sim/traffic/pathing';
-import { handleSchoolArrival, schoolFor } from '../../src/sim/traffic/schools';
+import { handleSchoolArrival, memberSlots, schoolFor } from '../../src/sim/traffic/schools';
 
 /** A staged roster: primary adult worker plus the given stages for members 1/2. */
 function stagedProfile(base: CitizenProfile, stages: [CitizenLifeStage, CitizenLifeStage]): CitizenProfile {
@@ -453,6 +453,47 @@ describe('school runs (D2)', () => {
       }
     }
     expect(collisions, 'one person carried by two agents at once').toEqual([]);
+  });
+
+  it('treats a corrupt member slot as absent instead of retiring the member', { timeout: 30_000 }, () => {
+    const { sim, citizen, childMemberId } = schoolTown({ seed: 29 });
+    // A slot nothing can service: no other code drops one, the due-loop only
+    // wakes `atPlace`, and the departure scan skips any member that has a slot
+    // — so an unrecognised phase would retire this child permanently.
+    sim.world.runMaintenance(() => {
+      sim.world.addComponent(citizen, 'memberTrip', {
+        slots: [
+          { memberId: childMemberId, phase: 'loitering', place: 1, placeGen: 0,
+            purpose: 'school', waitUntil: 0 },
+        ],
+      } as never);
+    });
+    expect(memberSlots(sim.world, citizen), 'corrupt slot is read as absent').toEqual([]);
+
+    let attended = false;
+    for (let i = 0; i < TICKS_PER_DAY * 2 && !attended; i++) {
+      sim.world.step();
+      const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId);
+      if (slot?.phase === 'toPlace' || slot?.phase === 'atPlace') attended = true;
+    }
+    expect(attended, 'child still went to school after the corrupt slot').toBe(true);
+  });
+
+  it('never spawns two walkers for one duplicated member slot', () => {
+    const { sim, citizen, childMemberId } = schoolTown({ seed: 31 });
+    sim.world.runMaintenance(() => {
+      sim.world.addComponent(citizen, 'memberTrip', {
+        slots: [
+          { memberId: childMemberId, phase: 'atPlace', place: 5, placeGen: 0,
+            purpose: 'school', waitUntil: 10 },
+          { memberId: childMemberId, phase: 'toHome', place: 6, placeGen: 0,
+            purpose: 'school', waitUntil: 20 },
+        ],
+      } as never);
+    });
+    const slots = memberSlots(sim.world, citizen);
+    expect(slots).toHaveLength(1);
+    expect(slots[0].phase, 'the first entry wins, deterministically').toBe('atPlace');
   });
 
   it('round-trips a mid-walk school run through save/load exactly', { timeout: 60_000 }, () => {

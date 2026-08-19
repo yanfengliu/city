@@ -77,8 +77,52 @@ export function schoolFor(sim: CitySim, home: number): number | null {
   return best;
 }
 
+const SLOT_PHASES = new Set<MemberTripSlot['phase']>(['toPlace', 'atPlace', 'toHome']);
+
+/** A slot this code can actually service; anything else is treated as absent. */
+function usableSlot(value: unknown, seen: Set<number>): value is MemberTripSlot {
+  if (typeof value !== 'object' || value === null) return false;
+  const slot = value as Partial<MemberTripSlot>;
+  if (!Number.isInteger(slot.memberId) || seen.has(slot.memberId as number)) return false;
+  if (!SLOT_PHASES.has(slot.phase as MemberTripSlot['phase'])) return false;
+  if (!Number.isInteger(slot.place) || !Number.isInteger(slot.placeGen)) return false;
+  if (!Number.isFinite(slot.waitUntil)) return false;
+  return true;
+}
+
+/**
+ * The member slots this household is actually carrying.
+ *
+ * Reads are repaired rather than trusted, following the `citizenProfile` and
+ * `citizenLife` precedent of sanitizing where stored data is consumed. A slot
+ * is uniquely dangerous if malformed: nothing else drops one, the due-loop only
+ * services `atPlace`, and the departure scan skips any member that already has
+ * a slot — so a single unrecognised `phase` from a hand-edited or corrupt save
+ * would silently retire that member forever, and a duplicate `memberId` would
+ * spawn two walkers for one person. Dropping the entry instead means the member
+ * is simply home, and departs again next morning.
+ *
+ * The common path allocates nothing: a slot list that is already clean is
+ * handed back as-is, since this is read inside the per-tick trip loops.
+ */
 export function memberSlots(w: CityWorld, citizenId: number): MemberTripSlot[] {
-  return w.getComponent(citizenId, 'memberTrip')?.slots ?? [];
+  const slots = w.getComponent(citizenId, 'memberTrip')?.slots;
+  if (!Array.isArray(slots) || slots.length === 0) return [];
+  const seen = new Set<number>();
+  let clean = true;
+  for (const slot of slots) {
+    if (!usableSlot(slot, seen)) { clean = false; break; }
+    seen.add(slot.memberId);
+  }
+  if (clean) return slots;
+  const repaired: MemberTripSlot[] = [];
+  const kept = new Set<number>();
+  for (const slot of slots) {
+    if (!usableSlot(slot, kept)) continue;
+    kept.add(slot.memberId);
+    repaired.push(slot);
+  }
+  return repaired;
 }
 
 function writeSlots(w: CityWorld, citizenId: number, slots: MemberTripSlot[]): void {
