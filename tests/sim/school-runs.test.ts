@@ -8,14 +8,16 @@ import {
 } from '../../src/protocol/city-clock';
 import {
   SCHOOL_RETURN_LOCAL_TICK,
+  SCHOOL_RETURN_SPREAD_TICKS,
 } from '../../src/sim/constants/routine';
+import { memberOffset, schoolDismissalAfter } from '../../src/sim/routine';
 import { CITIZEN_PRIMARY_MEMBER_ID } from '../../src/sim/constants/citizens';
 import { createCitizenProfile } from '../../src/sim/citizen-profile';
 import { citizenDetail } from '../../src/sim/citizen-detail';
 import type { CitizenLifeStage, CitizenProfile } from '../../src/sim/types';
 import { citizenOf, seedBuilding, seedCitizen } from './helpers';
 import { accessCell, buildingAccessCell } from '../../src/sim/traffic/pathing';
-import { schoolFor } from '../../src/sim/traffic/schools';
+import { handleSchoolArrival, schoolFor } from '../../src/sim/traffic/schools';
 
 /** A staged roster: primary adult worker plus the given stages for members 1/2. */
 function stagedProfile(base: CitizenProfile, stages: [CitizenLifeStage, CitizenLifeStage]): CitizenProfile {
@@ -343,6 +345,59 @@ describe('school runs (D2)', () => {
       }
     }
     expect(attended, 'child still attended the reachable school').toBe(true);
+  });
+
+  it('anchors dismissal to departure so the wrapping morning still gets a bell', () => {
+    const dawdle = 10;
+    const bell = SCHOOL_RETURN_LOCAL_TICK + dawdle;
+    const day = 5 * TICKS_PER_DAY;
+    // Departing before the bell: dismissal is later the same day.
+    expect(schoolDismissalAfter(day + bell - 200, dawdle)).toBe(day + bell);
+    // Departing in the morning window PAST local midnight's wrap — the bell is
+    // legitimately on the far side, not "already missed".
+    const wrapped = day + 3600;
+    expect(schoolDismissalAfter(wrapped, dawdle)).toBe(day + TICKS_PER_DAY + bell);
+    expect(schoolDismissalAfter(wrapped, dawdle)).toBeGreaterThan(wrapped);
+  });
+
+  it('sends a post-bell arrival straight home instead of holding it overnight', { timeout: 30_000 }, () => {
+    const { sim, citizen, school, childMemberId } = schoolTown({ seed: 17 });
+    // Drive the exact case a long winding walk produces: the child set out in
+    // the morning but only lands after their own bell has rung.
+    let walker: number | null = null;
+    for (let i = 0; i < TICKS_PER_DAY && walker === null; i++) {
+      sim.world.step();
+      const found = schoolWalkers(sim)[0];
+      const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId);
+      if (found !== undefined && slot?.phase === 'toPlace') walker = found;
+    }
+    expect(walker, 'a school walker to arrive').not.toBeNull();
+    const path = sim.world.getComponent(walker!, 'pedestrianPath')!;
+    const departedAt = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId)!.waitUntil;
+    const dawdle = memberOffset(
+      sim.seed,
+      citizen,
+      sim.world.getEntityGeneration(citizen),
+      sim.world.getComponent(citizen, 'citizen')!.home,
+      childMemberId,
+      SCHOOL_RETURN_SPREAD_TICKS,
+    );
+    const dismissal = schoolDismissalAfter(departedAt, dawdle);
+
+    // Step the world past the bell, then land the arrival.
+    while (sim.world.tick <= dismissal) sim.world.step();
+    expect(sim.world.tick, 'arriving after the bell').toBeGreaterThan(dismissal);
+    // Strict mode: component writes need a tick phase or a maintenance window.
+    sim.world.runMaintenance(() => handleSchoolArrival(sim, sim.world, path));
+
+    const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId)!;
+    expect(slot.phase).toBe('atPlace');
+    expect(
+      slot.waitUntil,
+      "a late arrival must be due home now, not at tomorrow's bell",
+    ).toBe(sim.world.tick);
+    expect(slot.waitUntil - sim.world.tick).toBeLessThan(TICKS_PER_DAY);
+    expect(slot.place).toBe(school);
   });
 
   it('round-trips a mid-walk school run through save/load exactly', { timeout: 60_000 }, () => {

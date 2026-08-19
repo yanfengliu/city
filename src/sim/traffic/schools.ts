@@ -13,7 +13,7 @@
  * so pedestrians.ts → schools.ts stays a one-way import.
  */
 import { SCHOOL_RETURN_SPREAD_TICKS } from '../constants/routine';
-import { memberOffset, schoolReturnAt } from '../routine';
+import { memberOffset, schoolDismissalAfter } from '../routine';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type {
@@ -126,6 +126,8 @@ export function handleSchoolArrival(
     return;
   }
   if (path.outbound) {
+    const departedAt =
+      memberSlots(w, path.citizen).find((s) => s.memberId === path.memberId)?.waitUntil ?? w.tick;
     const dawdle = memberOffset(
       sim.seed,
       path.citizen,
@@ -140,7 +142,11 @@ export function handleSchoolArrival(
       place: path.destination,
       placeGen: path.destinationGen,
       purpose: 'school',
-      waitUntil: schoolReturnAt(w.tick, dawdle),
+      // Max, not the raw dismissal: a walk long enough to land after the bell
+      // means the school day is already over, so the child turns around now
+      // rather than dwelling until tomorrow's bell — ~27 hours, through the
+      // night. The outbound slot's `waitUntil` is the tick they set out on.
+      waitUntil: Math.max(w.tick, schoolDismissalAfter(departedAt, dawdle)),
     });
   } else {
     dropMemberSlot(w, path.citizen, path.memberId);

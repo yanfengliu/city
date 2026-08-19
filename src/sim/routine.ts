@@ -117,10 +117,27 @@ export function schoolDepartureAt(tick: number, offset: number): number {
   return windowStart(tick, 'morning') + offset;
 }
 
-/** Dismissal: the 15:00 bell plus this child's own dawdle, next occurrence ≥ tick. */
-export function schoolReturnAt(tick: number, offset: number): number {
-  const local = localTick(tick);
+/**
+ * The dismissal this child is walking toward: the 15:00 bell plus their own
+ * dawdle, first occurrence after they SET OUT.
+ *
+ * Anchoring to departure rather than to the wall clock is the whole point. The
+ * morning window wraps past local midnight, so a child departing at local 3600
+ * is legitimately walking toward a bell at local 922 on the far side of the
+ * wrap; judging lateness by the arrival tick alone cannot tell that ordinary
+ * case apart from a genuine overshoot. Anchored at departure the two separate
+ * cleanly, and a caller that finds arrival past this moment knows the school
+ * day really is over.
+ *
+ * It matters because school legs have no path-length cap and the radius gate
+ * is crow-flies: a winding road can take far longer than the distance suggests.
+ * Before this, such an arrival booked TOMORROW's bell and the child dwelt at
+ * school through the evening, all night, and the next school day — ~27 hours,
+ * breaking the "at night the child is home" contract these tests assert.
+ */
+export function schoolDismissalAfter(departedAt: number, offset: number): number {
+  const local = localTick(departedAt);
   const bell = SCHOOL_RETURN_LOCAL_TICK + offset;
   const into = local <= bell ? bell - local : bell + TICKS_PER_DAY - local;
-  return tick + into;
+  return departedAt + into;
 }
