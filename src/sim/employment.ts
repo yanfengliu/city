@@ -10,6 +10,7 @@ import {
   withWorkerRole,
 } from './citizen-profile';
 import type { CitySim } from './city';
+import { isMemberSlotPurpose } from './types';
 import type { CityWorld, ZoneType } from './types';
 
 /**
@@ -23,7 +24,15 @@ export function unassignWorkers(sim: CitySim, w: CityWorld, building: number): v
     const citizen = w.getComponent(id, 'citizen');
     if (!citizen || citizen.work !== building) continue;
     for (const walker of [...w.query('pedestrianPath')]) {
-      if (w.getComponent(walker, 'pedestrianPath')?.citizen === id) w.destroyEntity(walker);
+      const path = w.getComponent(walker, 'pedestrianPath');
+      if (path?.citizen !== id) continue;
+      // A member's own trip is not this household's commute. Losing a job must
+      // not yank a child off the pavement mid-walk, and destroying that walker
+      // raw would strand its `memberTrip` slot forever — only walker arrival
+      // and `cancelPedestrian` drop a slot, so a slot whose walker vanished is
+      // never serviced again and serializes into every later save.
+      if (isMemberSlotPurpose(path.purpose)) continue;
+      w.destroyEntity(walker);
     }
     for (const vehicle of [...w.query('vehicle')].sort((a, b) => a - b)) {
       const data = w.getComponent(vehicle, 'vehicle');

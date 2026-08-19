@@ -141,6 +141,20 @@ export type TripPhase = 'home' | 'toWork' | 'atWork' | 'toHome' | 'toShop' | 'at
 export type PedestrianPurpose = 'commercial-work' | 'industrial-work' | 'shopping' | 'school';
 
 /**
+ * Purposes whose walker belongs to an individual member's `memberTrip` slot
+ * rather than to the household's own commute (D2). Two rules hang off this
+ * partition and both break silently if a new member purpose forgets it:
+ * such a walker may only be retired through `cancelPedestrian` (raw
+ * destruction strands the slot, which nothing else drops), and the household
+ * detail row must skip it (the member is described by its slot instead).
+ */
+export const MEMBER_SLOT_PURPOSES: readonly PedestrianPurpose[] = ['school'];
+
+export function isMemberSlotPurpose(purpose: PedestrianPurpose | undefined): boolean {
+  return purpose !== undefined && MEMBER_SLOT_PURPOSES.includes(purpose);
+}
+
+/**
  * What a household does with the free-time half of its cycle. `shop` walks to
  * the nearest commercial building; `leisure` walks to a park or community
  * garden within reach, or to nearby shops when neither is viable; `rest` stays

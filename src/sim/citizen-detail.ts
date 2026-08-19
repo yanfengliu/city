@@ -16,6 +16,7 @@ import {
   type HappinessBreakdown,
 } from './happiness';
 import type { CitySim } from './city';
+import { isMemberSlotPurpose } from './types';
 import type {
   CitizenActivity,
   CitizenLifeEvent,
@@ -246,6 +247,11 @@ function activeAgent(w: CityWorld, citizenId: number): {
   for (const id of [...w.query('pedestrianPath', 'pedestrian')].sort((a, b) => a - b)) {
     const path = w.getComponent(id, 'pedestrianPath');
     if (path?.citizen !== citizenId || path.citizenGen !== citizenGeneration) continue;
+    // A household owns several walkers at once since D2. A member's own trip is
+    // described by its `memberTrip` slot in `memberWhereabouts`, so binding the
+    // household row to it would report the commuter as home and print the
+    // member's destination, position, and travel verb for the commute.
+    if (isMemberSlotPurpose(path.purpose)) continue;
     return {
       agent: { kind: 'pedestrian', entity: id, generation: w.getEntityGeneration(id) },
       destination: entityAtGeneration(w, path.destination, path.destinationGen),

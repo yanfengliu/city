@@ -167,6 +167,71 @@ describe('school runs (D2)', () => {
     }
   });
 
+  it('keeps the school run alive when the household loses its workplace mid-walk', { timeout: 30_000 }, () => {
+    const { sim, citizen, work, childMemberId } = schoolTown({ seed: 5 });
+    // Step until the child is genuinely mid-walk to school.
+    let walking = false;
+    for (let i = 0; i < TICKS_PER_DAY && !walking; i++) {
+      sim.world.step();
+      const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId);
+      walking = slot?.phase === 'toPlace' && schoolWalkers(sim).length > 0;
+    }
+    expect(walking, 'child reached a mid-walk school leg').toBe(true);
+
+    // The parent's workplace is bulldozed out from under them. Losing a job is
+    // nothing to do with the child's school run, and must not strand the slot.
+    const { x, y } = sim.world.getComponent(work, 'position')!;
+    rebuildDerived(sim); // seeded buildings only enter occupiedCells here
+    expect(sim.world.submit('bulldozeRect', { ax: x, ay: y, bx: x, by: y })).toBe(true);
+    sim.world.step();
+    expect(citizenOf(sim, citizen).work, 'workplace cleared').toBeNull();
+
+    // The invariant the diff claims: a travelling slot always has its walker.
+    let reachedSchool = false;
+    let cameHome = false;
+    for (let i = 0; i < TICKS_PER_DAY; i++) {
+      sim.world.step();
+      const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId);
+      if (slot && (slot.phase === 'toPlace' || slot.phase === 'toHome')) {
+        expect(
+          schoolWalkers(sim).length,
+          `slot ${slot.phase} at tick ${sim.world.tick} with no school walker`,
+        ).toBeGreaterThan(0);
+      }
+      if (slot?.phase === 'atPlace') reachedSchool = true;
+      if (reachedSchool && !slot) cameHome = true;
+    }
+    expect(reachedSchool, 'child still reached school after the job loss').toBe(true);
+    expect(cameHome, 'child still came home after the job loss').toBe(true);
+  });
+
+  it('describes the household commuter, not the child, while both are out', { timeout: 30_000 }, () => {
+    const { sim, citizen, work, childMemberId } = schoolTown({ seed: 3 });
+    let checked = false;
+    for (let i = 0; i < TICKS_PER_DAY && !checked; i++) {
+      sim.world.step();
+      const slot = slotsOf(sim, citizen).find((s) => s.memberId === childMemberId);
+      const household = citizenOf(sim, citizen);
+      const householdOut = household.phase === 'toWork' || household.phase === 'toHome';
+      const childOut = slot?.phase === 'toPlace' || slot?.phase === 'toHome';
+      if (!householdOut || !childOut) continue;
+      checked = true;
+      const detail = citizenDetail(sim, citizen);
+      expect(detail, 'detail resolved').not.toBeNull();
+      // The household row is the commuter's, so its agent must not be the
+      // child's school walker riding in on a lower entity id.
+      const agentEntity = detail!.agent?.entity ?? null;
+      expect(
+        agentEntity === null || !schoolWalkers(sim).includes(agentEntity),
+        'household detail bound to the school walker',
+      ).toBe(true);
+      if (household.phase === 'toWork') {
+        expect(detail!.destination?.entity, 'commute destination is the workplace').toBe(work);
+      }
+    }
+    expect(checked, 'saw the worker and the child out at the same time').toBe(true);
+  });
+
   it('round-trips a mid-walk school run through save/load exactly', { timeout: 60_000 }, () => {
     const { sim, citizen } = schoolTown({ seed: 11 });
     // Step until the child is mid-walk to school.
