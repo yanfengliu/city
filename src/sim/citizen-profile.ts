@@ -352,8 +352,32 @@ export function storeCitizenProfile(
   }
 }
 
-/** Which named person owns a trip; the choice is stable and needs no RNG. */
+/**
+ * Which named person owns a trip; the choice is stable and needs no RNG.
+ *
+ * `busy` names members already out on their own `memberTrip` (D2) — a child
+ * still walking home from school, say. Without it the household's own leg
+ * could depart carrying an identity that is already on the pavement: the
+ * leisure traveller is the youngest member, which in most rosters IS the
+ * school child, so the same person appeared twice on the map with the same
+ * outfit and gait while the panel claimed both. Preference is unchanged when
+ * nobody is busy, so this cannot disturb a household whose members are home.
+ */
 export function travellerForActivity(
+  profile: CitizenProfile,
+  activity: CitizenActivity,
+  busy: ReadonlySet<number> = EMPTY_BUSY,
+): number {
+  const preferred = preferredTraveller(profile, activity);
+  if (!busy.has(preferred)) return preferred;
+  // Someone else at home takes this trip instead; if the whole roster is out,
+  // keep the preference rather than inventing a member.
+  return profile.members.find((entry) => !busy.has(entry.id))?.id ?? preferred;
+}
+
+const EMPTY_BUSY: ReadonlySet<number> = new Set();
+
+function preferredTraveller(
   profile: CitizenProfile,
   activity: CitizenActivity,
 ): number {

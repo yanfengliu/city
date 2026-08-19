@@ -79,7 +79,15 @@ function setTripTraveller(
   const citizen = w.getComponent(citizenId, 'citizen');
   if (!citizen) return null;
   const profile = profileForCitizen(sim, citizenId, citizen);
-  const memberId = memberOverride ?? travellerForActivity(profile, activity);
+  // Members already out on their own trip cannot also carry the household's.
+  // The override matters as much as the default here: a park or garden outing
+  // names its traveller by venue affinity, which lands on the youngest member
+  // — the same child most likely to still be walking home from school.
+  const busy = new Set(memberSlots(w, citizenId).map((slot) => slot.memberId));
+  const preferred = memberOverride ?? travellerForActivity(profile, activity, busy);
+  const memberId = busy.has(preferred)
+    ? travellerForActivity(profile, activity, busy)
+    : preferred;
   if (citizen.travellerMemberId !== memberId || (activity !== 'rest' && citizen.restUntil != null)) {
     w.patchComponent(citizenId, 'citizen', (data) => {
       data.travellerMemberId = memberId;

@@ -400,6 +400,61 @@ describe('school runs (D2)', () => {
     expect(slot.place).toBe(school);
   });
 
+  it('never puts the same person in two places at once', { timeout: 120_000 }, () => {
+    // A wider street than schoolTown: the school sits far from the homes, so a
+    // child's walk home is long enough to still be running when the household
+    // starts its own free-time outing. The household's leisure/shop traveller
+    // is chosen by life stage — usually that very child.
+    const sim = createCitySim({ seed: 11 });
+    const y = 60;
+    for (let x = 10; x <= 60; x++) {
+      for (const row of [y, y + 1, y + 2]) {
+        const cell = cellIndex(x, row);
+        sim.terrain.water[cell] = 0;
+        sim.terrain.trees[cell] = 0;
+        sim.terrain.elevation[cell] = sim.terrain.seaLevel;
+      }
+    }
+    expect(sim.world.submit('placeRoad', { ax: 10, ay: y, bx: 60, by: y })).toBe(true);
+    sim.world.step();
+    expect(sim.world.submit('placeService', { service: 'school', x: 46, y: y + 1 })).toBe(true);
+    sim.world.step();
+    expect(sim.world.submit('placeService', { service: 'park', x: 14, y: y + 1 })).toBe(true);
+    sim.world.step();
+    const homes: number[] = [];
+    for (let x = 18; x <= 30; x += 2) {
+      homes.push(seedBuilding(sim, { x, y: y + 1, zone: 'R', residents: 1 }));
+    }
+    const work = seedBuilding(sim, { x: 34, y: y + 1, zone: 'C', jobsFilled: homes.length });
+    rebuildDerived(sim);
+    for (const home of homes) {
+      const cz = seedCitizen(sim, home, work);
+      const base = createCitizenProfile(sim.seed, cz, sim.world.getEntityGeneration(cz), home);
+      const profile = stagedProfile(base, ['adult', 'child']);
+      sim.world.runMaintenance(() => {
+        sim.world.addComponent(cz, 'citizenProfile', profile);
+      });
+    }
+
+    const collisions: string[] = [];
+    for (let i = 0; i < TICKS_PER_DAY * 3 && collisions.length === 0; i++) {
+      sim.world.step();
+      const live = new Map<string, string>();
+      for (const id of [...sim.world.query('pedestrianPath')]) {
+        const path = sim.world.getComponent(id, 'pedestrianPath');
+        if (!path) continue;
+        const key = `${path.citizen}:${path.citizenGen}:${path.memberId}`;
+        if (live.has(key)) {
+          collisions.push(
+            `tick ${sim.world.tick}: ${key} on both a ${live.get(key)} and a ${path.purpose} walker`,
+          );
+        }
+        live.set(key, String(path.purpose));
+      }
+    }
+    expect(collisions, 'one person carried by two agents at once').toEqual([]);
+  });
+
   it('round-trips a mid-walk school run through save/load exactly', { timeout: 60_000 }, () => {
     const { sim, citizen } = schoolTown({ seed: 11 });
     // Step until the child is mid-walk to school.
