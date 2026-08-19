@@ -37,3 +37,4 @@ When a lesson becomes a gate — a test, a lint rule, a fixed command — delete
 - Visual bathymetry must read raw elevation before the land-surface projection ([evidence](lessons-evidence.md#visual-bathymetry-must-read-raw-elevation-before-the-land-surface-projection))
 - Water motion should animate lighting before it animates the mechanical plane ([evidence](lessons-evidence.md#water-motion-should-animate-lighting-before-it-animates-the-mechanical-plane))
 - `npm audit fix` can report a fix it never applies ([evidence](lessons-evidence.md#npm-audit-fix-can-report-a-fix-it-never-applies))
+- A test driven through the system it tests can pass while the defect is live ([evidence](lessons-evidence.md#a-test-driven-through-the-system-it-tests-can-pass-while-the-defect-is-live))
