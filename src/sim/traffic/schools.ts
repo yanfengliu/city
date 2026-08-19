@@ -12,11 +12,12 @@
  * owns school choice, slot mutation, and walker arrival/cancel consequences,
  * so pedestrians.ts → schools.ts stays a one-way import.
  */
-import { SCHOOL_RETURN_SPREAD_TICKS } from '../constants/routine';
+import { SCHOOLING_FRESH_TICKS, SCHOOL_RETURN_SPREAD_TICKS } from '../constants/routine';
 import { memberOffset, schoolDismissalAfter } from '../routine';
 import { markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type {
+  BuildingComponent,
   CityWorld,
   MemberTripSlot,
   PedestrianPathComponent,
@@ -105,6 +106,34 @@ function usableSlot(value: unknown, seen: Set<number>): value is MemberTripSlot 
  * The common path allocates nothing: a slot list that is already clean is
  * handed back as-is, since this is read inside the per-tick trip loops.
  */
+
+/**
+ * Marks a home's schooling obligation satisfied at this tick (D3).
+ *
+ * Stamped on the HOME BUILDING rather than the household, so the level gate can
+ * read it from the building it is already holding — no building-to-resident
+ * lookup in the per-tick level loop. The morning scan stamps homes with nobody
+ * of school age through the same door, so the gate reads one uniform field and
+ * never has to ask who lives where.
+ */
+export function creditSchooling(w: CityWorld, home: number): void {
+  if (!w.isAlive(home) || !w.getComponent(home, 'building')) return;
+  w.patchComponent(home, 'building', (b) => {
+    b.schoolingTick = w.tick;
+  });
+}
+
+/**
+ * Whether this home's schooling is current. An absent stamp means a snapshot
+ * from before D3 (or a home the morning scan has not reached yet) and reads as
+ * satisfied, so loading a legacy city never freezes its buildings at level 2.
+ */
+export function schoolingCurrent(building: BuildingComponent, tick: number): boolean {
+  const stamped = building.schoolingTick;
+  if (stamped === undefined || stamped === null) return true;
+  return tick - stamped <= SCHOOLING_FRESH_TICKS;
+}
+
 export function memberSlots(w: CityWorld, citizenId: number): MemberTripSlot[] {
   const slots = w.getComponent(citizenId, 'memberTrip')?.slots;
   if (!Array.isArray(slots) || slots.length === 0) return [];
@@ -179,6 +208,11 @@ export function handleSchoolArrival(
       citizen.home,
       path.memberId,
       SCHOOL_RETURN_SPREAD_TICKS,
+    );
+    creditSchooling(w, citizen.home);
+    w.setState(
+      'completedSchoolTrips',
+      ((w.getState('completedSchoolTrips') as number | undefined) ?? 0) + 1,
     );
     upsertMemberSlot(w, path.citizen, {
       memberId: path.memberId,

@@ -103,6 +103,8 @@ function detail(overrides: Partial<CitizenDetail> = {}): CitizenDetail {
     cell: 0,
     waitUntil: 0,
     strandedAt: null,
+    routineGap: null,
+    routineGapAt: null,
     commuteCells: 34,
     memberWhereabouts: [],
     ...overrides,

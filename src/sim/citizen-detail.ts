@@ -126,6 +126,13 @@ export interface CitizenDetail {
   waitUntil: number;
   /** Tick of their most recent unroutable trip, or null if none. */
   strandedAt: number | null;
+  /**
+   * A routine with nowhere to go (D3): the road is fine, the destination was
+   * never built or cannot be walked to. Distinct from `strandedAt` because the
+   * player's fix is different — build one, not repair the road.
+   */
+  routineGap: 'school' | 'shop' | null;
+  routineGapAt: number | null;
   /** Manhattan home→work distance in cells; null when unemployed. */
   commuteCells: number | null;
 }
@@ -492,6 +499,8 @@ export function citizenDetail(
     cell: cellIndex(x, y),
     waitUntil: citizen.waitUntil,
     strandedAt: citizen.strandedAt ?? null,
+    routineGap: citizen.routineGap ?? null,
+    routineGapAt: citizen.routineGapAt ?? null,
     commuteCells:
       home && work ? commuteCells(home.x, home.y, work.x, work.y) : null,
   };

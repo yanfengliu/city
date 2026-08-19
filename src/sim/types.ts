@@ -88,6 +88,13 @@ export interface BuildingComponent {
    */
   powered: boolean;
   watered: boolean;
+  /**
+   * Tick this home's schooling obligation was last satisfied (D3): a resident
+   * child arrived at school, or the morning scan found nobody of school age to
+   * send. Absent on snapshots predating it, which `schoolingCurrent` reads as
+   * "not yet evaluated" so a legacy city never stalls at level 2.
+   */
+  schoolingTick?: number | null;
 }
 
 /** Player-placed service building (2x2 footprint anchored at the position component). */
@@ -263,6 +270,20 @@ export interface CitizenComponent {
   travellerMemberId?: number;
   /** Exclusive end tick of a rest currently in progress at home. */
   restUntil?: number | null;
+  /**
+   * Tick of this household's most recent arrival at a staffed shop (D3) — the
+   * groceries half of routines feeding back. Null/absent means never.
+   */
+  groceryTick?: number | null;
+  /**
+   * Tick a routine last failed for want of a destination that exists but cannot
+   * be reached (D3): no school covers this home, or no shop is walkable. The
+   * `strandedAt` precedent, kept separate because the cause and the fix differ
+   * — stranded means the road broke, this means you never built the thing.
+   */
+  routineGapAt?: number | null;
+  /** Which routine had no destination, for the panel line and advisory. */
+  routineGap?: 'school' | 'shop' | null;
 }
 
 /** Immutable walking route; stored separately so tick diffs do not copy the path array. */

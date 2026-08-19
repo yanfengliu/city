@@ -13,7 +13,7 @@ import { pickFreeTimeActivity } from '../activities';
 import { profileForCitizen, travellerForActivity } from '../citizen-profile';
 import { departureOffsets, homeDepartureAt } from '../routine';
 import { handleSchoolArrival, handleSchoolCancel } from './schools';
-import { markStranded } from '../happiness';
+import { clearRoutineGap, markStranded } from '../happiness';
 import type { CitySim } from '../city';
 import type {
   CityWorld,
@@ -237,6 +237,14 @@ function arrive(
   // commercial building books retail. destinationValid has already run, so a
   // shopping-purpose destination is either a live shop or a live green venue.
   if (path.outbound && path.purpose === 'shopping' && w.getComponent(path.destination, 'building')) {
+    // Groceries are the same arrival, seen from the household's side (D3): the
+    // sale books the city's books, this books the cupboard. A green-venue
+    // outing is deliberately excluded by the same building check — a walk in
+    // the park is not the shop.
+    w.patchComponent(path.citizen, 'citizen', (data) => {
+      data.groceryTick = w.tick;
+    });
+    clearRoutineGap(w, path.citizen);
     w.setState(
       'pendingRetailVisits',
       ((w.getState('pendingRetailVisits') as number | undefined) ?? 0) + 1,

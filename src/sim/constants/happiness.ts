@@ -74,3 +74,23 @@ export const HAPPINESS_TAX_PER_POINT = -0.015;
 
 /** The home building is gone — nothing else about the household can be read. */
 export const HAPPINESS_NO_HOME = -0.4;
+
+
+/**
+ * Groceries (D3). A household that has actually reached a staffed shop lately
+ * is a little better off; one that has not is a little worse. Deliberately
+ * milder than STRANDED, because going without a shop is an inconvenience the
+ * player can fix by zoning, not a broken city — and because a brand-new
+ * household has simply not shopped yet and should not be punished for it.
+ */
+export const HAPPINESS_GROCERIES = 0.05;
+export const HAPPINESS_NO_GROCERIES = -0.06;
+
+/**
+ * A routine with nowhere to go — no school covers this home, no shop is
+ * walkable. Sits between the two above: worse than an empty cupboard, milder
+ * than a severed road, because the fix is to build the thing rather than to
+ * repair something broken.
+ */
+export const HAPPINESS_ROUTINE_GAP = -0.09;
+export const HAPPINESS_ROUTINE_GAP_MEMORY_TICKS = 8192;

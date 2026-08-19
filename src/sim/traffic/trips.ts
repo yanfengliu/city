@@ -22,11 +22,12 @@ import {
   workDepartureAt,
 } from '../routine';
 import { windowAt, windowStart } from '../../protocol/city-clock';
-import { markStranded } from '../happiness';
+import { clearRoutineGap, markRoutineGap, markStranded } from '../happiness';
 import { SCHOOL_DEPART_SPREAD_TICKS } from '../constants/routine';
 import { memberOffset, schoolDepartureAt } from '../routine';
 import { hasStoredCitizenProfile } from '../citizen-profile';
 import {
+  creditSchooling,
   memberSlots,
   schoolFor,
   upsertMemberSlot,
@@ -306,6 +307,11 @@ function startOutingLeg(
     const shop = chooseOutingDestination(sim, w, citizen.home, venues, activity, profile);
     const cells = shop === null ? null : findRoadCellPath(sim, citizen.home, shop);
     if (shop === null || !cells) {
+      // Nothing in reach at all is a gap the player can fix by zoning; a shop
+      // that exists but cannot be routed to is the road's fault and already
+      // counts as stranded. Only a shopping run reports the shop gap — an
+      // evening with no park to walk to is not a household need going unmet.
+      if (shop === null && activity === 'shop') markRoutineGap(w, citizenId, 'shop');
       w.patchComponent(citizenId, 'citizen', (data) => {
         data.nextActivity = 'work';
         data.shop = null;
@@ -413,8 +419,16 @@ function considerSchoolRuns(
   const members = hasStoredCitizenProfile(profile)
     ? profile.members
     : profileForCitizen(sim, citizenId, citizen).members;
-  for (const member of members) {
-    if (member.lifeStage !== 'child' && member.lifeStage !== 'teen') continue;
+  const schoolAge = members.filter(
+    (m) => m.lifeStage === 'child' || m.lifeStage === 'teen',
+  );
+  if (schoolAge.length === 0) {
+    // Nobody to send: the obligation is satisfied by having none, stamped
+    // through the same door so the level gate reads one uniform field.
+    creditSchooling(w, citizen.home);
+    return;
+  }
+  for (const member of schoolAge) {
     if (memberSlots(w, citizenId).some((s) => s.memberId === member.id)) continue;
     // Reserved headroom, not the whole pool: the member pass runs first each
     // trip run, so an unreserved cap lets school runs shut commutes out of a
@@ -430,9 +444,16 @@ function considerSchoolRuns(
     );
     if (schoolDepartureAt(w.tick, offset) > w.tick) continue;
     const school = schoolFor(sim, citizen.home);
-    if (school === null) return; // no covering school: nobody in this home attends
+    if (school === null) {
+      // No school covers this home, or the only one that does is on another
+      // road component. Silence here is what made D2's coverage bug invisible;
+      // record it so the panel and advisor can say so (D3).
+      markRoutineGap(w, citizenId, 'school');
+      return;
+    }
     const cells = findRoadCellPath(sim, citizen.home, school);
     if (!cells) continue; // covered but unroutable today; tomorrow retries
+    clearRoutineGap(w, citizenId);
     spawnPedestrian(w, citizenId, cells, school, 'school', true, member.id);
     upsertMemberSlot(w, citizenId, {
       memberId: member.id,

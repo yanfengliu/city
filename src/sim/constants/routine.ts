@@ -42,3 +42,21 @@ export const SCHOOL_RETURN_LOCAL_TICK = localTickOfFraction(SCHOOL_RETURN_FRACTI
 
 /** Dismissal shades over a short span so the walk home is a stream, not a spike. */
 export const SCHOOL_RETURN_SPREAD_TICKS = 96;
+
+
+/**
+ * How long a school arrival keeps a home's schooling "current" (D3).
+ *
+ * Slightly over a day, so one missed morning is not a penalty but a school
+ * that has genuinely stopped being reached goes stale within two. Homes with
+ * no school-age member are stamped by the same clock, so the gate below reads
+ * one uniform field rather than asking who lives where.
+ */
+export const SCHOOLING_FRESH_TICKS = 5000;
+
+/**
+ * How long a shopping arrival keeps a household's groceries stocked (D3).
+ * Households shop on the free-time slot, not daily, so this is deliberately
+ * looser than schooling.
+ */
+export const GROCERY_FRESH_TICKS = 12000;

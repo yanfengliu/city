@@ -12,6 +12,10 @@ import {
   HAPPINESS_PER_RUN,
   HAPPINESS_POWERED,
   HAPPINESS_SCALE,
+  HAPPINESS_GROCERIES,
+  HAPPINESS_NO_GROCERIES,
+  HAPPINESS_ROUTINE_GAP,
+  HAPPINESS_ROUTINE_GAP_MEMORY_TICKS,
   HAPPINESS_STRANDED,
   HAPPINESS_STRANDED_MEMORY_TICKS,
   HAPPINESS_TAX_PER_POINT,
@@ -20,6 +24,7 @@ import {
   HAPPINESS_UNWATERED,
   HAPPINESS_WATERED,
 } from './constants/happiness';
+import { GROCERY_FRESH_TICKS } from './constants/routine';
 import { SERVICE_BENEFIT_GROUPS } from './constants/services';
 import { DEFAULT_TAX_RATE } from './constants/zoning';
 import { CITIZEN_PRIMARY_MEMBER_ID } from './constants/citizens';
@@ -51,6 +56,8 @@ export type HappinessFactorId =
   | 'employment'
   | 'commute'
   | 'stranded'
+  | 'groceries'
+  | 'routineGap'
   | 'taxes';
 
 export interface HappinessFactor {
@@ -194,6 +201,82 @@ function commuteDelta(cells: number): number {
   return HAPPINESS_COMMUTE_MAX * Math.min(1, over / span);
 }
 
+/**
+ * Records that a routine had nowhere to go (D3) — no school covers this home,
+ * or no shop is walkable. Deliberately separate from `markStranded`: stranded
+ * means a route broke and the fix is road connectivity, while this means the
+ * destination was never built or never reachable, and the fix is to place one.
+ * Telling a player "check road connectivity" when the real answer is "you have
+ * no school" is the kind of error message this repo treats as a defect.
+ */
+export function markRoutineGap(
+  w: CityWorld,
+  citizenId: number,
+  gap: 'school' | 'shop',
+): void {
+  const citizen = w.getComponent(citizenId, 'citizen');
+  if (!citizen) return;
+  if (citizen.routineGap === gap && citizen.routineGapAt === w.tick) return;
+  w.patchComponent(citizenId, 'citizen', (data) => {
+    data.routineGapAt = w.tick;
+    data.routineGap = gap;
+  });
+}
+
+/** Clears a recorded gap once the routine succeeds again. */
+export function clearRoutineGap(w: CityWorld, citizenId: number): void {
+  const citizen = w.getComponent(citizenId, 'citizen');
+  if (!citizen || (citizen.routineGapAt === null && citizen.routineGap === null)) return;
+  if (citizen.routineGapAt === undefined && citizen.routineGap === undefined) return;
+  w.patchComponent(citizenId, 'citizen', (data) => {
+    data.routineGapAt = null;
+    data.routineGap = null;
+  });
+}
+
+/** Groceries: proven by an actual arrival at a staffed shop, never by proximity. */
+function groceryFactor(w: CityWorld, citizen: CitizenComponent): HappinessFactor {
+  const stamped = citizen.groceryTick;
+  if (stamped === undefined || stamped === null) {
+    // Never shopped. A household that has only just moved in has not had the
+    // chance, so this is neutral rather than a penalty it cannot yet avoid.
+    return { id: 'groceries', label: 'No shopping trip on record yet', delta: 0 };
+  }
+  const ago = w.tick - stamped;
+  if (ago <= GROCERY_FRESH_TICKS) {
+    return {
+      id: 'groceries',
+      label: `Shopped ${ago} ticks ago — the cupboard is stocked`,
+      delta: HAPPINESS_GROCERIES,
+    };
+  }
+  return {
+    id: 'groceries',
+    label: `No shopping trip for ${ago} ticks — no staffed shop within reach`,
+    delta: HAPPINESS_NO_GROCERIES,
+  };
+}
+
+/** A routine with nowhere to go, named so the fix is obvious. */
+function routineGapFactor(w: CityWorld, citizen: CitizenComponent): HappinessFactor {
+  const at = citizen.routineGapAt;
+  const gap = citizen.routineGap;
+  if (at === undefined || at === null || !gap) {
+    return { id: 'routineGap', label: 'Every daily routine has somewhere to go', delta: 0 };
+  }
+  if (w.tick - at > HAPPINESS_ROUTINE_GAP_MEMORY_TICKS) {
+    return { id: 'routineGap', label: 'Every daily routine has somewhere to go', delta: 0 };
+  }
+  return {
+    id: 'routineGap',
+    label:
+      gap === 'school'
+        ? 'No school reaches this home — place one nearby, or connect the road to it'
+        : 'No shop is walkable from this home — zone Commercial within reach',
+    delta: HAPPINESS_ROUTINE_GAP,
+  };
+}
+
 function strandedFactor(w: CityWorld, citizen: CitizenComponent): HappinessFactor {
   if (!recentlyStranded(w, citizen)) {
     return { id: 'stranded', label: 'No trip has failed to find a route recently', delta: 0 };
@@ -261,6 +344,8 @@ export function computeHappiness(sim: CitySim, citizenId: number): HappinessBrea
     factors.push(landValueFactor(sim, x, y));
     factors.push(...employmentFactors(w, citizen, x, y));
     factors.push(strandedFactor(w, citizen));
+    factors.push(groceryFactor(w, citizen));
+    factors.push(routineGapFactor(w, citizen));
     factors.push(taxFactor(w, home.zone));
   }
 

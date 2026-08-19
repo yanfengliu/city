@@ -127,6 +127,11 @@ export interface FrameStats {
   employed: number;
   completedShoppingTrips: number;
   disconnectedTrips: number;
+  completedSchoolTrips: number;
+  /** Households whose child has no school in reach (D3). */
+  homesWithoutSchool: number;
+  /** Households with no walkable staffed shop (D3). */
+  homesWithoutShop: number;
   taxRates: TaxRates;
   /** Latest budget interval's totals; {income: 0, expenses: 0} before the first. */
   lastBudget: BudgetReport;

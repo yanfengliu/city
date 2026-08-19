@@ -15,6 +15,7 @@ import {
   UTILITY_ABANDON_EVALS,
 } from './constants/zoning';
 import { cellIndex, inBounds } from './grid';
+import { schoolingCurrent } from './traffic/schools';
 import type { CitySim } from './city';
 import type { BuildingComponent, CityWorld, DemandState, ZoneType } from './types';
 
@@ -280,8 +281,14 @@ export function levelSystem(sim: CitySim): (w: CityWorld) => void {
       }
 
       const nextLevelScore = building.level === 1 ? LEVEL2_SCORE : LEVEL3_SCORE;
+      // Coverage alone was the old gate. D3 adds the other half: a school that
+      // no child actually reaches teaches nobody, which is precisely the case a
+      // coverage overlay cannot see (it is unaware of roads). Homes with nobody
+      // of school age are stamped current by the morning scan, so this reads
+      // one uniform field rather than asking who lives here.
       const educationOk =
-        building.level < 2 || inputs.educated(position.x, position.y);
+        building.level < 2 ||
+        (inputs.educated(position.x, position.y) && schoolingCurrent(building, w.tick));
       if (building.level < MAX_LEVEL && score >= nextLevelScore && educationOk) {
         if (building.upEvals + 1 >= LEVEL_UP_EVALS) {
           w.patchComponent(id, 'building', (b) => {

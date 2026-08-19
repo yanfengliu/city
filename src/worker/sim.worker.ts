@@ -20,6 +20,7 @@ import { MovingAgentMessageSync } from './pedestrian-projection';
 import { CITY_WORKER_SIM_FLAGS } from './sim-config';
 import { simFailureMessage, unknownCommandRejection } from './failure-reporting';
 import { inspectCitizenResponse, inspectHomeResidentResponse } from './citizen-inspection';
+import type { CityWorld } from '../sim/types';
 import type {
   BuildingView,
   ClientToWorker,
@@ -111,6 +112,26 @@ const movingAgentMessages = new MovingAgentMessageSync();
 /** Every command the sim registers a handler for — powers the did-you-mean
  * hint on a rejected name. `hasCommandHandler` remains the authority; this is
  * only for the suggestion, so a stale entry can never admit a bad command. */
+/**
+ * How many households currently have a routine with nowhere to go (D3), split
+ * by cause so the advisor can name the fix instead of a generic failure. A
+ * scan, not a stored counter: the state is per-citizen and the advisor only
+ * needs it at stats cadence.
+ */
+function routineGapCounts(world: CityWorld): {
+  homesWithoutSchool: number;
+  homesWithoutShop: number;
+} {
+  let homesWithoutSchool = 0;
+  let homesWithoutShop = 0;
+  for (const id of world.query('citizen')) {
+    const gap = world.getComponent(id, 'citizen')?.routineGap;
+    if (gap === 'school') homesWithoutSchool++;
+    else if (gap === 'shop') homesWithoutShop++;
+  }
+  return { homesWithoutSchool, homesWithoutShop };
+}
+
 const KNOWN_COMMANDS: readonly string[] = [
   'bulldozeRect',
   'bulldozeRoad',
@@ -320,6 +341,8 @@ const onTickDiff: Parameters<typeof world.onDiff>[0] = (diff) => {
       completedShoppingTrips:
         (world.getState('completedShoppingTrips') as number | undefined) ?? 0,
       disconnectedTrips: (world.getState('disconnectedTrips') as number | undefined) ?? 0,
+      completedSchoolTrips: (world.getState('completedSchoolTrips') as number | undefined) ?? 0,
+      ...routineGapCounts(world),
       taxRates: (world.getState('taxRates') as TaxRates | undefined) ?? {
         r: DEFAULT_TAX_RATE,
         c: DEFAULT_TAX_RATE,

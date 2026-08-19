@@ -232,6 +232,7 @@ export class Game {
   private pedestrians = 0;
   private pedestriansOnScreen = 0;
   private completedShoppingTrips = 0;
+  private completedSchoolTrips = 0;
   private pedestrianPurposes: Record<PedestrianPurpose, number> = {
     'commercial-work': 0,
     'industrial-work': 0,
@@ -255,6 +256,8 @@ export class Game {
   private congestionBuckets: ReadonlyMap<number, number> = new Map();
   private employed = 0;
   private disconnectedTrips = 0;
+  private homesWithoutSchool = 0;
+  private homesWithoutShop = 0;
   private readonly commandFeedback = new CommandFeedback();
   private ready = false;
   private readonly recordPlaytest: boolean;
@@ -601,10 +604,13 @@ export class Game {
         this.pedestrians = message.stats.pedestrians;
         this.employed = message.stats.employed;
         this.completedShoppingTrips = message.stats.completedShoppingTrips;
+        this.completedSchoolTrips = message.stats.completedSchoolTrips;
         if (message.stats.disconnectedTrips > this.disconnectedTrips) {
           this.lastDisconnectAt = performance.now();
         }
         this.disconnectedTrips = message.stats.disconnectedTrips;
+        this.homesWithoutSchool = message.stats.homesWithoutSchool;
+        this.homesWithoutShop = message.stats.homesWithoutShop;
         this.power = message.stats.power;
         this.water = message.stats.water;
         this.refreshCitizenOnFrame();
@@ -1154,6 +1160,24 @@ export class Game {
         target: firstOf(all.filter((b) => b.abandoned)),
       });
     }
+    // A routine with nowhere to go is a different problem from a broken road,
+    // so it gets its own tip naming its own fix (D3). Saying "check road
+    // connectivity" to a player who simply has no school is the kind of
+    // unhelpful message this repo treats as a defect.
+    if (this.homesWithoutSchool > 0) {
+      out.push({
+        id: 'no-school',
+        text: `🎒 ${this.homesWithoutSchool} home${this.homesWithoutSchool === 1 ? '' : 's'} can’t send children to school — place a School in reach, or connect its road to theirs.`,
+        target: firstOf(live.filter((b) => b.zone === 'R')),
+      });
+    }
+    if (this.homesWithoutShop > 0) {
+      out.push({
+        id: 'no-shop',
+        text: `🛒 ${this.homesWithoutShop} home${this.homesWithoutShop === 1 ? '' : 's'} have no shop within walking distance — zone Commercial nearby so they can buy groceries.`,
+        target: firstOf(live.filter((b) => b.zone === 'R')),
+      });
+    }
     if (performance.now() - this.lastDisconnectAt < 15_000) {
       out.push({
         id: 'disconnected',
@@ -1311,6 +1335,9 @@ export class Game {
       pedestriansOnScreen: this.pedestriansOnScreen,
       pedestrianPurposes: this.pedestrianPurposes,
       completedShoppingTrips: this.completedShoppingTrips,
+      completedSchoolTrips: this.completedSchoolTrips,
+      homesWithoutSchool: this.homesWithoutSchool,
+      homesWithoutShop: this.homesWithoutShop,
       employed: this.employed,
       disconnectedTrips: this.disconnectedTrips,
       congestion: this.congestionTextState(),
