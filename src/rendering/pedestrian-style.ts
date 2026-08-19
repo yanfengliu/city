@@ -25,7 +25,15 @@ export const PEDESTRIAN_PURPOSE_TOP_PALETTES: Record<
   ],
 };
 
-/** Wardrobe palette selected by stable person identity, never by the current trip. */
+/**
+ * The everyday wardrobe, selected by stable person identity.
+ *
+ * `school` is deliberately NOT spread in here. Appending it would relocate
+ * every existing citizen's outfit, because the pick is `hash % length` — a
+ * longer list reshuffles the whole city. School walkers instead select from
+ * their own palette by the same identity hash (`pedestrianStyle`), so adding
+ * the school run changed nobody else's coat.
+ */
 export const PEDESTRIAN_TOP_COLORS = [
   ...PEDESTRIAN_PURPOSE_TOP_PALETTES['commercial-work'],
   ...PEDESTRIAN_PURPOSE_TOP_PALETTES['industrial-work'],
@@ -94,15 +102,29 @@ export function identityDraw(seed: number, salt: number): number {
   return mix32(seed ^ salt) / UINT32_RANGE;
 }
 
-/** Stable for one live pedestrian identity; a recycled generation gets a new outfit. */
+/**
+ * Stable for one live pedestrian identity; a recycled generation gets a new
+ * outfit.
+ *
+ * Everything that describes the body — height, width, skin, trousers — comes
+ * from identity alone, so a person stays recognisably themselves across trips.
+ * The top is the one deliberate exception: a school walker draws from the
+ * bright backpack-and-raincoat palette so a morning school run reads as
+ * children at a glance, which is the whole point of drawing it. Within that
+ * palette the pick is still the same identity hash, so a given child wears the
+ * same coat to school every day.
+ */
 export function pedestrianStyle(
   citizen: number,
   generation: number,
   memberId: number,
+  purpose?: PedestrianPurpose,
 ): PedestrianStyle {
   const base = pedestrianIdentitySeed(citizen, generation, memberId);
   const index = (salt: number, length: number): number => mix32(base ^ salt) % length;
-  const topColor = PEDESTRIAN_TOP_COLORS[index(0x2c1b3c6d, PEDESTRIAN_TOP_COLORS.length)];
+  const tops =
+    purpose === 'school' ? PEDESTRIAN_PURPOSE_TOP_PALETTES.school : PEDESTRIAN_TOP_COLORS;
+  const topColor = tops[index(0x2c1b3c6d, tops.length)];
   const skinColor = PEDESTRIAN_SKIN_COLORS[index(0x7f4a7c15, PEDESTRIAN_SKIN_COLORS.length)];
   return {
     topColor,

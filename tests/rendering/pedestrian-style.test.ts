@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PEDESTRIAN_BOTTOM_COLORS,
   PEDESTRIAN_SKIN_COLORS,
+  PEDESTRIAN_PURPOSE_TOP_PALETTES,
   PEDESTRIAN_TOP_COLORS,
   identityDraw,
   pedestrianIdentitySeed,
@@ -48,6 +49,45 @@ describe('pedestrianStyle', () => {
     // Both readings appear on a crowd; neither is a rounding artefact.
     expect(sleeved.length).toBeGreaterThan(8);
     expect(styles.length - sleeved.length).toBeGreaterThan(8);
+  });
+});
+
+describe('school wardrobe', () => {
+  it('dresses school walkers from the school palette', () => {
+    for (const [citizen, gen, member] of [[7, 0, 1], [21, 5, 2], [63, 2, 3]] as const) {
+      const school = pedestrianStyle(citizen, gen, member, 'school');
+      expect(
+        PEDESTRIAN_PURPOSE_TOP_PALETTES.school,
+        'school run wears the bright palette',
+      ).toContain(school.topColor);
+    }
+  });
+
+  it('leaves every other outfit exactly where it was', () => {
+    // The trap this guards: spreading the school colors into the everyday
+    // wardrobe would move every citizen's coat, because the pick is
+    // `hash % length`. Non-school walkers must be untouched by the school run
+    // existing at all.
+    for (const purpose of ['commercial-work', 'industrial-work', 'shopping'] as const) {
+      for (const [citizen, gen, member] of [[7, 0, 1], [21, 5, 2], [63, 2, 3]] as const) {
+        const styled = pedestrianStyle(citizen, gen, member, purpose);
+        const unstyled = pedestrianStyle(citizen, gen, member);
+        expect(styled).toEqual(unstyled);
+        expect(PEDESTRIAN_TOP_COLORS).toContain(styled.topColor);
+      }
+    }
+  });
+
+  it('keeps the same child in the same coat, and the same body across trips', () => {
+    const a = pedestrianStyle(21, 5, 2, 'school');
+    const b = pedestrianStyle(21, 5, 2, 'school');
+    expect(a).toEqual(b);
+    // Body stays identity-stable even though the coat changes with the trip.
+    const offDuty = pedestrianStyle(21, 5, 2, 'shopping');
+    expect(a.heightScale).toBe(offDuty.heightScale);
+    expect(a.widthScale).toBe(offDuty.widthScale);
+    expect(a.skinColor).toBe(offDuty.skinColor);
+    expect(a.bottomColor).toBe(offDuty.bottomColor);
   });
 });
 

@@ -154,8 +154,10 @@ benchmarks/results/
 # Local Playwright CLI snapshots and session metadata
 .playwright-cli/
 
-# Multi-review captures and other task-local evidence sinks
-tmp/review-runs/
+# Multi-review captures, driver scripts, and other task-local evidence sinks.
+# The whole directory, not just review-runs/: screenshots and one-off drivers
+# land here too, and canon keeps task-run evidence out of Git entirely.
+tmp/
 test-results/
 playwright-report/
 evidence/

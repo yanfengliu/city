@@ -300,7 +300,12 @@ export class PedestriansView {
       next.set(pedestrian.id, {
         generation: pedestrian.generation,
         citizen,
-        style: pedestrianStyle(identityCitizen, identityGeneration, identityMember),
+        style: pedestrianStyle(
+          identityCitizen,
+          identityGeneration,
+          identityMember,
+          pedestrian.purpose,
+        ),
         gait: pedestrianGait(identityCitizen, identityGeneration, identityMember),
         motion: retargetVehicleMotion(continuing?.motion, previousAlpha, target.pose),
         // The odometer is retargeted like the pose: from what was on screen.
