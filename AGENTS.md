@@ -8,10 +8,11 @@ The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless
 
 Stack: Vite + TypeScript (strict) + Three.js + civ-engine + Vitest. Desktop browser only; single primary canvas; the first screen is the playable game, not a landing page.
 
-<!-- FLEET-CANON:BEGIN sha=b052162ef462 generated from ../fleet/FLEET.md by `npm run sync-canon` — do not edit inside this block; this repo's own rules go in docs/policies/local-rules.md -->
+<!-- FLEET-CANON:BEGIN sha=5364da321722 generated from ../fleet/FLEET.md by `npm run sync-canon` — do not edit inside this block; this repo's own rules go in docs/policies/local-rules.md -->
 ## Fleet constitution
 
-- Verify visual work visually: capture the rendered result — screenshot, frame, recording — and look at it, because a passing test says nothing about what the pixels do. Work with no visual surface runs headlessly. Confirming the change you made is only half of it: every task ends with a sweep of the whole rendered result, looking for what is wrong rather than for what you touched. Defects hide in the parts nobody was working on, and the ones a user finds first are almost always there.
+- Verify visual work visually: capture the rendered result — screenshot, frame, recording — and look at it, because a passing test says nothing about what the pixels do. Work with no visual surface runs headlessly. One framing is not a check: sweep several camera angles and zoom levels, since a defect the chosen view happens to hide is the normal case. Confirming the change you made is only half of it: every task ends with a sweep of the whole rendered result, looking for what is wrong rather than for what you touched. Defects hide in the parts nobody was working on, and the ones a user finds first are almost always there.
+- A defect the user reports is recorded and gated, never only fixed: an entry in `docs/learning/defect-register.md` — symptom as they saw it, investigation, root cause, and how it is checked from now on — plus a check that covers the defect's whole class rather than the one instance. Unlike a lesson, the entry stays after it becomes a gate: the register is the standing list of what the gates could not see, which is where the next defect comes from.
 - Commit each verified unit of change to `main` without being asked, and push. Gates pass before any commit that touches code; a dependency change re-runs the audit gate.
 - A repo chooses its own language and toolchain — Node, Python, and Rust all run here. Each pins its version where its own tooling reads it (`.nvmrc`, `requires-python`, `rust-toolchain.toml`) and names it in Gates, so a version mismatch is not read as a code failure. Node repos baseline at 24; an older major keeps a CI job proving it.
 - Runtime model calls are authorized and already paid for — this fleet has one user, with Claude Code and Codex subscriptions — so a program here may call a model at runtime, vision included.
@@ -48,7 +49,7 @@ Read `PROGRESS.md`, `docs/architecture/architecture.md`, and `docs/policies/loca
 - TDD for sim behavior: write the failing contract test first, scenario-level where possible ("after N ticks of X, Y holds"); test the contract, not the implementation.
 - No magic numbers — tunable gameplay values live in `src/sim/constants/` domain files.
 - Files under 500 LOC. 2-space indentation.
-- Do not ship a visual feature without verifying it in a browser screenshot. Expose `window.render_game_to_text()` and `window.advanceTime(ms)` for automated playtesting; init Three.js with `preserveDrawingBuffer: true` so screenshots capture WebGL.
+- `npm run visual:sweep` is how the canon's multi-angle visual check is run here: every model from four azimuths at two distances, one contact sheet per subject under `output/visual-sweep/<stamp>/`. Review the sheets. Expose `window.render_game_to_text()` and `window.advanceTime(ms)` for automated playtesting; init Three.js with `preserveDrawingBuffer: true` so screenshots capture WebGL.
 - Game testing loop for meaningful gameplay changes: implement a small behavior with its headless test → dev server → drive the game in a real browser → check `render_game_to_text()` output, screenshots, and controls agree → fix and repeat. Verify before calling the game complete: road place/bulldoze, zone paint/erase, service and utility placement, camera orbit/pan/zoom, overlays, speed/pause, save/load/reset, demand meter and budget reacting to play, traffic visibly flowing and congesting.
 - Do not edit the civ-engine repo unless the user asks; if an engine bug or missing feature blocks the game, note it in `PROGRESS.md` and work around it here. The engine is pinned as `file:../civ-engine`.
 - Repo review lenses for adversarial passes: correctness, sim-determinism, engine-contract, rendering/perf.
@@ -59,4 +60,4 @@ Read `PROGRESS.md`, `docs/architecture/architecture.md`, and `docs/policies/loca
 - `docs/architecture/architecture.md` — code boundaries, worker protocol, data flow.
 - `PROGRESS.md` — current status and next steps; keep it current while working (original prompt at top, then implementation notes, test runs, findings, and next steps per phase).
 - `docs/harness.md` — the LLM playtest → annotate → replay → improve harness (`npm run playtest:llm`, `npm run playtest:recursive`).
-- `docs/learning/lessons.md` — per the fleet evidence-anchor rule.
+- `docs/learning/lessons.md` — per the fleet evidence-anchor rule; `docs/learning/defect-register.md` — every defect the user has reported, and the check that now covers its class. Read the register before touching a surface it names.

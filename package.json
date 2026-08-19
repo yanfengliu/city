@@ -16,6 +16,7 @@
     "hooks:install": "git config core.hooksPath .githooks",
     "git:artifacts:staged": "node scripts/check-git-artifacts.mjs --staged",
     "git:artifacts:range": "node scripts/check-git-artifacts.mjs --range",
+    "visual:sweep": "node scripts/visual-sweep.mjs",
     "playtest:llm": "node scripts/llm-visual-loop.mjs",
     "playtest:recursive": "node scripts/playtest-recursive.mjs",
     "lessons:check": "node scripts/check-lessons.mjs"

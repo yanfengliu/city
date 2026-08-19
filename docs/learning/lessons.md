@@ -39,3 +39,4 @@ When a lesson becomes a gate — a test, a lint rule, a fixed command — delete
 - `npm audit fix` can report a fix it never applies ([evidence](lessons-evidence.md#npm-audit-fix-can-report-a-fix-it-never-applies))
 - A test driven through the system it tests can pass while the defect is live ([evidence](lessons-evidence.md#a-test-driven-through-the-system-it-tests-can-pass-while-the-defect-is-live))
 - A silhouette-joint check must measure the tightest side, not the widest ([evidence](lessons-evidence.md#a-silhouette-joint-check-must-measure-the-tightest-side-not-the-widest))
+- A camera you set is not the camera that took the frame ([evidence](lessons-evidence.md#a-camera-you-set-is-not-the-camera-that-took-the-frame))

@@ -239,8 +239,11 @@ export function addSchool(
       SCHOOL_CLOCK_HUB_COLOR),
   );
   f.post('flag-pole', 0.46, 0.5, top, top + SCHOOL_FLAG_HEIGHT, 0.013, SCHOOL_POLE_COLOR);
+  // Flag starts at the pole's axis, not at its radius: the 6-sided post only
+  // reaches its circumradius at a vertex, so a flag hung off that figure hangs
+  // off nothing between vertices. The socketed length is inside the post.
   f.part('flag', () =>
-    builder.coloredBox(f.u(0.46) + 0.013, top + 1.26, f.v(0.5) - 0.006, f.u(0.46) + 0.193,
+    builder.coloredBox(f.u(0.46), top + 1.26, f.v(0.5) - 0.006, f.u(0.46) + 0.193,
       top + 1.36, f.v(0.5) + 0.006, colorOf(SCHOOL_FLAG_COLOR)),
   );
   f.box('yard', 0.42, 0.46, 0.92, 0.9, top, top + 0.01, SCHOOL_YARD_COLOR);
