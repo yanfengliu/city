@@ -62,19 +62,18 @@ const COLOR = new Color();
 const hashIndex = (cell: number, offset: number, count: number): number =>
   Math.min(count - 1, Math.floor(cellHash01(cell + offset) * count));
 
-const createCanopyGeometry = (
-  layer: TreeCanopyLayerSpec,
-  trunkHeight: number,
-): BufferGeometry => {
-  const centerY = trunkHeight + layer.lift + layer.height / 2;
-  if (layer.shape === 'cone') {
-    const geometry = new ConeGeometry(layer.radius, layer.height, 6);
-    geometry.translate(0, centerY, 0);
-    return geometry;
-  }
-  const geometry = new DodecahedronGeometry(1, 0);
-  geometry.scale(layer.radius, layer.height / 2, layer.radius);
-  geometry.translate(0, centerY, 0);
+const createCanopyGeometry = (layer: TreeCanopyLayerSpec, baseY: number): BufferGeometry => {
+  const geometry =
+    layer.shape === 'cone'
+      ? new ConeGeometry(layer.radius, layer.height, 6)
+      : new DodecahedronGeometry(1, 0).scale(layer.radius, layer.height / 2, layer.radius);
+  // Seat the layer on its true lowest vertex rather than on its nominal
+  // half-height: a faceted canopy's bottom edge sits well above the floor of
+  // its height box, so trusting the nominal figure hangs the foliage in the
+  // air above the trunk it is supposed to be growing out of.
+  geometry.computeBoundingBox();
+  const floor = geometry.boundingBox?.min.y ?? -layer.height / 2;
+  geometry.translate(0, baseY + layer.lift - floor, 0);
   return geometry;
 };
 
@@ -138,6 +137,7 @@ export class TreesView {
         5,
       );
       trunkGeometry.translate(0, spec.trunkHeight / 2, 0);
+      const canopyBase = spec.trunkHeight - spec.canopySink;
       const prefix = `trees-${spec.name}`;
       const archetype = {
         spec,
@@ -149,13 +149,13 @@ export class TreesView {
           `${prefix}-trunks`,
         ),
         lowerCanopies: createInstancedLayer(
-          createCanopyGeometry(spec.lower, spec.trunkHeight),
+          createCanopyGeometry(spec.lower, canopyBase),
           lowerMaterial,
           cells.length,
           `${prefix}-lower-canopies`,
         ),
         upperCanopies: createInstancedLayer(
-          createCanopyGeometry(spec.upper, spec.trunkHeight),
+          createCanopyGeometry(spec.upper, canopyBase),
           upperMaterial,
           cells.length,
           `${prefix}-upper-canopies`,

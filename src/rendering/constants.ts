@@ -110,6 +110,7 @@ export interface TreeCanopyLayerSpec {
   shape: TreeCanopyShape;
   radius: number;
   height: number;
+  /** Height of this layer's lowest point above the canopy base. */
   lift: number;
 }
 
@@ -117,6 +118,14 @@ export interface TreeArchetypeSpec {
   name: TreeArchetypeName;
   trunkHeight: number;
   trunkRadius: number;
+  /**
+   * How deep the foliage settles onto the trunk: the canopy base sits this far
+   * below the trunk top, so the trunk ends inside the leaves instead of the
+   * leaves hovering above its tip. A faceted canopy tapers to a narrow bottom
+   * edge, so it needs a deeper sink than a cone's flat base to close the joint
+   * from every angle.
+   */
+  canopySink: number;
   lower: TreeCanopyLayerSpec;
   upper: TreeCanopyLayerSpec;
 }
@@ -126,6 +135,7 @@ export const TREE_ARCHETYPES: readonly TreeArchetypeSpec[] = [
     name: 'conifer',
     trunkHeight: 0.34,
     trunkRadius: 0.055,
+    canopySink: 0.05,
     lower: { shape: 'cone', radius: 0.39, height: 0.84, lift: 0 },
     upper: { shape: 'cone', radius: 0.3, height: 0.7, lift: 0.5 },
   },
@@ -133,6 +143,7 @@ export const TREE_ARCHETYPES: readonly TreeArchetypeSpec[] = [
     name: 'broadleaf',
     trunkHeight: 0.48,
     trunkRadius: 0.075,
+    canopySink: 0.15,
     lower: { shape: 'faceted', radius: 0.385, height: 0.62, lift: 0.08 },
     upper: { shape: 'faceted', radius: 0.34, height: 0.48, lift: 0.48 },
   },
@@ -140,6 +151,7 @@ export const TREE_ARCHETYPES: readonly TreeArchetypeSpec[] = [
     name: 'columnar',
     trunkHeight: 0.5,
     trunkRadius: 0.06,
+    canopySink: 0.16,
     lower: { shape: 'faceted', radius: 0.24, height: 1.1, lift: 0.04 },
     upper: { shape: 'faceted', radius: 0.19, height: 0.78, lift: 0.67 },
   },

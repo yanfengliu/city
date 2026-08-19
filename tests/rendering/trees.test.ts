@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Color, InstancedMesh, Matrix4, Vector3 } from 'three';
+import { Color, InstancedMesh, Matrix4, Vector2, Vector3 } from 'three';
+import type { Box3, BufferGeometry } from 'three';
 
 import {
   TREE_ARCHETYPES,
@@ -26,11 +27,54 @@ const mesh = (view: TreesView, archetype: TreeArchetypeName, layer: (typeof LAYE
   return result;
 };
 
-const dimensions = (target: InstancedMesh): Vector3 => {
+const bounds = (target: InstancedMesh): Box3 => {
   target.geometry.computeBoundingBox();
-  const bounds = target.geometry.boundingBox;
-  if (!bounds) throw new Error('missing geometry bounds');
-  return bounds.getSize(new Vector3());
+  const box = target.geometry.boundingBox;
+  if (!box) throw new Error('missing geometry bounds');
+  return box;
+};
+
+const dimensions = (target: InstancedMesh): Vector3 => bounds(target).getSize(new Vector3());
+
+/**
+ * Narrowest radius of the horizontal slice the plane `y` cuts out of the mesh:
+ * every triangle edge straddling the plane is interpolated into a section
+ * polygon, and the result is that polygon's distance to the axis at its
+ * tightest side. Zero when the plane misses the geometry, or grazes a tapered
+ * tip that leaves daylight from some angles — both of which read as a canopy
+ * detached from its trunk. Valid for the convex, axis-centred canopy solids.
+ */
+const narrowestCrossSection = (geometry: BufferGeometry, y: number): number => {
+  const position = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  const vertexCount = index ? index.count : position.count;
+  const corner = (slot: number): Vector3 => {
+    const vertex = index ? index.getX(slot) : slot;
+    return new Vector3(position.getX(vertex), position.getY(vertex), position.getZ(vertex));
+  };
+  const outline: Vector2[] = [];
+  for (let slot = 0; slot < vertexCount; slot += 3) {
+    const triangle = [corner(slot), corner(slot + 1), corner(slot + 2)];
+    for (let edge = 0; edge < 3; edge++) {
+      const from = triangle[edge];
+      const to = triangle[(edge + 1) % 3];
+      if ((from.y - y) * (to.y - y) > 0 || from.y === to.y) continue;
+      const t = (y - from.y) / (to.y - from.y);
+      outline.push(new Vector2(from.x + (to.x - from.x) * t, from.z + (to.z - from.z) * t));
+    }
+  }
+  if (outline.length < 3) return 0;
+  outline.sort((a, b) => a.angle() - b.angle());
+  let narrowest = Infinity;
+  for (let i = 0; i < outline.length; i++) {
+    const from = outline[i];
+    const span = new Vector2().subVectors(outline[(i + 1) % outline.length], from);
+    const lengthSquared = span.lengthSq();
+    if (lengthSquared < 1e-12) continue;
+    const t = Math.max(0, Math.min(1, -from.dot(span) / lengthSquared));
+    narrowest = Math.min(narrowest, from.clone().addScaledVector(span, t).length());
+  }
+  return Number.isFinite(narrowest) ? narrowest : 0;
 };
 
 const luminance = (hex: number): number => {
@@ -119,6 +163,28 @@ describe('TreesView diversity', () => {
       const maximumReach =
         maximumRadius * maximumUniformScale * maximumWidthScale + TREE_POSITION_JITTER;
       expect(maximumReach).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it('seats every canopy on the trunk it grows from, with no daylight at the joint', () => {
+    const view = makeTrees();
+
+    for (const archetype of TREE_ARCHETYPES) {
+      const trunkTop = bounds(mesh(view, archetype.name, 'trunks')).max.y;
+      const lower = mesh(view, archetype.name, 'lower-canopies');
+      const upper = mesh(view, archetype.name, 'upper-canopies');
+
+      // The foliage settles onto the trunk rather than hovering above its tip.
+      expect(bounds(lower).min.y).toBeLessThan(trunkTop);
+      // And it is broader than the trunk where the two meet — measured at the
+      // canopy's tightest side, so the joint closes from every angle rather
+      // than only from the one the faceted bottom edge happens to face.
+      expect(narrowestCrossSection(lower.geometry, trunkTop)).toBeGreaterThan(archetype.trunkRadius);
+
+      // The upper tier is seated on the lower one by the same rule.
+      const lowerTop = bounds(lower).max.y;
+      expect(bounds(upper).min.y).toBeLessThan(lowerTop);
+      expect(narrowestCrossSection(lower.geometry, bounds(upper).min.y)).toBeGreaterThan(0);
     }
   });
 
