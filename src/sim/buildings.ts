@@ -13,6 +13,7 @@ import {
   RECOVER_EVALS,
   RESIDENTIAL_LAND_VALUE_WEIGHT,
   UTILITY_ABANDON_EVALS,
+  UTILITY_ABANDON_SPREAD,
 } from './constants/zoning';
 import { cellIndex, inBounds } from './grid';
 import { schoolingCurrent } from './traffic/schools';
@@ -271,6 +272,19 @@ export function buildingEducationOk(
   );
 }
 
+/**
+ * How many consecutive unsupplied evaluations THIS building tolerates before
+ * its residents leave. Buildings zoned together start their grace on the same
+ * tick, so one shared threshold retires a whole district in a single cadence;
+ * spreading it by entity id makes the loss a visible drift instead of a cliff.
+ *
+ * The spread is entity-id arithmetic, never `world.random()` — it has to be
+ * identical on replay, and it must not consume the RNG stream.
+ */
+export function utilityAbandonThreshold(entity: number): number {
+  return UTILITY_ABANDON_EVALS + (entity % UTILITY_ABANDON_SPREAD);
+}
+
 /** The score a building must reach to reach its next level, or null at max. */
 export function nextLevelScore(level: number): number | null {
   if (level >= MAX_LEVEL) return null;
@@ -325,7 +339,7 @@ export function levelSystem(sim: CitySim): (w: CityWorld) => void {
         // (and the +10 bonus lifts a merely-depressed score back over the line).
         const abandonNow =
           (scoreBad && !utilitiesBad && building.badEvals + 1 >= ABANDON_EVALS) ||
-          (utilitiesBad && building.badUtilityEvals + 1 >= UTILITY_ABANDON_EVALS);
+          (utilitiesBad && building.badUtilityEvals + 1 >= utilityAbandonThreshold(id));
         if (abandonNow) {
           w.patchComponent(id, 'building', (b) => {
             b.abandoned = true;

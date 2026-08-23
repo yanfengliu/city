@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createCitySim, getTreasury, rebuildDerived } from '../../src/sim/city';
 import { PIPE_COST_PER_CELL } from '../../src/sim/constants/utilities';
-import { UTILITY_ABANDON_EVALS } from '../../src/sim/constants/zoning';
-import { LEVEL_INTERVAL } from '../../src/sim/constants/zoning';
+import {
+  LEVEL_INTERVAL,
+  UTILITY_ABANDON_EVALS,
+} from '../../src/sim/constants/zoning';
+import { TPS } from '../../src/sim/constants/map';
+import { utilityAbandonThreshold } from '../../src/sim/buildings';
 import { cellIndex, lPathCells } from '../../src/sim/grid';
 import {
   buildDistrict,
@@ -25,6 +29,39 @@ function poweredCounts(sim: CitySim) {
     else unpowered++;
   }
   return { powered, unpowered, abandoned };
+}
+
+/**
+ * Winds every building's unsupplied streak to `short` evaluations below ITS OWN
+ * grace. The grace is now spread per building, so a blanket step count either
+ * misses the earliest deadline or has to run past the latest — this lands every
+ * building exactly on its own boundary, and keeps the test off the 4-minute
+ * wall-clock the real grace represents.
+ */
+function ageUtilityStreak(sim: CitySim, short: number): void {
+  sim.world.runMaintenance(() => {
+    for (const id of [...sim.world.query('building')]) {
+      const threshold = utilityAbandonThreshold(id);
+      sim.world.patchComponent(id, 'building', (b) => {
+        b.badUtilityEvals = Math.max(0, threshold - short);
+      });
+    }
+  });
+}
+
+/**
+ * Winds every building to the SAME elapsed streak — which is what real play
+ * produces, since a district loses power on one tick. The spread lives in the
+ * thresholds, so this is the setup under which buildings separate.
+ */
+function setUtilityStreak(sim: CitySim, evals: number): void {
+  sim.world.runMaintenance(() => {
+    for (const id of [...sim.world.query('building')]) {
+      sim.world.patchComponent(id, 'building', (b) => {
+        b.badUtilityEvals = evals;
+      });
+    }
+  });
 }
 
 function seedDryBuilding(sim: CitySim, x: number, y: number): number {
@@ -65,8 +102,11 @@ describe('power network', () => {
     for (let i = 0; i < 20; i++) sim.world.step();
     expect(poweredCounts(sim).powered).toBe(0);
 
-    // Grace period expires → abandonment (unwatered counts through the same streak).
-    for (let i = 0; i < LEVEL_INTERVAL * (UTILITY_ABANDON_EVALS + 2); i++) sim.world.step();
+    // Each building's own grace expires → abandonment (unwatered counts through
+    // the same streak). Wound to one evaluation short of every deadline, then
+    // stepped past it.
+    ageUtilityStreak(sim, 1);
+    for (let i = 0; i < LEVEL_INTERVAL * 3; i++) sim.world.step();
     expect(poweredCounts(sim).abandoned).toBeGreaterThan(0);
 
     // Power + water the district: coal plant + pump + pipe along the spine.
@@ -105,6 +145,58 @@ describe('power network', () => {
     expect(poweredCounts(sim).abandoned).toBe(0);
   });
 
+  it('gives a new player minutes, not seconds, before an unsupplied district empties', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 18);
+    buildDistrict(sim, 'R', base);
+    for (let i = 0; i < 400; i++) sim.world.step();
+    const grown = poweredCounts(sim);
+    expect(grown.powered + grown.unpowered).toBeGreaterThan(4);
+
+    // The measured complaint: at the old 75-eval grace a starter district was
+    // completely empty 81 seconds after the first resident arrived. Every
+    // building must now still be standing well past that point.
+    const oldGraceTicks = LEVEL_INTERVAL * 75;
+    for (let i = 0; i < oldGraceTicks * 2; i++) sim.world.step();
+
+    expect(poweredCounts(sim).abandoned).toBe(0);
+    expect(UTILITY_ABANDON_EVALS * LEVEL_INTERVAL / TPS).toBeGreaterThanOrEqual(180);
+  });
+
+  it('empties an unsupplied district as a drift, never all at once', () => {
+    const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
+    const base = findLandBlock(sim, 18, 18);
+    buildDistrict(sim, 'R', base);
+    for (let i = 0; i < 400; i++) sim.world.step();
+    const counts = poweredCounts(sim);
+    const total = counts.unpowered + counts.powered;
+    expect(total).toBeGreaterThan(4);
+
+    // Read the district's real deadlines rather than assuming where they fall:
+    // the spread is entity-id arithmetic, so which building goes first depends
+    // on allocation order. (query() is a single-use generator — spread once.)
+    const thresholds = [...sim.world.query('building')].map(utilityAbandonThreshold);
+    const earliest = Math.min(...thresholds);
+    const latest = Math.max(...thresholds);
+    // Non-vacuous: if every building shared one deadline this test would prove
+    // nothing, so assert the spread actually separated THIS district.
+    expect(latest).toBeGreaterThan(earliest);
+
+    // One shared elapsed streak, just short of the earliest deadline — exactly
+    // what a district that lost power together looks like.
+    setUtilityStreak(sim, earliest - 1);
+    for (let i = 0; i < LEVEL_INTERVAL * 2; i++) sim.world.step();
+
+    const partial = poweredCounts(sim).abandoned;
+    expect(partial).toBeGreaterThan(0);
+    // The cliff this replaced: before the spread, that was every building.
+    expect(partial).toBeLessThan(total);
+
+    // The rest do follow, so the mechanic still has teeth.
+    for (let i = 0; i < LEVEL_INTERVAL * (latest - earliest + 4); i++) sim.world.step();
+    expect(poweredCounts(sim).abandoned).toBe(total);
+  });
+
   it('regaining utilities resets the utility-abandon streak (no premature abandon on flicker)', () => {
     const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
     // Drive the utility signal directly so we can flicker it precisely; the
@@ -122,7 +214,8 @@ describe('power network', () => {
     // Cut utilities and accumulate the utility-abandon streak to just under the
     // grace (never crossing it).
     hasPower = false;
-    for (let i = 0; i < LEVEL_INTERVAL * (UTILITY_ABANDON_EVALS - 8); i++) sim.world.step();
+    ageUtilityStreak(sim, 9);
+    for (let i = 0; i < LEVEL_INTERVAL * 8; i++) sim.world.step();
     expect(poweredCounts(sim).abandoned).toBe(0);
 
     // Restore utilities briefly — the buildings are fully healthy again, which

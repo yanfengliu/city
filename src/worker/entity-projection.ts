@@ -1,7 +1,7 @@
 import { footprintCells } from '../sim/buildings';
 import { SERVICE_FOOTPRINT } from '../sim/constants/services';
 import { POWER_PLANT_FOOTPRINT } from '../sim/constants/utilities';
-import { UTILITY_ABANDON_EVALS } from '../sim/constants/zoning';
+import { utilityAbandonThreshold } from '../sim/buildings';
 import { cellIndex } from '../sim/grid';
 import type { CitySim } from '../sim/city';
 import type {
@@ -48,9 +48,10 @@ export function projectBuildingView(
     jobsFilled: data.jobsFilled,
     powered: data.powered,
     watered: data.watered,
-    // Normalised so the renderer needs no sim constants to tell a building
-    // that just lost power from one about to be abandoned over it.
-    utilityDistress: Math.min(1, data.badUtilityEvals / UTILITY_ABANDON_EVALS),
+    // Normalised against THIS building's own grace, so the warning icon fills
+    // as its real deadline approaches — against the shared constant it would
+    // saturate early for every building whose grace was spread longer.
+    utilityDistress: Math.min(1, data.badUtilityEvals / utilityAbandonThreshold(id)),
   };
 }
 

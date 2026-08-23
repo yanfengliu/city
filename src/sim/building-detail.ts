@@ -4,6 +4,7 @@ import {
   buildingScore,
   footprintCells,
   nextLevelScore,
+  utilityAbandonThreshold,
   type BuildingScore,
 } from './buildings';
 import { GRID_HEIGHT, GRID_WIDTH } from './constants/map';
@@ -34,7 +35,6 @@ import {
   MAX_LEVEL,
   PEOPLE_PER_CITIZEN,
   RECOVER_EVALS,
-  UTILITY_ABANDON_EVALS,
 } from './constants/zoning';
 import { utilityTotals } from './utilities';
 import { coversCell } from './services';
@@ -354,7 +354,7 @@ function growableDetail(
       badEvals: building.badEvals,
       abandonEvals: ABANDON_EVALS,
       badUtilityEvals: building.badUtilityEvals,
-      utilityAbandonEvals: UTILITY_ABANDON_EVALS,
+      utilityAbandonEvals: utilityAbandonThreshold(entity),
       recoverEvals: building.recoverEvals,
       recoverEvalsNeeded: RECOVER_EVALS,
     },

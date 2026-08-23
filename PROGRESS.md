@@ -31,6 +31,20 @@ v1 COMPLETE. The full acceptance checklist is covered: **≥ 1,000 population wi
 
 ## Log
 
+### 2026-08-23 (later) — The game learns to wait
+
+User direction: lower the sensitivity for people to leave, because the game needs to be patient while the player builds up gradually.
+
+Measured first. A starter district — roads and R zoning, nothing else — filled to ~170 people by 23s, lost its first building at 60.3s, and was completely empty by 81s. The whole loss ran on the utility grace; the bad-location path never fired, because a serviced-nothing district still scores ~25 against a threshold of 12.
+
+`ABANDON_EVALS` 10 -> 60 (8s -> 48s at 1x) and `UTILITY_ABANDON_EVALS` 75 -> 300 (60s -> 240s). `ABANDON_SCORE` 12 -> 8 was tried and reverted: it did not make the game patient, it deleted the mechanic, because the same pollution-ruined block then scored 10 and never abandoned at all. Patience belongs in the time to react.
+
+The second half was the SHAPE of the loss. A district loses power on one tick, so a single shared threshold retired every building in the same cadence — a 21-second cliff after a 60-second wait. `utilityAbandonThreshold(entity)` spreads the grace by `entity % UTILITY_ABANDON_SPREAD` (150), so the earliest deadline is 240s and the latest 360s. It is integer arithmetic on the entity id, never `world.random()`, so it neither consumes the RNG stream nor changes replay. The building panel, the roof warning icon (`utilityDistress`), and `levelSystem` all read that one function.
+
+Re-measured: first loss 60s -> ~250s, empty 81s -> ~350s, decline window 21s -> ~100s. Browser-verified across three scripts: 189 people held for 249s with distress ramping 0.09 -> 0.99 the whole time; the decline frame shows a mix of grey and live warning-icon houses instead of a dead block; and a player who reacts to the warning keeps all 39 buildings (all powered and watered, 0 abandoned). Four "the product is broken" results during that verification were all the scaffold hardcoding coordinates onto procedural terrain — landed as a lesson.
+
+Gates: 866 tests, typecheck, zero-warning lint, production build. Both tuning changes mutation-checked (reverting the grace or the spread each turns a test red).
+
 ### 2026-08-23 — Per-type building panels, and a foldable inspector
 
 User direction: the resident panel was one crammed column, and every building had the same four flat lines. Both halves landed together.

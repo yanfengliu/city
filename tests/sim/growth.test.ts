@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createCitySim, getTreasury, type CitySim } from '../../src/sim/city';
 import { cellIndex } from '../../src/sim/grid';
-import { PEOPLE_PER_CITIZEN } from '../../src/sim/constants/zoning';
+import {
+  ABANDON_EVALS,
+  LEVEL_INTERVAL,
+  PEOPLE_PER_CITIZEN,
+  RECOVER_EVALS,
+} from '../../src/sim/constants/zoning';
 import type { DemandState, ZoneType } from '../../src/sim/types';
 
 /**
@@ -122,7 +127,9 @@ describe('abandonment via score inputs seam', () => {
       bx: base.x + 17,
       by: base.y + 25,
     });
-    for (let i = 0; i < 16 * 12; i++) sim.world.step();
+    // Scaled off the constant, not a literal: the bad-location grace is a
+    // tuning value and a hardcoded step count silently stops covering it.
+    for (let i = 0; i < LEVEL_INTERVAL * (ABANDON_EVALS + 2); i++) sim.world.step();
 
     let abandoned = 0;
     for (const id of sim.world.query('building')) {
@@ -134,7 +141,7 @@ describe('abandonment via score inputs seam', () => {
 
     // Restore land value → buildings recover at level 1.
     sim.scoreInputs.landValueAt = () => 30;
-    for (let i = 0; i < 16 * 8; i++) sim.world.step();
+    for (let i = 0; i < LEVEL_INTERVAL * (RECOVER_EVALS + 5); i++) sim.world.step();
     let stillAbandoned = 0;
     for (const id of sim.world.query('building')) {
       const b = sim.world.getComponent(id, 'building');

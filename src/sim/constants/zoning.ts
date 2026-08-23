@@ -18,10 +18,38 @@ export const MAX_LEVEL = 3;
 export const LEVEL2_SCORE = 45;
 export const LEVEL3_SCORE = 70;
 export const LEVEL_UP_EVALS = 3;
+/**
+ * Desirability below this is "bad". Left where it is on purpose: a starter
+ * district with utilities but no services scores ~25, so this threshold is
+ * reached only when land value has been genuinely destroyed (heavy industrial
+ * pollution beside unserviced homes). Lowering it to 8 was tried and reverted —
+ * it did not make the game patient, it deleted the mechanic, because the same
+ * ruined block then scored 10 and never abandoned at all. The patience belongs
+ * in the grace below, which is TIME to react, not in the threshold.
+ */
 export const ABANDON_SCORE = 12;
-export const ABANDON_EVALS = 10;
-/** Longer grace when only utilities are missing — ~60s at 1x, so onboarding does not mass-abandon (playtest round 1). */
-export const UTILITY_ABANDON_EVALS = 75;
+/**
+ * Consecutive bad-LOCATION evaluations before residents leave — 48s at 1x
+ * (LEVEL_INTERVAL / TPS per evaluation). It was 8s, which emptied homes beside
+ * a new factory before the player could react to the pollution overlay at all.
+ */
+export const ABANDON_EVALS = 60;
+/**
+ * Consecutive unsupplied evaluations before residents leave — 240s at 1x, up
+ * from 60s. MEASURED at 60s: a starter district filled to ~170 people by 22s
+ * and was completely empty by 81s, because the game gave a new player one
+ * minute to discover plants, lines, pumps, and pipes. Utilities still matter;
+ * the player is simply given time to get there.
+ */
+export const UTILITY_ABANDON_EVALS = 300;
+/**
+ * Deterministic per-building spread on that grace (see `utilityAbandonThreshold`).
+ * Buildings zoned together begin their grace on the same tick, so ONE shared
+ * threshold retires an entire district inside a single cadence — the measured
+ * failure was a 20-second cliff, not a decline. Spreading it turns the loss
+ * into a drift the player can see coming and still reverse.
+ */
+export const UTILITY_ABANDON_SPREAD = 150;
 export const RECOVER_EVALS = 3;
 /** Neutral inputs until later phases wire the real sources. */
 export const DEFAULT_LAND_VALUE = 30;
