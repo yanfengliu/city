@@ -17,8 +17,9 @@ export interface InputController {
  * Wires pointer/keyboard events on the canvas to the tool state machine.
  * Primary button starts build drags (MapControls' left-pan is disabled while
  * a build tool is active) or, with the select tool, inspects the clicked cell
- * (ignoring drags, which pan the camera); right-click or Escape cancels an
- * in-flight drag; middle/right buttons stay free for camera navigation.
+ * (ignoring drags, which pan the camera); right-click cancels an in-flight
+ * drag and Escape backs out one level (drag, then tool, then inspector);
+ * middle/right buttons stay free for camera navigation.
  */
 export function attachInput(
   element: HTMLElement,
@@ -119,7 +120,7 @@ export function attachInput(
   element.addEventListener('contextmenu', (event) => event.preventDefault());
 
   window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') tools.cancelDrag();
+    if (event.key === 'Escape') tools.escape();
   });
 
   return {

@@ -116,12 +116,31 @@ export function projectNetworks(
     const side = POWER_PLANT_FOOTPRINT[plant.kind];
     const cells = footprintCells(position.x, position.y, side, side);
     plantCells.push(...cells);
-    plants.push({ kind: plant.kind, x: position.x, y: position.y, w: side, h: side, cells });
+    plants.push({
+      id,
+      generation: world.getEntityGeneration(id),
+      kind: plant.kind,
+      x: position.x,
+      y: position.y,
+      w: side,
+      h: side,
+      cells,
+    });
   }
+  const pumps: WaterNetworkView['pumps'] = [];
   const pumpCells: number[] = [];
   for (const id of [...world.query('waterPump', 'position')].sort((a, b) => a - b)) {
     const position = world.getComponent(id, 'position');
-    if (position) pumpCells.push(cellIndex(position.x, position.y));
+    if (!position) continue;
+    const cell = cellIndex(position.x, position.y);
+    pumps.push({
+      id,
+      generation: world.getEntityGeneration(id),
+      x: position.x,
+      y: position.y,
+      cell,
+    });
+    pumpCells.push(cell);
   }
   return {
     power: {
@@ -130,6 +149,7 @@ export function projectNetworks(
       lineCells: [...sim.powerLineCells.keys()].sort((a, b) => a - b),
     },
     water: {
+      pumps,
       pumpCells,
       pipeCells: [...sim.pipeCells.keys()].sort((a, b) => a - b),
     },

@@ -1,4 +1,3 @@
-import { overlayStatusCss } from '../rendering/overlay-semantics';
 import {
   HUD_DIVIDER_COLOR,
   HUD_MUTED_TEXT,
@@ -7,10 +6,9 @@ import {
   hudButtonCss,
   hudIconButtonCss,
 } from './hud-style';
+import { MeterView, type InspectMeter } from './inspect-meter';
 
-/** At or above this the bar reads green; below METER_WARN_AT it reads red. */
-const METER_GOOD_AT = 0.6;
-const METER_WARN_AT = 0.3;
+export type { InspectMeter } from './inspect-meter';
 
 /** Desktop inspector dimensions are exported for a DOM-free layout contract. */
 export const INSPECT_PANEL_LAYOUT_CSS =
@@ -39,19 +37,43 @@ export function inspectPanelShouldResetScroll(
   return previousSubjectKey !== nextSubjectKey;
 }
 
-/** A labelled 0..1 bar, e.g. a household's happiness. */
-export interface InspectMeter {
-  label: string;
-  /** Clamped to 0..1 by the panel; drives both the bar and its colour. */
-  value: number;
-  /** Right-hand caption, e.g. "72% — content". */
-  caption: string;
-}
-
-/** A visually separated group within a rich inspector. */
+/** A visually separated, individually expandable group within an inspector. */
 export interface InspectSection {
+  /**
+   * Stable collapse-state key. Headings carry live counts ("Members (3)"), so
+   * keying on the heading alone would silently reopen a section the player
+   * closed the moment its count changed — always give a section an id.
+   */
+  id?: string;
   heading: string;
   lines: string[];
+  /** Bars rendered above the lines, e.g. occupancy or level progress. */
+  meters?: InspectMeter[];
+  /** One-line gist shown on the header row, readable while collapsed. */
+  summary?: string;
+  /** Default false: sections open unless a section asks to start closed. */
+  startCollapsed?: boolean;
+  /** Default true. A pinned section renders as a plain heading with no control. */
+  collapsible?: boolean;
+}
+
+/** Collapse-state key for one section (see `InspectSection.id`). */
+export function inspectSectionKey(section: InspectSection): string {
+  return section.id ?? section.heading;
+}
+
+/**
+ * Whether a section is expanded right now: the player's own toggle wins, and
+ * until they touch it the section's own default applies. Kept separate from the
+ * DOM so the "a live refresh must not reopen what I closed" rule is testable.
+ */
+export function inspectSectionOpen(
+  section: InspectSection,
+  toggles: ReadonlyMap<string, boolean>,
+): boolean {
+  if (section.collapsible === false) return true;
+  const toggled = toggles.get(inspectSectionKey(section));
+  return toggled ?? !(section.startCollapsed ?? false);
 }
 
 /** App-owned action. The panel only presents it and invokes its callback. */
@@ -68,32 +90,47 @@ export interface InspectData {
   /** Stable inspected-object identity; display titles are not necessarily unique. */
   subjectKey: string;
   title: string;
-  /** Flat fallback used by simple building panels and text-oriented consumers. */
+  /** Flat fallback used by simple panels and text-oriented consumers. */
   lines: string[];
-  /** Optional hierarchy for richer citizen details. */
+  /** Optional hierarchy for richer citizen and building details. */
   sections?: InspectSection[];
   /** Optional building/resident navigation supplied by the app controller. */
   actions?: InspectAction[];
   abandoned: boolean;
+  /** Optional subtitle under the title, e.g. "Level 2 · 2×2 at (14, 30)". */
+  subtitle?: string;
   /** Optional headline bar shown above the details (people show happiness). */
   meter?: InspectMeter;
+}
+
+/** Reused DOM for one section, so a refresh never rebuilds under the pointer. */
+interface SectionView {
+  root: HTMLElement;
+  header: HTMLButtonElement;
+  headingEl: HTMLSpanElement;
+  summaryEl: HTMLSpanElement;
+  caretEl: HTMLSpanElement;
+  body: HTMLDivElement;
+  meterHost: HTMLDivElement;
+  meters: MeterView[];
+  lineHost: HTMLDivElement;
+  lineEls: HTMLDivElement[];
 }
 
 /** Bottom-left selection inspector for buildings, structures, and citizens. */
 export class InspectPanel {
   private readonly root: HTMLDivElement;
   private readonly titleEl: HTMLSpanElement;
+  private readonly subtitleEl: HTMLDivElement;
   private readonly badgeEl: HTMLDivElement;
   private readonly bodyEl: HTMLDivElement;
   private readonly actionsEl: HTMLDivElement;
-  private readonly meterEl: HTMLDivElement;
-  private readonly meterLabelEl: HTMLDivElement;
-  private readonly meterNameEl: HTMLSpanElement;
-  private readonly meterCaptionEl: HTMLSpanElement;
-  private readonly meterTrackEl: HTMLDivElement;
-  private readonly meterFillEl: HTMLDivElement;
+  private readonly meterEl: MeterView;
   private readonly actionButtons: HTMLButtonElement[] = [];
-  private bodySignature: string | null = null;
+  private readonly sectionViews = new Map<string, SectionView>();
+  /** Player-toggled sections for the CURRENT subject only. */
+  private readonly sectionToggles = new Map<string, boolean>();
+  private lineViews: HTMLDivElement[] = [];
   private subjectKey: string | null = null;
 
   constructor(private readonly container: HTMLElement, onClose: () => void) {
@@ -119,35 +156,24 @@ export class InspectPanel {
     header.appendChild(closeButton);
     this.root.appendChild(header);
 
+    this.subtitleEl = document.createElement('div');
+    this.subtitleEl.style.cssText =
+      `margin-top:2px;color:${HUD_MUTED_TEXT};font-size:12px;line-height:1.3;display:none`;
+    this.root.appendChild(this.subtitleEl);
+
     this.badgeEl = document.createElement('div');
     this.badgeEl.textContent = 'Abandoned';
     this.badgeEl.style.cssText =
       `color:${HUD_NEGATIVE_TEXT};font-weight:bold;margin-top:4px;display:none`;
     this.root.appendChild(this.badgeEl);
 
-    this.meterEl = document.createElement('div');
-    this.meterEl.style.cssText = 'margin-top:9px;display:none';
-    this.meterLabelEl = document.createElement('div');
-    this.meterLabelEl.style.cssText =
-      'display:flex;justify-content:space-between;gap:10px;font-size:12px;line-height:1.25';
-    this.meterNameEl = document.createElement('span');
-    this.meterCaptionEl = document.createElement('span');
-    this.meterLabelEl.append(this.meterNameEl, this.meterCaptionEl);
-    this.meterTrackEl = document.createElement('div');
-    this.meterTrackEl.style.cssText =
-      'height:8px;margin-top:4px;border-radius:4px;overflow:hidden;background:rgba(20,40,45,.18)';
-    this.meterFillEl = document.createElement('div');
-    this.meterFillEl.style.cssText = 'height:100%;width:0%';
-    this.meterTrackEl.setAttribute('role', 'progressbar');
-    this.meterTrackEl.setAttribute('aria-valuemin', '0');
-    this.meterTrackEl.setAttribute('aria-valuemax', '100');
-    this.meterTrackEl.appendChild(this.meterFillEl);
-    this.meterEl.append(this.meterLabelEl, this.meterTrackEl);
-    this.root.appendChild(this.meterEl);
+    this.meterEl = new MeterView();
+    this.meterEl.root.style.cssText = 'margin-top:9px;display:none';
+    this.root.appendChild(this.meterEl.root);
 
     this.bodyEl = document.createElement('div');
     this.bodyEl.style.cssText =
-      'margin-top:8px;display:flex;flex-direction:column;gap:9px;line-height:1.35';
+      'margin-top:8px;display:flex;flex-direction:column;gap:2px;line-height:1.35';
     this.root.appendChild(this.bodyEl);
 
     this.actionsEl = document.createElement('div');
@@ -159,12 +185,15 @@ export class InspectPanel {
   }
 
   show(data: InspectData): void {
-    const resetScroll = inspectPanelShouldResetScroll(
-      this.subjectKey,
-      data.subjectKey,
-    );
+    const resetScroll = inspectPanelShouldResetScroll(this.subjectKey, data.subjectKey);
+    // Expansion belongs to the thing being looked at: a new subject starts from
+    // its own defaults, while a live refresh of the same subject must leave the
+    // player's open/closed choices exactly where they left them.
+    if (resetScroll) this.sectionToggles.clear();
     this.subjectKey = data.subjectKey;
     this.titleEl.textContent = data.title;
+    this.subtitleEl.textContent = data.subtitle ?? '';
+    this.subtitleEl.style.display = data.subtitle ? 'block' : 'none';
     this.badgeEl.style.display = data.abandoned ? 'block' : 'none';
     this.renderMeter(data.meter);
     this.renderBody(data);
@@ -177,41 +206,155 @@ export class InspectPanel {
   hide(): void {
     this.root.style.display = 'none';
     this.subjectKey = null;
+    this.sectionToggles.clear();
   }
 
   private renderBody(data: InspectData): void {
-    const signature = JSON.stringify(data.sections?.length ? data.sections : data.lines);
-    if (signature === this.bodySignature) return;
-    this.bodySignature = signature;
-    const scrollTop = this.root.scrollTop;
-    if (!data.sections || data.sections.length === 0) {
-      this.bodyEl.replaceChildren(...data.lines.map((line) => this.line(line)));
-      this.root.scrollTop = scrollTop;
+    const sections = data.sections ?? [];
+    if (sections.length === 0) {
+      this.clearSections();
+      this.renderFlatLines(data.lines);
       return;
     }
-    this.bodyEl.replaceChildren(
-      ...data.sections.map((section) => {
-        const sectionEl = document.createElement('section');
-        const heading = document.createElement('div');
-        heading.textContent = section.heading;
-        heading.setAttribute('role', 'heading');
-        heading.setAttribute('aria-level', '3');
-        heading.style.cssText =
-          `padding-top:6px;border-top:1px solid ${HUD_DIVIDER_COLOR};color:${HUD_MUTED_TEXT};` +
-          'font-size:11px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase';
-        const lines = document.createElement('div');
-        lines.style.cssText = 'margin-top:3px;display:flex;flex-direction:column;gap:2px';
-        lines.replaceChildren(...section.lines.map((line) => this.line(line)));
-        sectionEl.append(heading, lines);
-        return sectionEl;
-      }),
-    );
-    this.root.scrollTop = scrollTop;
+    this.renderFlatLines([]);
+    const live = new Set<string>();
+    for (let index = 0; index < sections.length; index++) {
+      const section = sections[index];
+      const key = inspectSectionKey(section);
+      live.add(key);
+      const view = this.sectionView(key);
+      this.updateSection(view, section, key);
+      // Only MOVE a section that is actually out of position. Re-appending an
+      // in-place node still detaches it, which blurs a focused header button —
+      // and this panel refreshes twice a second while a subject is open.
+      const atIndex = this.bodyEl.children[index];
+      if (atIndex !== view.root) this.bodyEl.insertBefore(view.root, atIndex ?? null);
+    }
+    for (const [key, view] of [...this.sectionViews]) {
+      if (live.has(key)) continue;
+      view.root.remove();
+      this.sectionViews.delete(key);
+    }
   }
 
-  private line(text: string): HTMLDivElement {
+  /** Flat-line mode for simple panels; reuses rows to avoid churn. */
+  private renderFlatLines(lines: string[]): void {
+    while (this.lineViews.length > lines.length) this.lineViews.pop()!.remove();
+    while (this.lineViews.length < lines.length) {
+      const row = this.line();
+      this.lineViews.push(row);
+      this.bodyEl.appendChild(row);
+    }
+    for (let i = 0; i < lines.length; i++) this.lineViews[i].textContent = lines[i];
+  }
+
+  private clearSections(): void {
+    for (const view of this.sectionViews.values()) view.root.remove();
+    this.sectionViews.clear();
+  }
+
+  private sectionView(key: string): SectionView {
+    const existing = this.sectionViews.get(key);
+    if (existing) return existing;
+
+    const root = document.createElement('section');
+    root.style.cssText = 'margin-top:7px';
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.style.cssText =
+      `width:100%;display:flex;align-items:baseline;gap:6px;padding:6px 0 0;` +
+      `border:0;border-top:1px solid ${HUD_DIVIDER_COLOR};background:none;cursor:pointer;` +
+      `color:${HUD_MUTED_TEXT};font:inherit;text-align:left`;
+    const caretEl = document.createElement('span');
+    caretEl.setAttribute('aria-hidden', 'true');
+    caretEl.style.cssText = 'flex:0 0 auto;font-size:10px;line-height:1.6';
+    const headingEl = document.createElement('span');
+    headingEl.setAttribute('role', 'heading');
+    headingEl.setAttribute('aria-level', '3');
+    headingEl.style.cssText =
+      'font-size:11px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase';
+    const summaryEl = document.createElement('span');
+    summaryEl.style.cssText =
+      'margin-left:auto;font-size:11px;text-align:right;overflow-wrap:anywhere';
+    header.append(caretEl, headingEl, summaryEl);
+
+    const body = document.createElement('div');
+    body.style.cssText = 'margin-top:3px;display:flex;flex-direction:column;gap:5px';
+    const meterHost = document.createElement('div');
+    meterHost.style.cssText = 'display:flex;flex-direction:column;gap:5px';
+    const lineHost = document.createElement('div');
+    lineHost.style.cssText = 'display:flex;flex-direction:column;gap:2px';
+    body.append(meterHost, lineHost);
+    root.append(header, body);
+
+    const view: SectionView = {
+      root,
+      header,
+      headingEl,
+      summaryEl,
+      caretEl,
+      body,
+      meterHost,
+      meters: [],
+      lineHost,
+      lineEls: [],
+    };
+    header.addEventListener('click', () => {
+      const open = header.getAttribute('aria-expanded') !== 'true';
+      this.sectionToggles.set(key, open);
+      this.applySectionOpen(view, open);
+    });
+    this.sectionViews.set(key, view);
+    return view;
+  }
+
+  private updateSection(view: SectionView, section: InspectSection, key: string): void {
+    view.headingEl.textContent = section.heading;
+    view.summaryEl.textContent = section.summary ?? '';
+    const collapsible = section.collapsible !== false;
+    view.header.disabled = !collapsible;
+    view.header.style.cursor = collapsible ? 'pointer' : 'default';
+    view.header.setAttribute(
+      'aria-label',
+      section.summary ? `${section.heading}: ${section.summary}` : section.heading,
+    );
+
+    const meters = section.meters ?? [];
+    while (view.meters.length > meters.length) view.meters.pop()!.root.remove();
+    while (view.meters.length < meters.length) {
+      const meter = new MeterView();
+      view.meters.push(meter);
+      view.meterHost.appendChild(meter.root);
+    }
+    for (let i = 0; i < meters.length; i++) view.meters[i].update(meters[i]);
+    view.meterHost.style.display = meters.length > 0 ? 'flex' : 'none';
+
+    while (view.lineEls.length > section.lines.length) view.lineEls.pop()!.remove();
+    while (view.lineEls.length < section.lines.length) {
+      const row = this.line();
+      view.lineEls.push(row);
+      view.lineHost.appendChild(row);
+    }
+    for (let i = 0; i < section.lines.length; i++) {
+      view.lineEls[i].textContent = section.lines[i];
+    }
+    view.lineHost.style.display = section.lines.length > 0 ? 'flex' : 'none';
+
+    this.applySectionOpen(view, inspectSectionOpen(section, this.sectionToggles), collapsible);
+    if (section.collapsible === false) this.sectionToggles.delete(key);
+  }
+
+  private applySectionOpen(view: SectionView, open: boolean, collapsible = true): void {
+    view.header.setAttribute('aria-expanded', open ? 'true' : 'false');
+    view.caretEl.textContent = collapsible ? (open ? '▼' : '▶') : '';
+    view.body.style.display = open ? 'flex' : 'none';
+    // The summary is the collapsed view of the section. Showing it while the
+    // body is open printed the same fact twice in a row on every panel.
+    view.summaryEl.style.display = open ? 'none' : 'inline';
+  }
+
+  private line(): HTMLDivElement {
     const row = document.createElement('div');
-    row.textContent = text;
     row.style.cssText = 'overflow-wrap:anywhere';
     return row;
   }
@@ -247,21 +390,13 @@ export class InspectPanel {
     this.actionsEl.style.display = 'flex';
   }
 
-  /** Fills the meter using the shared overlay status colours. */
   private renderMeter(meter: InspectMeter | undefined): void {
     if (!meter) {
-      this.meterEl.style.display = 'none';
+      this.meterEl.root.style.display = 'none';
       return;
     }
-    const value = Math.min(Math.max(meter.value, 0), 1);
-    this.meterNameEl.textContent = meter.label;
-    this.meterCaptionEl.textContent = meter.caption;
-    this.meterFillEl.style.width = `${Math.round(value * 100)}%`;
-    this.meterFillEl.style.background = overlayStatusCss(meterStatus(value));
-    this.meterTrackEl.setAttribute('aria-label', meter.label);
-    this.meterTrackEl.setAttribute('aria-valuenow', String(Math.round(value * 100)));
-    this.meterTrackEl.setAttribute('aria-valuetext', meter.caption);
-    this.meterEl.style.display = 'block';
+    this.meterEl.update(meter);
+    this.meterEl.root.style.display = 'block';
   }
 
   private positionBelowHud(): void {
@@ -275,10 +410,4 @@ export class InspectPanel {
       hudRect.bottom,
     )}px`;
   }
-}
-
-/** Happiness bands, using the shared overlay vocabulary. */
-function meterStatus(value: number): 'provided' | 'warn' | 'severe' {
-  if (value >= METER_GOOD_AT) return 'provided';
-  return value >= METER_WARN_AT ? 'warn' : 'severe';
 }

@@ -10,7 +10,10 @@ import { resolve } from 'node:path';
 // 2026-08-17 for the daily-routine clock (shared civic windows, identity-hashed
 // departures, the trip-system schedule gate). The budget still exists to catch
 // accidental bloat and recorder leakage, not to freeze the sim.
-const MAX_WORKER_BYTES = 158_000;
+// then 158k -> 166k on 2026-08-23 for the on-demand building-detail query
+// (per-type detail for growables, services, plants, and pumps: the shared score
+// terms, coverage reach, school attendance, and venue visitors).
+const MAX_WORKER_BYTES = 166_000;
 const FORBIDDEN_RECORDER_STRINGS = ['SessionRecorder', 'MemorySink', 'city-playtest-recorder'];
 
 const assetsDir = resolve('dist/assets');

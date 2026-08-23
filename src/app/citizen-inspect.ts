@@ -179,7 +179,9 @@ function selectedSection(detail: CitizenDetail): InspectSection {
       ? `${member.givenName} represents the household's current activity; nobody is travelling.`
       : `${representative} represents the current activity; ${member.givenName} remains selected and nobody is travelling.`;
   return {
+    id: 'selected',
     heading: 'Selected resident',
+    summary: `${member.age} · ${LIFE_STAGE_LABELS[member.lifeStage]}`,
     lines: [
       `Age ${member.age} · ${LIFE_STAGE_LABELS[member.lifeStage]}`,
       `${ROLE_LABELS[member.role]} · ${EDUCATION_LABELS[member.education]}`,
@@ -197,7 +199,12 @@ function activitySection(detail: CitizenDetail): InspectSection {
   lines.push(detail.agent
     ? `One household trip is simulated at a time; ${detail.activeTraveller.givenName} represents this activity.`
     : `Household activities are simulated one at a time; ${detail.activeTraveller.givenName} represents this one.`);
-  return { heading: 'Current activity', lines };
+  return {
+    id: 'activity',
+    heading: 'Current activity',
+    summary: detail.status,
+    lines,
+  };
 }
 
 function placesSection(detail: CitizenDetail): InspectSection {
@@ -205,7 +212,10 @@ function placesSection(detail: CitizenDetail): InspectSection {
     ? activityPlaceLabel(detail.destinationPlace, 'No active destination')
     : placeLabel(detail.destination, 'No active destination');
   return {
+    id: 'places',
     heading: 'Places & commute',
+    summary: detail.commuteCells === null ? 'No commute' : `${detail.commuteCells} cells each way`,
+    startCollapsed: true,
     lines: [
       'Map markers: cyan home / orange work / magenta current destination or venue',
       `Home: ${placeLabel(detail.home, 'No home — the household lost its residence')}`,
@@ -224,7 +234,13 @@ function lifeSection(detail: CitizenDetail): InspectSection {
     detail.lifeEvents.length === 0
       ? ['No recorded life events yet.']
       : [...detail.lifeEvents].reverse().map((event) => eventLine(detail, event));
-  return { heading: 'Recent life', lines };
+  return {
+    id: 'life',
+    heading: 'Recent life',
+    summary: detail.lifeEvents.length === 0 ? 'Nothing yet' : `${detail.lifeEvents.length} events`,
+    startCollapsed: true,
+    lines,
+  };
 }
 
 /**
@@ -242,14 +258,24 @@ export function citizenInspectData(
     selectedSection(detail),
     activitySection(detail),
     {
+      id: 'members',
       heading: `Household members (${detail.profile.members.length})`,
+      summary: detail.profile.householdName,
       lines: detail.profile.members.map((member) => memberSummary(member, detail)),
     },
     placesSection(detail),
   ];
 
   if (reasons.length > 0) {
-    sections.push({ heading: 'Household happiness reasons', lines: reasons });
+    sections.push({
+      id: 'happiness',
+      heading: 'Happiness reasons',
+      // A whole reason on the header wrapped it onto three lines; the count
+      // fits, and opening the section is what the reasons are for.
+      summary: `${reasons.length} ${reasons.length === 1 ? 'factor' : 'factors'}`,
+      startCollapsed: true,
+      lines: reasons,
+    });
   }
   sections.push(lifeSection(detail));
   const provenanceLines: string[] = [];
@@ -271,7 +297,10 @@ export function citizenInspectData(
   }
   if (provenanceLines.length > 0) {
     sections.unshift({
+      id: 'provenance',
       heading: 'Record provenance',
+      summary: 'Incomplete record',
+      startCollapsed: true,
       lines: provenanceLines,
     });
   }

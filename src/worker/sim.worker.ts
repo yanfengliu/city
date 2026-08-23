@@ -19,6 +19,7 @@ import {
 import { MovingAgentMessageSync } from './pedestrian-projection';
 import { CITY_WORKER_SIM_FLAGS } from './sim-config';
 import { simFailureMessage, unknownCommandRejection } from './failure-reporting';
+import { inspectBuildingResponse } from './building-inspection';
 import { inspectCitizenResponse, inspectHomeResidentResponse } from './citizen-inspection';
 import type { CityWorld } from '../sim/types';
 import type {
@@ -474,6 +475,12 @@ addEventListener('message', (event) => {
     }
     case 'inspectHomeResident': {
       post(inspectHomeResidentResponse(sim, message));
+      break;
+    }
+    case 'inspectBuilding': {
+      // Same on-demand contract as the citizen query: derived building detail
+      // (scores, coverage reach, live attendance) never rides the tick diffs.
+      post(inspectBuildingResponse(sim, message));
       break;
     }
     case 'selfCheck': {

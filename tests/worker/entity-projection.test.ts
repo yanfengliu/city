@@ -243,6 +243,6 @@ describe('projectNetworks', () => {
     const sim = createCitySim({ seed: 4 });
     const networks = projectNetworks(sim, sim.world);
     expect(networks.power).toEqual({ plants: [], plantCells: [], lineCells: [] });
-    expect(networks.water).toEqual({ pumpCells: [], pipeCells: [] });
+    expect(networks.water).toEqual({ pumps: [], pumpCells: [], pipeCells: [] });
   });
 });

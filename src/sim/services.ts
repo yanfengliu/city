@@ -32,6 +32,32 @@ function treasury(w: CityWorld): number {
  * radius (Chebyshev) of the anchor cell — see SERVICE_RADIUS for the metric
  * contract.
  */
+/**
+ * Whether a service anchored at (ax, ay) with this radius covers cell (x, y).
+ *
+ * Coverage is BLOCK-granular: `markCoverage` marks every COVERAGE_BLOCK_SIZE
+ * block the radius box touches, so a service reaches up to a block short of
+ * COVERAGE_BLOCK_SIZE past its nominal radius. Anything reporting who a service
+ * serves must ask THIS — an exact Chebyshev test on the anchor is a stricter
+ * rule than the sim's, and would deny homes the coverage field is crediting.
+ */
+export function coversCell(
+  ax: number,
+  ay: number,
+  radius: number,
+  x: number,
+  y: number,
+): boolean {
+  const bx = Math.floor(x / COVERAGE_BLOCK_SIZE);
+  const by = Math.floor(y / COVERAGE_BLOCK_SIZE);
+  return (
+    bx >= Math.floor((ax - radius) / COVERAGE_BLOCK_SIZE) &&
+    bx <= Math.floor((ax + radius) / COVERAGE_BLOCK_SIZE) &&
+    by >= Math.floor((ay - radius) / COVERAGE_BLOCK_SIZE) &&
+    by <= Math.floor((ay + radius) / COVERAGE_BLOCK_SIZE)
+  );
+}
+
 function markCoverage(layer: Layer<number>, x: number, y: number, radius: number): void {
   const bx0 = Math.max(0, Math.floor((x - radius) / COVERAGE_BLOCK_SIZE));
   const bx1 = Math.min(layer.width - 1, Math.floor((x + radius) / COVERAGE_BLOCK_SIZE));

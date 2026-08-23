@@ -3,6 +3,13 @@ import { InstancedMesh, Matrix4, Mesh, Quaternion, Vector3, type MeshLambertMate
 import { WIRE_Y } from '../../src/rendering/constants';
 import { NetworksView } from '../../src/rendering/networks-mesh';
 import type { TerrainSurfaceView } from '../../src/rendering/terrain-surface';
+import type {
+  PowerPlantFootprintView,
+  WaterNetworkView,
+} from '../../src/protocol/messages';
+
+/** These fixtures index cells on the same 64-wide grid the views are built with. */
+const GRID_WIDTH = 64;
 
 const pipeMesh = (view: NetworksView): InstancedMesh => {
   const child = view.group.getObjectByName('water-pipes');
@@ -62,7 +69,30 @@ const slopedSurface = (width: number, height: number): TerrainSurfaceView => {
 };
 
 const emptyPower = { plants: [], plantCells: [], lineCells: [] };
-const emptyWater = { pumpCells: [], pipeCells: [] };
+const emptyWater = { pumps: [], pumpCells: [], pipeCells: [] };
+
+/** Plant footprint with the ECS identity the inspector selects it by. */
+function plantView(
+  plant: Omit<PowerPlantFootprintView, 'id' | 'generation'>,
+  id = 1,
+): PowerPlantFootprintView {
+  return { id, generation: 0, ...plant };
+}
+
+/** Water view whose `pumps` identities agree with its flattened cells. */
+function waterView(pumpCells: number[], pipeCells: number[]): WaterNetworkView {
+  return {
+    pumps: pumpCells.map((cell, index) => ({
+      id: 100 + index,
+      generation: 0,
+      x: cell % GRID_WIDTH,
+      y: Math.floor(cell / GRID_WIDTH),
+      cell,
+    })),
+    pumpCells,
+    pipeCells,
+  };
+}
 
 describe('NetworksView', () => {
   it('exposes solid utility models as pick blockers without thin network geometry', () => {
@@ -81,7 +111,7 @@ describe('NetworksView', () => {
   it('shows underground pipes only while the Water overlay is active', () => {
     const view = new NetworksView(64);
 
-    view.update(emptyPower, { pumpCells: [], pipeCells: [65, 66] });
+    view.update(emptyPower, waterView([], [65, 66]));
 
     expect(pipeMesh(view).count).toBe(2);
     expect(pipeMesh(view).visible).toBe(false);
@@ -91,6 +121,7 @@ describe('NetworksView', () => {
 
     // Capacity growth replaces the InstancedMesh; visibility must survive it.
     view.update(emptyPower, {
+      pumps: [],
       pumpCells: [],
       pipeCells: Array.from({ length: 513 }, (_, cell) => cell),
     });
@@ -108,7 +139,7 @@ describe('NetworksView', () => {
     view.setTerrainSurface(surface);
     view.update(
       {
-        plants: [{ kind: 'coal', x: 1, y: 1, w: 3, h: 3, cells }],
+        plants: [plantView({ kind: 'coal', x: 1, y: 1, w: 3, h: 3, cells })],
         plantCells: cells,
         lineCells: [],
       },
@@ -141,8 +172,8 @@ describe('NetworksView', () => {
     view.update(
       {
         plants: [
-          { kind: 'wind', x: 10, y: 12, w: 1, h: 1, cells: [12 * 64 + 10] },
-          { kind: 'wind', x: 20, y: 12, w: 1, h: 1, cells: [12 * 64 + 20] },
+          plantView({ kind: 'wind', x: 10, y: 12, w: 1, h: 1, cells: [12 * 64 + 10] }, 1),
+          plantView({ kind: 'wind', x: 20, y: 12, w: 1, h: 1, cells: [12 * 64 + 20] }, 2),
         ],
         plantCells: [12 * 64 + 10, 12 * 64 + 20],
         lineCells: [],
@@ -185,14 +216,12 @@ describe('NetworksView', () => {
 
   it('retires rotors on bulldoze and regrows capacity past eight turbines', () => {
     const view = new NetworksView(64);
-    const plants = Array.from({ length: 9 }, (_, i) => ({
-      kind: 'wind' as const,
-      x: 2 + i * 3,
-      y: 5,
-      w: 1,
-      h: 1,
-      cells: [5 * 64 + 2 + i * 3],
-    }));
+    const plants = Array.from({ length: 9 }, (_, i) =>
+      plantView(
+        { kind: 'wind', x: 2 + i * 3, y: 5, w: 1, h: 1, cells: [5 * 64 + 2 + i * 3] },
+        i + 1,
+      ),
+    );
     view.update(
       { plants, plantCells: plants.map((p) => p.cells[0]), lineCells: [] },
       emptyWater,
@@ -211,7 +240,7 @@ describe('NetworksView', () => {
     const gridWidth = 64;
     const cell = 5 * gridWidth + 5;
     const view = new NetworksView(gridWidth);
-    view.update(emptyPower, { pumpCells: [cell], pipeCells: [] });
+    view.update(emptyPower, waterView([cell], []));
     // No mask yet: the intake falls back to east but stays near the cell.
     expect(positionBounds(namedMesh(view, 'water-pumps')).max.x).toBeLessThan(6.5);
 
@@ -229,7 +258,7 @@ describe('NetworksView', () => {
     water[cell + 1] = 1; // east neighbor is lake
     const view = new NetworksView(gridWidth);
     view.setWater(water);
-    view.update(emptyPower, { pumpCells: [cell], pipeCells: [] });
+    view.update(emptyPower, waterView([cell], []));
 
     const pumps = namedMesh(view, 'water-pumps');
     expect(pumps.visible).toBe(true);
@@ -248,7 +277,7 @@ describe('NetworksView', () => {
     view.setTerrainSurface(surface);
     view.update(
       { plants: [], plantCells: [], lineCells: [11, 12, 21] },
-      { pumpCells: [], pipeCells: [] },
+      waterView([], []),
     );
 
     const east = matrixAt(namedInstanced(view, 'power-wires-east'), 0);
@@ -275,7 +304,7 @@ describe('NetworksView', () => {
     water[cell - gridWidth] = 1; // north neighbor
     const view = new NetworksView(gridWidth);
     view.setWater(water);
-    view.update(emptyPower, { pumpCells: [cell], pipeCells: [] });
+    view.update(emptyPower, waterView([cell], []));
 
     const surface = slopedSurface(64, 64);
     view.setTerrainSurface(surface);

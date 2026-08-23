@@ -254,6 +254,24 @@ export class Tools {
   }
 
   /**
+   * Escape backs out one level at a time: an in-progress drag first, then the
+   * build tool itself (falling back to Select), then any open inspector. Each
+   * press undoes exactly what the player is looking at, so escaping a half-drawn
+   * road never also throws away the tool they still want.
+   */
+  escape(): void {
+    if (this.dragAnchor) {
+      this.cancelDrag();
+      return;
+    }
+    if (this.activeTool !== 'select') {
+      this.setTool('select');
+      return;
+    }
+    this.host.inspect(null);
+  }
+
+  /**
    * Shows the L-path (road), the service footprint, or the rect (others) from
    * the drag anchor (or a 1-cell / footprint hover preview).
    */

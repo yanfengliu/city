@@ -20,6 +20,18 @@ export type {
   CitizenDetail,
   CitizenPlace,
 } from '../sim/citizen-detail';
+import type { BuildingDetail } from '../sim/building-detail';
+export type {
+  BuildingDetail,
+  BuildingDetailBase,
+  CoverageNeed,
+  GrowableBuildingDetail,
+  GrowableScoreDetail,
+  PowerPlantDetail,
+  ServiceBuildingDetail,
+  UtilityCityTotals,
+  WaterPumpDetail,
+} from '../sim/building-detail';
 export type { HappinessBreakdown, HappinessFactor, HappinessFactorId } from '../sim/happiness';
 export type { CitizenActivity, TripPhase } from '../sim/types';
 
@@ -79,6 +91,18 @@ export type ClientToWorker =
       entity: number;
       generation: number;
       memberId: number;
+    }
+  /**
+   * One placed building, service, plant, or pump in full. Derived detail —
+   * scores, coverage reach, live attendance — is never streamed with the
+   * per-tick diffs, so it costs nothing until a panel is open. `id` correlates
+   * the reply.
+   */
+  | {
+      type: 'inspectBuilding';
+      id: number;
+      entity: number;
+      generation: number;
     }
   /**
    * Picks one person living in a residential building without streaming every
@@ -214,12 +238,24 @@ export interface PedestrianView {
 
 /** One levelled utility footprint within the flattened `plantCells` set. */
 export interface PowerPlantFootprintView {
+  /** ECS identity, so a click on the footprint can inspect the plant. */
+  id: number;
+  generation: number;
   kind: PowerPlantKind;
   x: number;
   y: number;
   w: number;
   h: number;
   cells: number[];
+}
+
+/** One pump's identity and cell, paralleling the flattened `pumpCells` set. */
+export interface WaterPumpView {
+  id: number;
+  generation: number;
+  x: number;
+  y: number;
+  cell: number;
 }
 
 export interface PowerNetworkView {
@@ -229,6 +265,7 @@ export interface PowerNetworkView {
 }
 
 export interface WaterNetworkView {
+  pumps: WaterPumpView[];
   pumpCells: number[];
   pipeCells: number[];
 }
@@ -320,5 +357,17 @@ export type WorkerToClient =
         index: number;
         total: number;
       };
+      error?: string;
+    }
+  /**
+   * One placement's full detail (null + a reason naming the entity when it is
+   * not inspectable). `id` correlates the `inspectBuilding` request.
+   */
+  | {
+      type: 'buildingDetail';
+      id: number;
+      entity: number;
+      generation: number;
+      detail: BuildingDetail | null;
       error?: string;
     };

@@ -31,6 +31,25 @@ v1 COMPLETE. The full acceptance checklist is covered: **≥ 1,000 population wi
 
 ## Log
 
+### 2026-08-23 — Per-type building panels, and a foldable inspector
+
+User direction: the resident panel was one crammed column, and every building had the same four flat lines. Both halves landed together.
+
+Inspector sections are now individually expandable. Collapse state is keyed on a stable section `id` (headings carry live counts, so heading-keyed state would silently reopen what the player closed), lives per inspected subject, and survives the 2 Hz live refresh because the panel reconciles section DOM by key and updates text in place instead of rebuilding it.
+
+Every placed thing now has a panel tailored to its type, fed by a new on-demand `inspectBuilding` -> `buildingDetail` worker query on the same generation-guarded, 500 ms-throttled contract as the citizen query. A home reads in people and who is out of the house; a shop in jobs and shoppers on the way; a school in children in class and still walking; a park in visitors; a plant in capacity against the city's draw. Power plants and water pumps became selectable at all — their ECS identities now ride the `networks` message.
+
+The design turns on one rule: `src/sim/building-detail.ts` restates no sim rule. `buildingScore`, `buildingEducationOk`, and `nextLevelScore` were extracted from `levelSystem` (behaviour-preserving; 297 sim tests including the replay gate stayed green), so the panel and the system that levels and abandons buildings read the same arithmetic.
+
+Escape became a ladder — drag, then tool, then open inspector — so a zone tool falls back to Select.
+
+Five wording defects were found by looking at the rendered panel rather than its text: occupancy printed three times, an abandoned building warned about a countdown it had already lost, "Draws 1 units", "Everyone is home right now" in an empty building, and a threshold demanded of a building that already cleared it. All five are pinned by tests now. Browser-verified with real synthetic clicks (8/8 interaction checks, zero console errors) and panel screenshots of all ten subjects.
+
+An independent adversarial review then found three HIGH defects, all the same shape — the panel restating a rule instead of reading it. (1) The Growth section showed a full "toward level 2" bar on a building `levelSystem` will never advance: missing power or water skips the ENTIRE level evaluation, not just its +10 bonus. A `growthBlocker` now retraces `levelSystem`'s branches in its own order, and the bar is suppressed while the path is shut. (2) `coverageReach` used exact Chebyshev while `markCoverage` marks whole 4-cell blocks, so a garden reported "serving 0 buildings" about a home showing its ✅ and taking its +8; `coversCell` is now exported from `services.ts` and consumed. (3) "Heading here" counted households already at the venue and already walking home, because `citizen.shop` survives the dwell and the return leg — the outing now splits on phase, and the test that had encoded the bug was rewritten. The review also proved the score extraction behaviour-identical by measurement (610 values, `Object.is`, 0 mismatches) and flagged the rewritten panel's missing DOM coverage: `jsdom` is now a devDependency and `tests/ui/inspect-panel-dom.test.ts` pins 21 rendered behaviours, each mutation-checked.
+
+Gates: 864 tests, typecheck, zero-warning lint, production build, and the dependency audit (0 vulnerabilities, full tree and `--omit=dev`) for the jsdom addition. **Worker budget consciously raised 158,000 -> 166,000 bytes** at 162,585 for the query.
+
+
 ### 2026-08-19 — Canopies that floated off their trunks
 
 Reported as "tree body is separated from trunk", and it was literal. `TREE_ARCHETYPES` positioned each canopy layer by its NOMINAL height box — `centerY = trunkHeight + lift + height / 2` — but `DodecahedronGeometry(1, 0)` bottoms out at y = -phi/sqrt(3) ~= -0.934, filling only 93.4% of that box, so both faceted archetypes hung in the air: broadleaf canopy floor 0.100 above its trunk top, columnar 0.076. The conifer's cone was flush but exactly coplanar. `createCanopyGeometry` now seats a layer by its COMPUTED lowest vertex, so `lift` finally means what it says, and a new per-archetype `canopySink` settles the whole foliage stack onto the trunk (conifer 0.05 / broadleaf 0.15 / columnar 0.16). Trunk heights are unchanged; the visible trunk is shorter by the sink.

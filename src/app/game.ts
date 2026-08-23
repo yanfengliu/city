@@ -29,7 +29,8 @@ import { CitizenLifeMarkers } from '../rendering/citizen-life-markers';
 import { ZonesView } from '../rendering/zones-mesh';
 import { Hud, type OverlayName } from '../ui/hud';
 import { BudgetPanel } from '../ui/budget-panel';
-import { InspectPanel } from '../ui/inspect-panel';
+import { InspectPanel, type InspectAction } from '../ui/inspect-panel';
+import { buildingInspectData } from './building-inspect';
 import { citizenInspectData } from './citizen-inspect';
 import { AdvisorPanel, type Advisory } from '../ui/advisor';
 import { GRID_HEIGHT, GRID_WIDTH, TICK_MS } from '../sim/constants/map';
@@ -37,7 +38,7 @@ import { cityClock, clockTime } from '../protocol/city-clock';
 import { HIGHWAY_CELL_SET, HIGHWAY_COLUMN, HIGHWAY_LENGTH } from '../sim/constants/highway';
 import { SERVICE_RADIUS } from '../sim/constants/services';
 import { UTILITY_BRIDGE_RADIUS } from '../sim/constants/utilities';
-import { CAPACITY_PER_CELL, PEOPLE_PER_CITIZEN } from '../sim/constants/zoning';
+import { PEOPLE_PER_CITIZEN } from '../sim/constants/zoning';
 import { cellIndex, type Cell } from '../sim/grid';
 import {
   consumePendingLoad,
@@ -56,6 +57,7 @@ import {
 import { collectZoneOcclusionCells, replaceFootprintOwner } from './occupancy';
 import { TOOL_GROUPS, Tools, type PersonSelection, type ToolName } from './tools';
 import type {
+  BuildingDetail,
   BuildingView,
   CitizenDetail,
   CitizenMemberRef,
@@ -83,28 +85,17 @@ import type {
   OverlayFieldName,
   ServiceType,
   TaxRates,
-  ZoneType,
 } from '../sim/types';
 import { DEFAULT_TAX_RATE } from '../sim/constants/zoning';
 import { CommandFeedback } from './command-feedback';
+import { BuildingInspectionState } from './building-inspection-state';
 import { CitizenInspectionState } from './citizen-inspection-state';
 
 const HUD_REFRESH_MS = 250;
 /** Citizen detail stays visibly live without scaling worker/DOM churn with game speed. */
 const CITIZEN_INSPECT_REFRESH_MS = 500;
-const ZONE_LABELS: Record<ZoneType, string> = {
-  R: 'Residential',
-  C: 'Commercial',
-  I: 'Industrial',
-};
-const SERVICE_LABELS: Record<ServiceType, string> = {
-  fireStation: 'Fire Station',
-  police: 'Police Station',
-  clinic: 'Clinic',
-  school: 'School',
-  park: 'Park',
-  garden: 'Garden',
-};
+/** Same wall-clock cadence for the building panel, for the same reason. */
+const BUILDING_INSPECT_REFRESH_MS = 500;
 /** Coverage overlay → the service that provides it (blank for every other overlay). */
 const COVERAGE_OVERLAY_SERVICE: Partial<Record<OverlayName, ServiceType>> = {
   fireCoverage: 'fireStation',
@@ -130,11 +121,12 @@ const FIELD_OVERLAYS: readonly OverlayName[] = [
 
 /** Every selection carries the ECS incarnation so an id reuse cannot retarget it. */
 type Inspected =
-  | { kind: 'building'; id: number; generation: number }
-  | { kind: 'structure'; id: number; generation: number }
+  /** Any placed thing the building-detail query describes: R/C/I, service, plant, pump. */
+  | { kind: 'place'; id: number; generation: number }
   | ({ kind: 'citizen' } & CitizenMemberRef);
 
 type CitizenDetailMessage = Extract<WorkerToClient, { type: 'citizenDetail' }>;
+type BuildingDetailMessage = Extract<WorkerToClient, { type: 'buildingDetail' }>;
 
 interface GameOptions {
   recordPlaytest?: boolean;
@@ -206,6 +198,13 @@ export class Game {
   /** Correlates async detail replies and owns generation-safe person state. */
   private readonly citizenInspection = new CitizenInspectionState();
   private lastCitizenInspectRefreshAt: number | null = null;
+  /** Same contract for the placed thing under the cursor (building/service/plant/pump). */
+  private readonly buildingInspection = new BuildingInspectionState();
+  private lastBuildingInspectRefreshAt: number | null = null;
+  /** Cell index -> owning plant/pump id, so their footprints are clickable. */
+  private readonly utilityCellOwner = new Map<number, number>();
+  /** Plant/pump id -> its incarnation, for the same liveness check buildings get. */
+  private readonly utilityPlaces = new Map<number, number>();
   private activeOverlay: OverlayName = 'none';
   /** Set once the worker reports a halted world; surfaced in the text state so
    * automation sees a dead sim instead of silently timing out on a frozen tick. */
@@ -551,6 +550,20 @@ export class Game {
           ...message.power.plantCells,
           ...message.water.pumpCells,
         ]);
+        // Plants and pumps are placed buildings too, so their footprints must be
+        // clickable and their incarnation checkable — the networks message is
+        // the only place their identities arrive.
+        this.utilityCellOwner.clear();
+        this.utilityPlaces.clear();
+        for (const plant of message.power.plants) {
+          this.utilityPlaces.set(plant.id, plant.generation);
+          for (const cell of plant.cells) this.utilityCellOwner.set(cell, plant.id);
+        }
+        for (const pump of message.water.pumps) {
+          this.utilityPlaces.set(pump.id, pump.generation);
+          this.utilityCellOwner.set(pump.cell, pump.id);
+        }
+        this.refreshInspect();
         this.powerLineCells = new Set(message.power.lineCells);
         this.pipeCells = new Set(message.water.pipeCells);
         this.occupancyDirty = true;
@@ -614,6 +627,7 @@ export class Game {
         this.power = message.stats.power;
         this.water = message.stats.water;
         this.refreshCitizenOnFrame();
+        this.refreshBuildingOnFrame();
         break;
       case 'commandSubmissionResult':
         if (!this.commandFeedback.receive(message)) break;
@@ -621,6 +635,9 @@ export class Game {
         break;
       case 'citizenDetail':
         this.receiveCitizenDetail(message);
+        break;
+      case 'buildingDetail':
+        this.receiveBuildingDetail(message);
         break;
       case 'simFailure':
         // The world will not tick again. Say so loudly and stop the HUD from
@@ -876,97 +893,138 @@ export class Game {
     this.send(this.citizenInspection.requestDirect(person));
   }
 
-  private inspectCell(cell: Cell | null): void {
-    const index = cell ? cellIndex(cell.x, cell.y) : null;
-    const structureId = index === null ? undefined : this.structureCellOwner.get(index);
+  /**
+   * Resolves the clicked cell to the thing that owns it, in the order the
+   * player expects: a service or utility footprint sitting on top of a block
+   * wins over the growable underneath it.
+   */
+  private placeAt(index: number | null): { id: number; generation: number } | null {
+    if (index === null) return null;
+    const structureId = this.structureCellOwner.get(index);
     if (structureId !== undefined) {
       const view = this.structures.get(structureId);
-      if (!view) {
-        this.clearInspect();
-        return;
-      }
-      this.clearInspect();
-      this.inspected = { kind: 'structure', id: structureId, generation: view.generation };
-      this.refreshInspect();
-      return;
+      return view ? { id: structureId, generation: view.generation } : null;
     }
-    const buildingId = index === null ? undefined : this.buildingCellOwner.get(index);
-    if (buildingId === undefined) {
-      this.clearInspect();
-      return;
+    const utilityId = this.utilityCellOwner.get(index);
+    if (utilityId !== undefined) {
+      const generation = this.utilityPlaces.get(utilityId);
+      return generation === undefined ? null : { id: utilityId, generation };
     }
+    const buildingId = this.buildingCellOwner.get(index);
+    if (buildingId === undefined) return null;
     const view = this.buildings.get(buildingId);
-    if (!view) {
+    return view ? { id: buildingId, generation: view.generation } : null;
+  }
+
+  /** True while the client mirrors still hold this exact incarnation. */
+  private placeIsLive(place: { id: number; generation: number }): boolean {
+    const building = this.buildings.get(place.id);
+    if (building) return building.generation === place.generation;
+    const structure = this.structures.get(place.id);
+    if (structure) return structure.generation === place.generation;
+    const utility = this.utilityPlaces.get(place.id);
+    return utility !== undefined && utility === place.generation;
+  }
+
+  /**
+   * Opens the building panel. Like the person panel the detail is a worker
+   * round-trip (scores, coverage reach, and live attendance are derived, not
+   * streamed), so the panel fills on the reply.
+   */
+  private inspectCell(cell: Cell | null): void {
+    const place = this.placeAt(cell ? cellIndex(cell.x, cell.y) : null);
+    if (!place) {
       this.clearInspect();
       return;
     }
     this.clearInspect();
-    this.inspected = { kind: 'building', id: buildingId, generation: view.generation };
-    this.refreshInspect();
+    this.inspected = { kind: 'place', ...place };
+    this.showInspectCoverage(place.id);
+    this.inspectPanel.show({
+      subjectKey: `place:${place.id}:${place.generation}`,
+      title: 'Reading this building...',
+      lines: ['Reading its live simulation record...'],
+      abandoned: false,
+    });
+    this.lastBuildingInspectRefreshAt = performance.now();
+    this.send(this.buildingInspection.requestDirect(place));
+  }
+
+  /** Services show the live coverage square the sim marks; nothing else does. */
+  private showInspectCoverage(id: number): void {
+    const view = this.structures.get(id);
+    if (!view) {
+      this.inspectCoverage.hide();
+      return;
+    }
+    // Same Chebyshev box the sim marks (anchored on the structure's top-left
+    // cell, like placement previews).
+    const r = SERVICE_RADIUS[view.service];
+    this.inspectCoverage.show(view.x - r, view.y - r, view.x + r, view.y + r);
   }
 
   private clearInspect(): void {
     this.citizenInspection.clear();
+    this.buildingInspection.clear();
     this.inspected = null;
     this.inspectPanel.hide();
     this.inspectCoverage.hide();
     this.citizenLifeMarkers.hide();
     this.pedestriansView.setSelectedCitizen(null);
     this.lastCitizenInspectRefreshAt = null;
+    this.lastBuildingInspectRefreshAt = null;
   }
 
-  /** Syncs the panel with the inspected object's latest view (or closes it when gone). */
+  /**
+   * Closes the panel when the inspected thing stops existing. Content itself
+   * comes from the worker detail on its own cadence — building diffs are far
+   * too noisy to redraw a panel from.
+   */
   private refreshInspect(): void {
-    if (this.inspected === null) return;
-    if (this.inspected.kind === 'citizen') {
-      // The frame cadence owns live refreshes; building diffs can be noisy.
-      return;
-    }
-    if (this.inspected.kind === 'structure') {
-      const view = this.structures.get(this.inspected.id);
-      if (!view || view.generation !== this.inspected.generation) {
-        this.clearInspect();
-        return;
-      }
-      // Show the live coverage square — same Chebyshev box the sim marks
-      // (anchored on the structure's top-left cell, like placement previews).
-      const r = SERVICE_RADIUS[view.service];
-      this.inspectCoverage.show(view.x - r, view.y - r, view.x + r, view.y + r);
-      this.inspectPanel.show({
-        subjectKey: `structure:${view.id}:${view.generation}`,
-        title: SERVICE_LABELS[view.service],
-        lines: [
-          `Footprint: ${view.w}×${view.h} cells`,
-          `Coverage radius: ${SERVICE_RADIUS[view.service]} cells (shown on the map)`,
-        ],
-        abandoned: false,
-      });
-      return;
-    }
-    this.inspectCoverage.hide();
-    const view = this.buildings.get(this.inspected.id);
-    if (!view || view.generation !== this.inspected.generation) {
+    if (this.inspected === null || this.inspected.kind === 'citizen') return;
+    if (!this.placeIsLive(this.inspected)) this.clearInspect();
+  }
+
+  private receiveBuildingDetail(message: BuildingDetailMessage): void {
+    const result = this.buildingInspection.acceptReply(message, this.tick);
+    if (result.kind === 'ignored') return;
+    if (result.kind === 'failed') {
+      this.hud.showToast(result.error);
       this.clearInspect();
       return;
     }
-    this.inspectPanel.show({
-      subjectKey: `building:${view.id}:${view.generation}`,
-      title: `${ZONE_LABELS[view.zone]} — Level ${view.level}`,
-      lines: [
-        `Footprint: ${view.w}×${view.h} cells`,
-        this.occupancyLine(view),
-        `⚡ Power: ${view.powered ? 'connected' : 'not connected'}`,
-        `💧 Water: ${view.watered ? 'connected' : 'not connected'}`,
-      ],
-      abandoned: view.abandoned,
-      actions:
-        view.zone === 'R' && view.residents > 0
-          ? [{
-              label: 'Meet a resident',
-              onClick: () => this.inspectHomeResident({ id: view.id, generation: view.generation }),
-            }]
-          : undefined,
-    });
+    this.inspected = { kind: 'place', id: result.target.id, generation: result.target.generation };
+    this.lastBuildingInspectRefreshAt = performance.now();
+    this.showInspectCoverage(result.target.id);
+    this.inspectPanel.show(buildingInspectData(result.detail, this.buildingActions(result.detail)));
+  }
+
+  /** A home with people in it can be drilled into; nothing else has an action. */
+  private buildingActions(detail: BuildingDetail): InspectAction[] | undefined {
+    if (detail.kind !== 'growable' || detail.zone !== 'R' || detail.households === 0) {
+      return undefined;
+    }
+    const home = { id: detail.entity, generation: detail.generation };
+    return [{
+      label: 'Meet a resident',
+      title: `Show one of the ${detail.people} people living here`,
+      onClick: () => this.inspectHomeResident(home),
+    }];
+  }
+
+  private refreshBuildingOnFrame(): void {
+    const now = performance.now();
+    if (
+      this.inspected?.kind !== 'place' ||
+      this.buildingInspection.pendingMode !== null ||
+      now - (this.lastBuildingInspectRefreshAt ?? Number.NEGATIVE_INFINITY) <
+        BUILDING_INSPECT_REFRESH_MS
+    ) return;
+    const request = this.buildingInspection.requestRefresh();
+    if (request) {
+      this.lastBuildingInspectRefreshAt = now;
+      this.send(request);
+    }
   }
 
   /** On-demand residential drill-down, flattened to people rather than households. */
@@ -1014,7 +1072,12 @@ export class Game {
     if (context) {
       const residentPosition = `Resident ${context.index + 1} of ${context.total} at this home`;
       data.lines.push(residentPosition);
-      data.sections?.unshift({ heading: 'Residential home', lines: [residentPosition] });
+      data.sections?.unshift({
+        id: 'residentialHome',
+        heading: 'Residential home',
+        summary: `${context.index + 1} of ${context.total}`,
+        lines: [residentPosition],
+      });
       data.actions = [{
         label: 'Next resident',
         title: `Show resident ${(context.index + 1) % context.total + 1} of ${context.total}`,
@@ -1053,17 +1116,6 @@ export class Game {
       this.lastCitizenInspectRefreshAt = now;
       this.send(request);
     }
-  }
-
-  /** R shows residents as people (xPEOPLE_PER_CITIZEN); C/I show job slots filled/capacity. */
-  private occupancyLine(view: BuildingView): string {
-    const levelIndex = Math.min(Math.max(view.level, 1), 3) - 1;
-    const capacity = CAPACITY_PER_CELL[view.zone][levelIndex] * view.w * view.h;
-    if (view.zone === 'R') {
-      const people = view.residents * PEOPLE_PER_CITIZEN;
-      return `Residents: ${people} / ${capacity * PEOPLE_PER_CITIZEN} people`;
-    }
-    return `Jobs: ${view.jobsFilled} / ${capacity}`;
   }
 
   private refreshHud(): void {
@@ -1413,36 +1465,22 @@ export class Game {
         residentContext: this.citizenInspection.residentContext,
       };
     }
-    if (this.inspected.kind === 'structure') {
-      const view = this.structures.get(this.inspected.id);
-      if (!view || view.generation !== this.inspected.generation) return null;
+    const detail = this.buildingInspection.detail;
+    if (!detail || detail.entity !== this.inspected.id || detail.generation !== this.inspected.generation) {
       return {
-        id: view.id,
-        generation: view.generation,
-        kind: 'service',
-        service: view.service,
-        x: view.x,
-        y: view.y,
-        w: view.w,
-        h: view.h,
-        coverageRadius: SERVICE_RADIUS[view.service],
+        kind: 'place',
+        place: { id: this.inspected.id, generation: this.inspected.generation },
+        loading: true,
       };
     }
-    const view = this.buildings.get(this.inspected.id);
-    if (!view || view.generation !== this.inspected.generation) return null;
+    // The whole worker detail is the text state: an automated playtest reads
+    // the same numbers the panel shows, rather than a second, thinner summary
+    // that could disagree with it.
     return {
-      id: view.id,
-      generation: view.generation,
-      kind: 'rci',
-      zone: view.zone,
-      level: view.level,
-      x: view.x,
-      y: view.y,
-      w: view.w,
-      h: view.h,
-      abandoned: view.abandoned,
-      residents: view.residents,
-      jobsFilled: view.jobsFilled,
+      kind: 'place',
+      place: { id: detail.entity, generation: detail.generation },
+      detailTick: this.buildingInspection.detailTick,
+      detail,
     };
   }
 }

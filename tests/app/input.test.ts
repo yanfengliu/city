@@ -8,6 +8,8 @@ interface InputHarness {
   picker: GroundPicker;
   tools: Tools;
   fire(type: string, event?: Record<string, unknown>): void;
+  /** Dispatches a window-level event (Escape and other global keys). */
+  fireWindow(type: string, event?: Record<string, unknown>): void;
 }
 
 function harness(): InputHarness {
@@ -27,18 +29,25 @@ function harness(): InputHarness {
     isBuildTool: false,
     dragging: false,
     cancelDrag: vi.fn(),
+    escape: vi.fn(),
     pointerDown: vi.fn(),
     pointerMove: vi.fn(),
     pointerUp: vi.fn(),
     select: vi.fn(),
     selectPerson: vi.fn(),
   } as unknown as Tools;
-  vi.stubGlobal('window', { addEventListener: vi.fn() });
+  const windowListeners = new Map<string, (event: Record<string, unknown>) => void>();
+  vi.stubGlobal('window', {
+    addEventListener: (type: string, listener: (event: Record<string, unknown>) => void) => {
+      windowListeners.set(type, listener);
+    },
+  });
   return {
     element,
     picker,
     tools,
     fire: (type, event = {}) => listeners.get(type)?.(event),
+    fireWindow: (type, event = {}) => windowListeners.get(type)?.(event),
   };
 }
 
@@ -155,5 +164,27 @@ describe('pedestrian pointer input', () => {
     controller.refreshPersonHover();
     expect(onHover).toHaveBeenLastCalledWith(null);
     expect(input.element.style.cursor).toBe('');
+  });
+});
+
+describe('escape key', () => {
+  it('backs the tool state machine out rather than only dropping the drag ghost', () => {
+    const input = harness();
+    attachInput(input.element, input.picker, input.tools);
+
+    input.fireWindow('keydown', { key: 'Escape' });
+
+    expect(input.tools.escape).toHaveBeenCalledTimes(1);
+    // The old wiring called cancelDrag directly, which left a zone tool armed.
+    expect(input.tools.cancelDrag).not.toHaveBeenCalled();
+  });
+
+  it('ignores other keys', () => {
+    const input = harness();
+    attachInput(input.element, input.picker, input.tools);
+
+    input.fireWindow('keydown', { key: 'r' });
+
+    expect(input.tools.escape).not.toHaveBeenCalled();
   });
 });

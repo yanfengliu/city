@@ -186,6 +186,97 @@ export function evictCitizens(w: CityWorld, building: number): void {
   }
 }
 
+/** Points one covered civic need adds to a building's desirability score. */
+export const COVERAGE_SCORE_PER_NEED = 8;
+/** Points connected power AND water add. Missing either forfeits the whole bonus. */
+export const UTILITY_SCORE_BONUS = 10;
+
+/**
+ * Every term of one building's desirability score, in the sim's own arithmetic.
+ * `levelSystem` and the inspector both read THIS — a panel that recomputed the
+ * score itself would drift from the rule that actually levels and abandons
+ * buildings the first time either side was tuned.
+ */
+export interface BuildingScore {
+  score: number;
+  utilitiesOk: boolean;
+  landValue: number;
+  /** Distinct civic needs covering the anchor cell (0..5). */
+  coverageCount: number;
+  /** Points contributed by that coverage. */
+  coverage: number;
+  utilityBonus: number;
+  /** Subtracted for R/C; industrial is scored on a flat base instead. */
+  taxPenalty: number;
+  /** Flat industrial base, 0 for R/C. */
+  base: number;
+  /** Weight applied to land value for this zone. */
+  landValueWeight: number;
+}
+
+export function buildingScore(
+  sim: CitySim,
+  entity: number,
+  building: BuildingComponent,
+  position: { x: number; y: number },
+): BuildingScore {
+  const inputs = sim.scoreInputs;
+  const utilitiesOk = inputs.powered(entity) && inputs.watered(entity);
+  const landValue = inputs.landValueAt(position.x, position.y);
+  const coverageCount = inputs.coverageCount(position.x, position.y);
+  const coverage = COVERAGE_SCORE_PER_NEED * coverageCount;
+  const utilityBonus = utilitiesOk ? UTILITY_SCORE_BONUS : 0;
+  // Industrial couples weakly to land value (it tanks its own neighborhood
+  // via pollution) and gets a flat base instead.
+  const industrial = building.zone === 'I';
+  const taxPenalty = industrial ? 0 : inputs.taxPenalty(building.zone);
+  const score = industrial
+    ? INDUSTRIAL_LAND_VALUE_WEIGHT * landValue +
+      coverage +
+      utilityBonus +
+      INDUSTRIAL_SCORE_BASE
+    : RESIDENTIAL_LAND_VALUE_WEIGHT * landValue +
+      coverage +
+      utilityBonus -
+      taxPenalty;
+  return {
+    score,
+    utilitiesOk,
+    landValue,
+    coverageCount,
+    coverage,
+    utilityBonus,
+    taxPenalty,
+    base: industrial ? INDUSTRIAL_SCORE_BASE : 0,
+    landValueWeight: industrial
+      ? INDUSTRIAL_LAND_VALUE_WEIGHT
+      : RESIDENTIAL_LAND_VALUE_WEIGHT,
+  };
+}
+
+/**
+ * The level 2 -> 3 gate beyond score: a school covering this cell that children
+ * actually reach (D3). Levels 1 and 2 are ungated, so this reads true there.
+ */
+export function buildingEducationOk(
+  sim: CitySim,
+  building: BuildingComponent,
+  position: { x: number; y: number },
+  tick: number,
+): boolean {
+  return (
+    building.level < 2 ||
+    (sim.scoreInputs.educated(position.x, position.y) &&
+      schoolingCurrent(building, tick))
+  );
+}
+
+/** The score a building must reach to reach its next level, or null at max. */
+export function nextLevelScore(level: number): number | null {
+  if (level >= MAX_LEVEL) return null;
+  return level === 1 ? LEVEL2_SCORE : LEVEL3_SCORE;
+}
+
 /**
  * Level/abandonment state machine. Score inputs come from sim.scoreInputs so
  * later phases (land value, services, utilities) plug in without rewiring.
@@ -196,23 +287,7 @@ export function levelSystem(sim: CitySim): (w: CityWorld) => void {
       const building = w.getComponent(id, 'building');
       const position = w.getComponent(id, 'position');
       if (!building || !position) continue;
-      const inputs = sim.scoreInputs;
-      const utilitiesOk = inputs.powered(id) && inputs.watered(id);
-      const landValue = inputs.landValueAt(position.x, position.y);
-      const coverage = 8 * inputs.coverageCount(position.x, position.y);
-      const utilityBonus = utilitiesOk ? 10 : 0;
-      // Industrial couples weakly to land value (it tanks its own neighborhood
-      // via pollution) and gets a flat base instead.
-      const score =
-        building.zone === 'I'
-          ? INDUSTRIAL_LAND_VALUE_WEIGHT * landValue +
-            coverage +
-            utilityBonus +
-            INDUSTRIAL_SCORE_BASE
-          : RESIDENTIAL_LAND_VALUE_WEIGHT * landValue +
-            coverage +
-            utilityBonus -
-            inputs.taxPenalty(building.zone);
+      const { score, utilitiesOk } = buildingScore(sim, id, building, position);
 
       if (building.abandoned) {
         // "Healthy" is the exact complement of abandonment.
@@ -280,16 +355,14 @@ export function levelSystem(sim: CitySim): (w: CityWorld) => void {
         });
       }
 
-      const nextLevelScore = building.level === 1 ? LEVEL2_SCORE : LEVEL3_SCORE;
+      const nextScore = nextLevelScore(building.level);
       // Coverage alone was the old gate. D3 adds the other half: a school that
       // no child actually reaches teaches nobody, which is precisely the case a
       // coverage overlay cannot see (it is unaware of roads). Homes with nobody
       // of school age are stamped current by the morning scan, so this reads
       // one uniform field rather than asking who lives here.
-      const educationOk =
-        building.level < 2 ||
-        (inputs.educated(position.x, position.y) && schoolingCurrent(building, w.tick));
-      if (building.level < MAX_LEVEL && score >= nextLevelScore && educationOk) {
+      const educationOk = buildingEducationOk(sim, building, position, w.tick);
+      if (nextScore !== null && score >= nextScore && educationOk) {
         if (building.upEvals + 1 >= LEVEL_UP_EVALS) {
           w.patchComponent(id, 'building', (b) => {
             b.level += 1;

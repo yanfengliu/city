@@ -223,7 +223,7 @@ describe('citizenInspectData', () => {
   });
 
   it('explains the score with its strongest factors, biggest first', () => {
-    const reasons = section({}, 'Household happiness reasons');
+    const reasons = section({}, 'Happiness reasons');
     expect(reasons).toHaveLength(MAX_HAPPINESS_REASONS);
     expect(reasons[0]).toBe('+10 Works at the industrial job');
     expect(reasons).toContain('+8 Home has power');
@@ -246,7 +246,7 @@ describe('citizenInspectData', () => {
           ],
         },
       },
-      'Household happiness reasons',
+      'Happiness reasons',
     );
     expect(reasons[0]).toBe('−22 Home at (12, 40) has no power');
     expect(reasons.every((line) => line.startsWith('−'))).toBe(true);
@@ -269,8 +269,10 @@ describe('citizenInspectData', () => {
         lifeEvents: [],
       }),
     );
-    expect(data.sections?.[0]).toEqual({
+    expect(data.sections?.[0]).toMatchObject({
+      id: 'provenance',
       heading: 'Record provenance',
+      startCollapsed: true,
       lines: [
         'Names were reconstructed deterministically from this legacy save.',
         'Life events before tick 2048 are unavailable.',
@@ -291,8 +293,10 @@ describe('citizenInspectData', () => {
       historyStartTick: null,
     }));
 
-    expect(data.sections?.[0]).toEqual({
+    expect(data.sections?.[0]).toMatchObject({
+      id: 'provenance',
       heading: 'Record provenance',
+      startCollapsed: true,
       lines: ['Life events from before this save was upgraded are unavailable.'],
     });
   });
@@ -304,8 +308,10 @@ describe('citizenInspectData', () => {
       historyTruncated: true,
     }));
 
-    expect(data.sections?.[0]).toEqual({
+    expect(data.sections?.[0]).toMatchObject({
+      id: 'provenance',
       heading: 'Record provenance',
+      startCollapsed: true,
       lines: [
         'Only the newest valid life events are retained; earlier history before tick 4096 is unavailable.',
       ],

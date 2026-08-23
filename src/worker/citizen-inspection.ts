@@ -2,32 +2,11 @@ import type { ClientToWorker, WorkerToClient } from '../protocol/messages';
 import { citizenDetail, citizenDetailProblem } from '../sim/citizen-detail';
 import { profileForCitizen } from '../sim/citizen-profile';
 import type { CitySim } from '../sim/city';
-import type { CityWorld } from '../sim/types';
+import { identityProblem } from './entity-identity';
 
 type InspectCitizenRequest = Extract<ClientToWorker, { type: 'inspectCitizen' }>;
 type InspectHomeResidentRequest = Extract<ClientToWorker, { type: 'inspectHomeResident' }>;
 type CitizenDetailResponse = Extract<WorkerToClient, { type: 'citizenDetail' }>;
-
-function identityProblem(
-  world: CityWorld,
-  kind: string,
-  entity: number,
-  generation: number,
-): string | null {
-  if (!Number.isInteger(entity) || entity < 0) {
-    return `${kind} ${entity} is not an entity id — pass a whole non-negative number`;
-  }
-  if (!Number.isInteger(generation) || generation < 0) {
-    return `${kind} ${entity} generation ${generation} is invalid — pass its non-negative ECS generation`;
-  }
-  if (!world.isAlive(entity)) {
-    return `${kind} ${entity} generation ${generation} is no longer alive`;
-  }
-  const actual = world.getEntityGeneration(entity);
-  return actual === generation
-    ? null
-    : `${kind} ${entity} generation ${generation} is stale — its current generation is ${actual}`;
-}
 
 /** Generation-guarded on-demand query for a known household identity. */
 export function inspectCitizenResponse(

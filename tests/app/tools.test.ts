@@ -230,3 +230,58 @@ describe('utility line ghosts', () => {
     expect(tools.pipePreview).toBeNull();
   });
 });
+
+describe('escape backs out one level at a time', () => {
+  it('returns a build tool to select, leaving nothing selected mid-air', () => {
+    const toolHost = host();
+    const tools = new Tools(toolHost);
+    tools.setTool('zoneR');
+
+    tools.escape();
+
+    expect(tools.activeTool).toBe('select');
+    expect(tools.isBuildTool).toBe(false);
+    expect(toolHost.onToolChanged).toHaveBeenLastCalledWith('select');
+  });
+
+  it('cancels an in-flight drag first and keeps the tool for the next attempt', () => {
+    const toolHost = host();
+    const tools = new Tools(toolHost);
+    tools.setTool('zoneR');
+    tools.pointerDown({ x: 1, y: 1 });
+    tools.pointerMove({ x: 4, y: 4 });
+    expect(tools.dragging).toBe(true);
+
+    tools.escape();
+
+    expect(tools.dragging).toBe(false);
+    expect(tools.activeTool).toBe('zoneR');
+    expect(toolHost.submitZone).not.toHaveBeenCalled();
+
+    tools.escape();
+
+    expect(tools.activeTool).toBe('select');
+  });
+
+  it('every build tool escapes back to select', () => {
+    for (const group of TOOL_GROUPS) {
+      for (const tool of group) {
+        if (tool.id === 'select') continue;
+        const tools = new Tools(host());
+        tools.setTool(tool.id);
+        tools.escape();
+        expect(tools.activeTool).toBe('select');
+      }
+    }
+  });
+
+  it('closes an open inspector once the tool is already select', () => {
+    const toolHost = host();
+    const tools = new Tools(toolHost);
+
+    tools.escape();
+
+    expect(tools.activeTool).toBe('select');
+    expect(toolHost.inspect).toHaveBeenCalledWith(null);
+  });
+});
