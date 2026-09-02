@@ -26,6 +26,19 @@ const shaderFixture = (): WebGLProgramParametersWithUniforms => ({
   ].join('\n'),
 }) as unknown as WebGLProgramParametersWithUniforms;
 
+/**
+ * For decorative motion over a surface that is mechanically fixed, start with a
+ * renderer-time normal field and add geometry only when collision, picking, and
+ * the boundary seams are explicitly updated too. GPU vertex displacement here
+ * would make the water a player sees diverge from the flat plane the CPU picks
+ * against, and would expose the fixed shoreline skirts at every wave trough.
+ *
+ * Two details the shader has to get right: restore the flat normal before
+ * Three.js applies receiver-shadow bias, or the shadow edge ripples with the
+ * lighting; and drive the animation from the scene's own presentation clock
+ * rather than a private wall clock inside the material, or rAF and the
+ * screenshot path disagree about what time it is.
+ */
 describe('wind-driven water wave material', () => {
   it('pins a gentle prevailing wind and two readable wave bands', () => {
     expect(WATER_WIND_DIRECTION).toEqual({ x: 0.82, z: 0.57 });

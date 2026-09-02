@@ -53,6 +53,41 @@ function harness(): InputHarness {
 
 afterEach(() => vi.unstubAllGlobals());
 
+describe('build-tool pointer capture', () => {
+  /**
+   * `setPointerCapture` throws `NotFoundError` for a synthetic PointerEvent:
+   * a dispatched event carries no active pointer id, so there is nothing to
+   * capture. Automated playtests dispatch exactly those, and an uncaught throw
+   * aborts the rest of the pointerdown listener — which disabled every build
+   * tool under automation while leaving the game perfectly playable by hand.
+   * The drag never started and nothing was logged, so it read as "the tool does
+   * not work" rather than as a capture failure.
+   *
+   * Capture is a nicety; the drag is the product. Anything that only improves
+   * the experience must not sit upstream of the work in the same handler.
+   */
+  it('starts the drag even when capture throws for a synthetic pointer', () => {
+    const input = harness();
+    (input.element.setPointerCapture as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () => {
+        throw new Error('NotFoundError: no active pointer with the given id');
+      },
+    );
+    (input.picker.pick as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ x: 3, y: 4 });
+    Object.assign(input.tools, { isBuildTool: true });
+    attachInput(input.element, input.picker, input.tools, () => null);
+
+    expect(() => input.fire('pointerdown', { button: 0, clientX: 10, clientY: 20, pointerId: 7 }))
+      .not.toThrow();
+    expect(input.element.setPointerCapture).toHaveBeenCalledWith(7);
+    expect(
+      input.tools.pointerDown,
+      'the pointerdown handler aborted on the capture throw, so the build tool never ' +
+        'received the press — capture must be best-effort',
+    ).toHaveBeenCalledWith({ x: 3, y: 4 });
+  });
+});
+
 describe('pedestrian pointer input', () => {
   it('forwards the complete picked person identity on a select click', () => {
     const input = harness();

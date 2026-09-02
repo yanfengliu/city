@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCitySim, rebuildDerived } from '../../src/sim/city';
+import { edgeKey } from '../../src/sim/traffic/topology';
 import { buildDistrict, findLandBlock, stats } from './helpers';
 
 /**
@@ -140,10 +141,78 @@ describe('employment and commuting', () => {
     expect(sim.world.isPoisoned()).toBe(false);
   });
 
+  /**
+   * A parameter a caller may omit is a parameter a caller WILL omit. Behavior
+   * that must run does not belong behind an optional argument: `refreshRoads`
+   * remaps in-flight vehicles onto the rebuilt graph only when it is handed the
+   * world, so a command handler written `refreshRoads(sim)` still compiles,
+   * still rebuilds the graph, and silently skips the remap. The remap has no
+   * other caller, so nothing fails until the exact scenario arrives.
+   *
+   * Gate the behavior the argument buys, not the survival of the process. Every
+   * rebuild reassigns edge ids, so the question is whether each car is still on
+   * the road it was on. "Nothing crashed" and "the id is in range" both pass
+   * with the defect live, because a stale id still names SOME edge — and a
+   * scenario that culls every car passes while comparing nothing at all.
+   */
+  it('keeps in-flight cars on the same road when a rebuild renumbers edges', () => {
+    const sim = createCitySim({ seed: 7 });
+    buildCommuterTown(sim);
+    stepUntil(sim, () => stats(sim).vehicles > 0, 1600);
+
+    // Where each in-flight car is, recorded by geometry rather than by id.
+    const before = new Map<number, { citizen: number; ids: number[]; keys: string[] }>();
+    for (const id of [...sim.world.query('vehicle')].sort((a, b) => a - b)) {
+      const data = sim.world.getComponent(id, 'vehicle');
+      if (!data) continue;
+      before.set(id, {
+        citizen: data.citizen,
+        ids: data.legs.map((leg) => leg.edge),
+        keys: data.legs.map((leg) => edgeKey(sim.roadGraph.edges[leg.edge])),
+      });
+    }
+    expect(before.size).toBeGreaterThan(0);
+
+    // A disconnected stub at a low cell index: it renumbers the whole edge
+    // array without touching the geometry any car is driving on, so every car
+    // must survive AND stay put. Cutting the road under the cars instead would
+    // cull them all and leave nothing to compare.
+    const stub = findLandBlock(sim, 3, 1);
+    expect(
+      sim.world.submit('placeRoad', { ax: stub.x, ay: stub.y, bx: stub.x + 2, by: stub.y }),
+    ).toBe(true);
+    sim.world.step();
+
+    // Entity ids recycle, so only compare cars still driven by the same
+    // citizen.
+    let survivors = 0;
+    let renumbered = 0;
+    for (const [id, snapshot] of before) {
+      const data = sim.world.getComponent(id, 'vehicle');
+      if (!data || data.citizen !== snapshot.citizen) continue;
+      survivors++;
+      const ids = data.legs.map((leg) => leg.edge);
+      const keys = data.legs.map((leg) => {
+        const edge = sim.roadGraph.edges[leg.edge];
+        return edge ? edgeKey(edge) : `no edge ${leg.edge}`;
+      });
+      if (JSON.stringify(ids) !== JSON.stringify(snapshot.ids)) renumbered++;
+      expect(keys, `vehicle ${id} must still be on the road it was on`).toEqual(snapshot.keys);
+    }
+    // Both guards fail loudly if the fixture stops exercising the case: a run
+    // with no survivor compares nothing, and a run that renumbered no leg would
+    // pass even with the remap deleted.
+    expect(survivors).toBeGreaterThan(0);
+    expect(renumbered).toBeGreaterThan(0);
+  });
+
   it('survives massive topology destruction under in-flight vehicles (regression: stale edge ids)', () => {
     // Regression for the dead-code refreshRoads(sim) bug: vehicles kept edge
     // ids into the rebuilt (smaller) graph — silent teleports or a poisoned
-    // world once an id indexed past the shrunken edges array.
+    // world once an id indexed past the shrunken edges array. This rect also
+    // destroys the buildings, so it culls every car; the surviving-car identity
+    // check lives in "handles road edits while traffic is in flight", where
+    // cars actually survive.
     const sim = createCitySim({ seed: 7 });
     const base = buildCommuterTown(sim);
     stepUntil(sim, () => stats(sim).vehicles > 0, 1600);

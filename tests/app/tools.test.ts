@@ -140,6 +140,23 @@ describe('zone painting ghosts', () => {
   });
 });
 
+/**
+ * A cleared drag ghost is not evidence of what the player attempted. The tool
+ * clears its visual preview synchronously on pointer-up while the command is
+ * still queued for the worker, so a harness that observes afterwards sees
+ * neither what was previewed nor whether it was accepted — "pointer events were
+ * dispatched" becomes indistinguishable from success, and from a rejection.
+ *
+ * Retain a bounded SEMANTIC record of the action before clearing presentation
+ * state, and return a correlated submission result for every command, with
+ * monotonic ids so an older rejection cannot attach itself to a newer drag of
+ * the same name. Cancellation and pointer-leave have to clear that record too,
+ * or the next observation reads a stale one.
+ *
+ * And when a client preview mirrors a sim validator, test BOTH layers against
+ * the same edge case: here each had independently encoded the same obsolete
+ * rule, so they agreed with each other and disagreed with the game.
+ */
 describe('utility line ghosts', () => {
   it('retains an observable valid pipe preview across water and submits the drag', () => {
     const showGhost = vi.fn();

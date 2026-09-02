@@ -13,6 +13,17 @@ import {
   waterDepth01,
 } from '../../src/rendering/water-depth';
 
+/**
+ * A shared presentation projection that deliberately discards source information
+ * for one contract cannot be the source for a feature that needs the discarded
+ * part. `TerrainSurface` maps every below-sea sample to the coast datum on
+ * purpose, because roads, bridges, picking, and overlays all need water to be
+ * one flat plane — so reading depth back out of it returns zero everywhere, and
+ * the ramp renders a uniform shallow colour that looks like a palette choice.
+ *
+ * Consume the raw immutable payload instead. Do not reverse-engineer the
+ * projection to recover what it was built to throw away.
+ */
 const luminance = (color: Color): number =>
   0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
 

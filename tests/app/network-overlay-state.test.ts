@@ -6,6 +6,19 @@ import {
 import type { BuildingView, StructureView } from '../../src/protocol/messages';
 import { cellIndex } from '../../src/sim/grid';
 
+/**
+ * A topology visualization must be derived from topology. Allocation flags —
+ * powered, watered, supplied — are a separate layer computed on top of the
+ * graph, and they cannot stand in for membership of it: during a brownout an
+ * attached building conducts but is not supplied, and a source-less run of wire
+ * is real infrastructure with nothing flowing through it. An overlay drawn from
+ * supply status therefore lies in exactly the situations a player turns it on
+ * to understand.
+ *
+ * The other half is refresh: an overlay recomputed from a closure must recompute
+ * whenever ANY input to that closure changes, which includes the message types
+ * nobody was thinking about when the overlay was written.
+ */
 const WIDTH = 40;
 const HEIGHT = 8;
 const Y = 3;

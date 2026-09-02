@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createCitySim, getTreasury, rebuildDerived } from '../../src/sim/city';
 import { PIPE_COST_PER_CELL } from '../../src/sim/constants/utilities';
 import {
+  ABANDON_EVALS,
+  ABANDON_SCORE,
   LEVEL_INTERVAL,
   UTILITY_ABANDON_EVALS,
 } from '../../src/sim/constants/zoning';
 import { TPS } from '../../src/sim/constants/map';
-import { utilityAbandonThreshold } from '../../src/sim/buildings';
+import { buildingScore, utilityAbandonThreshold } from '../../src/sim/buildings';
 import { cellIndex, lPathCells } from '../../src/sim/grid';
 import {
   buildDistrict,
@@ -197,6 +199,18 @@ describe('power network', () => {
     expect(poweredCounts(sim).abandoned).toBe(total);
   });
 
+  /**
+   * A counter documented as "N CONSECUTIVE evaluations of X" must be cleared on
+   * EVERY not-X branch, including the healthy fall-through — not only on the
+   * terminal transitions. A reset that lives only on abandon and recover looks
+   * complete and silently accumulates across brief recoveries: a building that
+   * banked most of its grace while unpowered, regained power for a single
+   * evaluation, then lost it again, died within a few evaluations instead of
+   * getting a fresh grace. Brownout flicker on an undersized plant reaches that
+   * state on its own.
+   *
+   * The doc already said "consecutive". The code enforced it on one path only.
+   */
   it('regaining utilities resets the utility-abandon streak (no premature abandon on flicker)', () => {
     const sim = createCitySim({ seed: 7, utilitiesEnabled: true });
     // Drive the utility signal directly so we can flicker it precisely; the
@@ -232,11 +246,25 @@ describe('power network', () => {
     expect(poweredCounts(sim).abandoned).toBe(0);
   });
 
+  /**
+   * When one scalar folds in a concern that already owns a timer, the two timers
+   * race and the shorter one wins — silently, because the scalar does not say
+   * which of its terms moved. Desirability `score` includes +10 for "powered &&
+   * watered", so a building missing utilities loses those 10 points and can fall
+   * under ABANDON_SCORE on land value alone; abandonment then fires on the FAST
+   * score path instead of the long utility grace that exists to prevent exactly
+   * this. A missing utility was laundered into a verdict of "bad location".
+   *
+   * Keep a fast path measuring only what it names, and let the concern that has
+   * its own grace own its own timeline.
+   *
+   * This test is worth nothing unless its fixture actually reaches the losing
+   * condition, and it silently stopped reaching it once already: the original
+   * ran 25 evaluations against an ABANDON_EVALS that later grew to 60, so the
+   * fast path could not have fired even with the guard deleted. The explicit
+   * preconditions below fail loudly if that happens again.
+   */
   it('keeps the full utility grace where pollution depresses land value (onboarding)', () => {
-    // Regression: missing utilities drop the +10 utility bonus from the score;
-    // if pollution also lowers land value, the raw score falls below
-    // ABANDON_SCORE and the fast 8s score path pre-empts the 60s utility grace,
-    // mass-abandoning a fresh district before the player can wire power/water.
     const sim = createCitySim({ seed: 7, fieldsEnabled: true, utilitiesEnabled: true });
     const base = findLandBlock(sim, 18, 18);
     buildDistrict(sim, 'R', base);
@@ -249,16 +277,44 @@ describe('power network', () => {
 
     // A coal plant beside the homes: a pollution source that depresses land
     // value. We deliberately do NOT wire power — the ONLY faults are "missing
-    // utilities" (its own 75-eval grace) and pollution-lowered land value.
+    // utilities" (its own grace) and pollution-lowered land value.
     expect(sim.world.submit('placePowerPlant', { kind: 'coal', x: base.x + 6, y: base.y + 6 })).toBe(
       true,
     );
 
-    // Well past the fast score path (ABANDON_EVALS=10) but within the utility
-    // grace (UTILITY_ABANDON_EVALS=75): a still-unpowered building must not be
-    // abandoned yet — the grace owns the timeline while utilities are missing.
-    for (let i = 0; i < LEVEL_INTERVAL * 25; i++) sim.world.step();
-    expect(poweredCounts(sim).abandoned).toBe(0);
+    // Long past the fast score path, still well inside the utility grace
+    // (UTILITY_ABANDON_EVALS, before its per-building spread).
+    const evaluations = 200;
+    expect(evaluations).toBeGreaterThan(ABANDON_EVALS);
+    expect(evaluations).toBeLessThan(UTILITY_ABANDON_EVALS);
+    for (let i = 0; i < LEVEL_INTERVAL * evaluations; i++) sim.world.step();
+
+    // While utilities are missing, only the utility grace may end a building.
+    expect(
+      poweredCounts(sim).abandoned,
+      'homes abandoned inside the utility grace — the missing-utility score penalty tripped ' +
+        'the fast score path, which is the grace being bypassed rather than a bad location',
+    ).toBe(0);
+
+    // And the precondition, checked after: some home is unpowered AND scoring
+    // under the abandonment line AND has already banked more consecutive
+    // bad-score evaluations than the fast path needs. Without it the fast path
+    // is being held back by nothing and the assertion above is decoration.
+    let heldBackFromScorePath = 0;
+    for (const id of [...sim.world.query('building', 'position')].sort((a, b) => a - b)) {
+      const building = sim.world.getComponent(id, 'building');
+      const position = sim.world.getComponent(id, 'position');
+      if (!building || !position || building.abandoned) continue;
+      const { score, utilitiesOk } = buildingScore(sim, id, building, position);
+      if (!utilitiesOk && score < ABANDON_SCORE && building.badEvals >= ABANDON_EVALS) {
+        heldBackFromScorePath++;
+      }
+    }
+    expect(
+      heldBackFromScorePath,
+      'fixture no longer reaches the losing condition: no unpowered home is under ' +
+        'ABANDON_SCORE with a wound-up score streak, so nothing here exercises the guard',
+    ).toBeGreaterThan(0);
   });
 
   it('brownout powers the ascending-id prefix deterministically', () => {

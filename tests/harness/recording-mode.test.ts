@@ -5,6 +5,16 @@ import { playtestRecordingRequested } from '../../src/harness/recording-mode';
 
 const gameSource = readFileSync('src/app/game.ts', 'utf8');
 
+/**
+ * A compile-time environment guard only removes a feature if the mutable state
+ * that belongs to it stays inside the guard. Constructing the recorder outside
+ * the DEV branch — even to immediately discard it — defeats dead-code
+ * elimination and shipped the whole implementation to players, growing the
+ * minified worker from 111 kB to 163 kB with no source change that looked
+ * wrong. Inspect the emitted artifact, not the source branch: the byte budget
+ * and the forbidden-symbol scan in `scripts/check-production-bundle.mjs` (run by
+ * `npm run build`) are the half of this gate that reads the build output.
+ */
 describe('playtest recording mode', () => {
   it('is disabled for ordinary localhost sessions', () => {
     expect(playtestRecordingRequested('')).toBe(false);

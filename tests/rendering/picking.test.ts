@@ -48,6 +48,60 @@ function piecewiseSurface(
 }
 
 describe('GroundPicker', () => {
+  /**
+   * `matrixWorld` is refreshed by the render loop, and the render loop is rAF.
+   * A tab that is not painting — an unfocused preview, a headless automation
+   * tab — has rAF throttled to a full stop, so every camera matrix is stale at
+   * whatever the last painted frame held. A raycast built from it maps screen
+   * points onto the world the camera used to be looking at, which is how
+   * scripted drags landed cells near world (0,0) while screenshots (which force
+   * a frame) showed a perfectly centered map.
+   *
+   * Anything that converts between screen and world must therefore refresh the
+   * camera itself rather than trusting the loop to have run. The corollary is
+   * the trap: "it renders fine" says nothing, because taking the screenshot is
+   * what made it render.
+   */
+  it('refreshes the camera itself, because a throttled rAF leaves matrixWorld stale', () => {
+    const width = 8;
+    const height = 8;
+    const surface = new TerrainSurface({
+      width,
+      height,
+      elevation: new Float32Array(width * height).fill(0.5),
+      seaLevel: 0.35,
+      water: new Uint8Array(width * height),
+    });
+    const camera = new PerspectiveCamera(55, 800 / 600, 0.1, 100);
+    const element = {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+    } as HTMLElement;
+    const picker = new GroundPicker(camera, element, width, height);
+    picker.setTerrainSurface(surface);
+
+    // Frame 1: the loop ran, so the matrix is current. Aim at one corner.
+    camera.position.set(1.5, 6, 1.5);
+    camera.lookAt(new Vector3(1.5, surface.heightAt(1.5, 1.5), 1.5));
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    const nearCorner = picker.pick(400, 300);
+    expect(nearCorner).toEqual({ x: 1, y: 1 });
+
+    // The player pans, keeping the same view angle. In a painting tab the loop
+    // would refresh matrixWorld before the next pointer event; here it never
+    // runs again, so matrixWorld still describes the old eye position.
+    // (`lookAt` would refresh it as a side effect, which is why this moves the
+    // camera without re-aiming it.)
+    camera.position.set(6.5, 6, 6.5);
+    expect(camera.matrixWorld.elements[12]).toBe(1.5);
+
+    expect(
+      picker.pick(400, 300),
+      'the pick used a stale camera transform — screen-to-world must call ' +
+        'updateMatrixWorld() itself rather than assume the render loop ran',
+    ).toEqual({ x: 6, y: 6 });
+  });
+
   it('round-trips a projected point on elevated terrain', () => {
     const width = 8;
     const height = 8;

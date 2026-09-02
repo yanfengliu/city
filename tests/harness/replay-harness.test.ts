@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import {
   IMPROVEMENT_FINDING_SCHEMA_VERSION,
@@ -20,10 +21,46 @@ import { inspectBundle, selfCheckBundle } from '../../src/harness/inspect';
 import type { CityCommands, CityEvents } from '../../src/sim/types';
 
 /**
- * End-to-end proof of the playtest harness (docs/harness.md): record a session,
- * annotate a finding as a marker, then replay + self-check + inspect — the exact
- * pipeline the browser `__harness` drives, verified browser-free.
+ * The sim runs in a Web Worker, so the client's `tick` is whatever the last
+ * `frame` message carried — the async round trip plus the live game loop puts it
+ * tens of ticks behind. A tick the client reads is therefore NOT the tick the
+ * worker is on, and an annotation anchored to it points at a moment BEFORE the
+ * command it is describing executed: inspecting there shows the world without
+ * the thing that was just built.
+ *
+ * Any "at the current tick" operation belongs in the worker, and the tick it
+ * used must be reported back for the client to quote. Nothing in the headless
+ * pipeline below can see this — there is no client/worker skew in-process — so
+ * the anchoring itself is pinned separately, at both ends of the message.
  */
+describe('harness annotation tick anchoring', () => {
+  /** The body of one `case '<name>':` branch, up to the next case label. */
+  function caseBody(source: string, name: string): string {
+    const start = source.indexOf(`case '${name}':`);
+    expect(start, `no case '${name}' branch found`).toBeGreaterThan(-1);
+    const rest = source.slice(start + name.length);
+    const end = rest.indexOf("case '");
+    return end < 0 ? rest : rest.slice(0, end);
+  }
+
+  it('stamps the marker with the worker tick and echoes it back', () => {
+    const body = caseBody(readFileSync('src/worker/sim.worker.ts', 'utf8'), 'annotate');
+    expect(body).toContain('const tick = world.tick;');
+    expect(body).toContain('cityFindingToMarker(message.finding, tick)');
+    expect(body).toContain("post({ type: 'annotated', tick, finding: message.finding })");
+  });
+
+  it('quotes the tick the worker reported, never the lagging client mirror', () => {
+    const body = caseBody(readFileSync('src/app/game.ts', 'utf8'), 'annotated');
+    expect(body).toContain('message.tick');
+    expect(
+      body,
+      'the client mirror tick lags the worker by the message round trip, so a finding ' +
+        'anchored to it lands before the command it describes ever ran',
+    ).not.toContain('this.tick');
+  });
+});
+
 describe('playtest harness pipeline', () => {
   it('records → annotates → replays → self-checks → inspects at the finding tick', () => {
     const config: CitySimConfig = {
@@ -333,6 +370,17 @@ describe('playtest harness pipeline', () => {
     });
   });
 
+  /**
+   * When a dependency major flips a validation default, grep the consumers for
+   * every construction site of the newly-validated payload instead of trusting
+   * suite output. A stricter recorder began refusing findings marked verified
+   * that carried no replayable ref and no method — and the refusal happened
+   * inside a host `annotate` callback, where the throw was swallowed and became
+   * a silent no-op. Nothing errored; the findings simply were not there.
+   *
+   * A finding claiming to be verified must say HOW it was verified and point at
+   * something replayable, which is a claim the recorder can actually check.
+   */
   it('dogfoods the recursive loop with verified findings and before/after comparison', async () => {
     const report = await dogfoodRecursiveImprovementLoop();
 

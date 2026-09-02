@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { buildSurfacePatch } from '../../src/rendering/surface-geometry';
 import type { TerrainSurfaceView } from '../../src/rendering/terrain-surface';
 
+/**
+ * Once the ground is piecewise-linear rather than one plane, sharing `heightAt()`
+ * between consumers is not enough. They must also share its TRIANGULATION, its
+ * nearest-hit semantics, its finite bounds, its off-map interaction contract,
+ * and its late-initialization lifecycle — each of those is a separate way to
+ * agree about heights and still disagree about the surface.
+ *
+ * This is the triangulation half: an inset rectangle whose corners sample the
+ * right heights can still bridge the cell's OPPOSITE diagonal, so the quad
+ * floats above or sinks below the terrain it is painted on while every corner
+ * height matches.
+ */
 describe('buildSurfacePatch', () => {
   it('splits an inset rectangle along the terrain triangle seam', () => {
     const heightAt = (x: number, z: number): number => {

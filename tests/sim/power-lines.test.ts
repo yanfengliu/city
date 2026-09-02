@@ -197,6 +197,22 @@ function overlaidBuildingCell(sim: CitySim, overlay: ReadonlyMap<number, number>
   return null;
 }
 
+/**
+ * If two things can occupy the same cell, do not let one of them "own the cell
+ * when it is otherwise free" in a shared derived cache. That model looks
+ * economical and generates a permanent bug class instead: ownership then has to
+ * transfer correctly across every add, every remove, and the rebuild, and each
+ * path is a separate chance to get it wrong. Three separate fixes here were the
+ * same root shape — a road bulldoze, a building demolition, and a save/load
+ * rebuild each disagreeing about who owned a cell a power line was crossing —
+ * and the replay self-check is structurally blind to all of them, because a
+ * derived cache is never serialized.
+ *
+ * Give the overlay a private map and let it own nothing. No ownership means no
+ * transfer to get wrong. The one thing to fix up afterwards: a validator that
+ * asked "is anything here?" through the shared cache must now consult the
+ * overlay's own map explicitly, or it will refuse to bulldoze a lone wire.
+ */
 describe('utilities never occupy building space', () => {
   /**
    * Zones an R band on both sides of a road WITHOUT stepping growth, then lays

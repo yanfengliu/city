@@ -12,6 +12,19 @@ import { simSummary } from '../../src/sim/summary';
 import { MovingAgentMessageSync } from '../../src/worker/pedestrian-projection';
 import { CITY_WORKER_SIM_FLAGS } from '../../src/worker/sim-config';
 
+/**
+ * For a save-driven visual benchmark, matching state counts are not evidence
+ * that two runs described the same world. The save carries the simulation; it
+ * does not carry the seed the renderer boots terrain, water, and trees from, so
+ * a fixture generated at one seed can be loaded into a world built at another
+ * and still reach plausible building counts — comparing two different planets
+ * and reporting the difference as a rendering delta.
+ *
+ * Pin every world-construction input that survives outside the loaded snapshot,
+ * and pin the workload the fixture actually produces rather than its bytes: a
+ * byte-identical save paired with a stale "88 cars" expectation is the same
+ * failure one level up, and that one has already happened here.
+ */
 const fixtureText = readFileSync('benchmarks/fixtures/performance-city-save.json', 'utf8');
 const generatorSource = readFileSync('scripts/generate-performance-fixture.mjs', 'utf8');
 const fixture = JSON.parse(fixtureText) as {

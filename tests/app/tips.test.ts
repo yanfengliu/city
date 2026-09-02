@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { activeTips, utilityTipFacts, type TipContext } from '../../src/app/tips';
 
@@ -141,5 +142,39 @@ describe('utilityTipFacts count buildings that need a utility even once abandone
     expect(shown).toContain('power');
     expect(shown).toContain('water');
     expect(shown).not.toContain('services');
+  });
+
+  /**
+   * A count that means "how many things need fixing right now" must include the
+   * things that already broke. Filtering to the healthy subset makes the alarm
+   * go silent at the exact moment of total failure: when every building has
+   * abandoned for want of power, the live list is empty, both counts read 0, the
+   * power and water tips disappear, and the advisor cheerfully recommends adding
+   * services to a dark and dying city.
+   *
+   * The helper counts whatever it is handed, so it is correct in isolation and
+   * stays correct while the defect is live — the defect is at the CALL SITE, in
+   * which list gets passed. Passing the live-only list there reintroduces the
+   * shipped bug and every behavioural test under tests/app still passes, so the
+   * argument itself is what has to be pinned.
+   */
+  it('is called over every building, not just the live ones', () => {
+    const source = readFileSync('src/app/game.ts', 'utf8').replaceAll('\r\n', '\n');
+    const calls = [...source.matchAll(/utilityTipFacts\(([^)]*)\)/g)].map((m) => m[1].trim());
+    expect(
+      calls,
+      'game.ts must derive the advisor utility counts from utilityTipFacts',
+    ).toHaveLength(1);
+
+    // Whatever the argument is named, it must be bound to the unfiltered map.
+    const bound = new RegExp(
+      `const ${calls[0]}\\s*=\\s*\\[\\.\\.\\.this\\.buildings\\.values\\(\\)\\]`,
+    ).test(source);
+    expect(
+      bound,
+      `utilityTipFacts is called with "${calls[0]}", which is not bound to the unfiltered ` +
+        'building list — a utility-fault count taken over live buildings only reads zero in a ' +
+        'fully abandoned city, which is when it matters most',
+    ).toBe(true);
   });
 });

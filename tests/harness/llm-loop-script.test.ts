@@ -31,6 +31,15 @@ describe('llm-visual-loop script wiring', () => {
     expect(source).toContain("url.searchParams.set('record', '1')");
   });
 
+  /**
+   * Always pair a verification status with the amount of evidence it actually
+   * checked. An idle recorder returns `ok: true` with `checkedSegments: 0` — no
+   * command boundary was ever recorded, so nothing was compared, so nothing
+   * disagreed. A runner that reads `ok` alone publishes that as a determinism
+   * pass, and it is the runs where the harness did nothing that report cleanest.
+   *
+   * Fail closed unless at least one real segment was replayed.
+   */
   it('never reports a zero-segment self-check as verified', () => {
     expect(source).toContain('selfCheck.ok === true && checkedSegments > 0');
   });

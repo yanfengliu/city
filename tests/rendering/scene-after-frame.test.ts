@@ -72,6 +72,52 @@ describe('CityScene after-frame callbacks', () => {
     expect(second.mock.calls).toEqual([[16], [32]]);
   });
 
+  /**
+   * Never assume the rAF loop is running. An automation or background tab is
+   * not painting, so `setAnimationLoop` is throttled to a full stop and every
+   * frame callback — view sync, vehicle interpolation, FX lifetimes, camera
+   * flight — stops with it. A capture that only calls `renderer.render()` then
+   * photographs frozen time: cars pinned at their last interpolated position,
+   * level-up labels accumulating forever because the wall-clock fade never
+   * advances. Those artefacts read as game bugs and are not.
+   *
+   * So the capture path must pump a full presentation frame itself. Capturing
+   * then IS the frame tick, which has its own consequence: animation advances
+   * by real wall-clock between shots, so two captures taken microseconds apart
+   * look identical no matter how much sim time passed between them.
+   */
+  it('pumps a presentation frame before reading the buffer, because rAF is stopped', () => {
+    const { cityScene, render } = makeScene();
+    const onFrame = vi.fn();
+    cityScene.onFrame(onFrame);
+    const toDataURL = vi.fn(() => 'jpeg');
+    Object.assign(cityScene, {
+      renderer: {
+        render,
+        domElement: {
+          width: 800,
+          height: 600,
+          getBoundingClientRect: () => ({ width: 800, height: 600 }),
+          toDataURL,
+        },
+      },
+    });
+
+    expect(cityScene.screenshot(0.7)).toBe('jpeg');
+
+    // A bare render would satisfy toDataURL while leaving every time-based
+    // visual frozen at whatever the last painted frame held.
+    expect(onFrame, 'screenshot() must run the frame callbacks, not just render')
+      .toHaveBeenCalledOnce();
+    expect(render).toHaveBeenCalledOnce();
+    expect(onFrame.mock.invocationCallOrder[0]!).toBeLessThan(
+      render.mock.invocationCallOrder[0]!,
+    );
+    expect(render.mock.invocationCallOrder[0]!).toBeLessThan(
+      toDataURL.mock.invocationCallOrder[0]!,
+    );
+  });
+
   it('still acknowledges the draw when an after-frame callback throws', () => {
     const { cityScene, render } = makeScene();
     const failing = vi.fn(() => { throw new Error('adapter commit failed'); });

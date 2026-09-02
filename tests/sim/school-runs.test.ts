@@ -100,6 +100,20 @@ function schoolWalkers(sim: CitySim): number[] {
   );
 }
 
+/**
+ * When a defect's signature is ABSENCE — no agent, no event, no row — do not
+ * assert it through the system that would have produced the missing thing. An
+ * unreachable choice does not announce itself: the path lookup returns null, the
+ * loop continues, no walker is ever created, and that is indistinguishable from
+ * "the departure moment has not arrived yet". An assertion guarded by `if
+ * (thing != null)` then never runs, and the test passes with the defect live.
+ *
+ * Assert the deciding function directly, and guard the fixture so it fails
+ * loudly if it stops exercising the case. And confirm a new test is red for the
+ * reason you intended BEFORE writing the fix — then re-break the fix and watch
+ * it go red again. A green test proves nothing until it has been seen to fail
+ * for the right reason.
+ */
 describe('school runs (D2)', () => {
   it('sends the child to the covering school while the worker is at work — simultaneously', { timeout: 30_000 }, () => {
     const { sim, citizen, childMemberId } = schoolTown();

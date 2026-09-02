@@ -113,6 +113,19 @@ const snapshot = (view: TreesView): unknown[] => {
   );
 };
 
+/**
+ * When checking that two solids visibly join, measure the joint where it is
+ * NARROWEST across the full turn, not where it is widest. A convex solid that
+ * tapers to an edge or a point is wide from exactly one azimuth, and a
+ * max-radius probe finds precisely that one: the first version of this check
+ * read 0.158 against a 0.075 trunk and passed, while the same slice measured
+ * 0.040 perpendicular to the faceted bottom edge — daylight, on trees that are
+ * randomly rotated per cell under a free-orbiting camera.
+ *
+ * The cheap half of the fix that paid the most: seat a mesh by its COMPUTED
+ * bounding box rather than by its nominal dimensions, so a new shape cannot
+ * silently be seated wrong.
+ */
 describe('TreesView diversity', () => {
   it('anchors every tree archetype to the shared terrain surface', () => {
     const surface = new TerrainSurface({
