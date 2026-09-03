@@ -2,6 +2,18 @@
 
 Every lesson this repo used to keep as prose now lives in a machine, and this file is the record that each machine was actually made to go red by reintroducing the defect it claims to prevent.
 
+
+## If a gate here is wrong
+
+A gate and the claim in its header can be wrong together, and when they are they look exactly like a gate that is right: retiring 356 lessons across this fleet found 43 that named a defect their own named test did not catch. Auditing one means reaching what was actually believed, measured, and abandoned — never the sentence the gate carries about itself, which is the same self-agreement these gates exist to catch.
+
+That evidence was deleted in the retirement commits, not lost. This repo's evidence file as it stood immediately before, all 31 entries with their anchors:
+
+    git show cb3e6ab:docs/learning/lessons-evidence.md
+
+`git log -- docs/learning/lessons-evidence.md` lists every earlier revision, and `git log -S'<phrase from the gate header>' -- docs/learning/` finds the entry a particular gate came from.
+
+
 Method for each entry: apply the smallest edit to product code (never to the test) that brings the defect back, run the gate, confirm it fails and that the failure names the defect, revert with `git checkout --`, confirm green. A gate that could not be made to go red is not recorded here as a gate.
 
 Baseline at the time of these proofs: `npm test` 866 passed / 128 files, `npm run lint` exit 0, `npm run typecheck` exit 0, `npm run build` exit 0 (worker 162,626 / 166,000 bytes). No test file used as a proof surface was red at baseline.
