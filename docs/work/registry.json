@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "allocations": [
+    {
+      "id": 0,
+      "theme": "recursive-loop-dogfood",
+      "legacyFiles": [
+        {
+          "path": "historical/superpowers/plans/2026-07-08-recursive-loop-dogfood.md",
+          "sha256": "86d22fdf57e830637a5558a6cc92310f294a27524bd1e514a7e1e7516dfcf8b0",
+          "source": "city@d3c555f53642a7135bad06c4aead0cb28c28ddd7:docs/superpowers/plans/2026-07-08-recursive-loop-dogfood.md"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "theme": "voxel-buildings-migration",
+      "legacyFiles": [
+        {
+          "path": "historical/architecture/voxel-buildings-migration.md",
+          "sha256": "675f9fbc009f12c20acef218ad1fc2d1c8878b39031a15a5501f417fbef9fd1b",
+          "source": "city@d3c555f53642a7135bad06c4aead0cb28c28ddd7:docs/architecture/voxel-buildings-migration.md"
+        }
+      ]
+    }
+  ]
+}
