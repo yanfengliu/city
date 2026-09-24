@@ -8,7 +8,7 @@ The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless
 
 Stack: Vite + TypeScript (strict) + Three.js + civ-engine + Vitest. Desktop browser only; single primary canvas; the first screen is the playable game, not a landing page.
 
-<!-- FLEET-CANON:BEGIN sha=95bcbcb491dd generated from ../fleet/FLEET.md by `npm run sync-canon` — do not edit inside this block; this repo's own rules go in docs/policies/local-rules.md -->
+<!-- FLEET-CANON:BEGIN sha=a4df5e4b87dc generated from ../fleet/FLEET.md by `npm run sync-canon` — do not edit inside this block; this repo's own rules go in docs/policies/local-rules.md -->
 ## Fleet constitution
 
 ### Fleet Orchestration Policy
@@ -19,7 +19,7 @@ Deliver the requested outcome with verified correctness, coherent architecture, 
 
 Only an explicitly designated agent acts as coordinator. Use one accountable integration owner per scope. The coordinator owns planning, dependencies, shared interfaces, architectural consistency, integration, and acceptance. It does not implement. Every change, however small, is delegated: the coordinator's session is where the next request arrives, and a coordinator in the middle of an edit cannot take it. Its own hands stay on what delegation needs — reading enough to write an assignment, and inspecting a handoff to accept or reject it.
 
-Workers own bounded outcomes and local implementation decisions. They may use subagents within their scope and budget, but remain accountable. Organize threads around deliverables, not permanent departments. Avoid recursive manager hierarchies.
+Workers own bounded outcomes and local implementation decisions. Each worker, a reviewer included, decides how many subagents its task needs and dispatches them, within its budget (owner directive, 2026-09-23). For a small task that is none. It remains accountable for what they return. Organize threads around deliverables, not permanent departments. Avoid recursive manager hierarchies.
 
 #### Plan and delegate
 
