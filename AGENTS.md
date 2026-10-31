@@ -61,7 +61,7 @@ Obtain independent, preferably read-only review for substantial or high-risk cha
 
 ## Session start
 
-Read `PROGRESS.md`, `docs/architecture/architecture.md`, and `docs/policies/local-rules.md` before starting work.
+Read `PROGRESS.md`, the section map at the top of `docs/architecture/architecture.md`, and `docs/policies/local-rules.md` before starting work, then the sections of `architecture.md` the work needs.
 
 ## Invariants & boundaries
 
@@ -81,6 +81,6 @@ Read `PROGRESS.md`, `docs/architecture/architecture.md`, and `docs/policies/loca
 
 - `docs/design/vision.md` — product direction and visual identity; `docs/design/game-design.md` — gameplay rules, mechanics, tuning values; `docs/design/roadmap.md` — milestone ordering and acceptance criteria; `docs/design/simulation-realism.md` — micro-level traffic/agent behavior (lanes, headway, signals, identity) and its phasing. Read before changing the relevant system.
 - `docs/architecture/architecture.md` — code boundaries, worker protocol, data flow.
-- `PROGRESS.md` — current status and next steps; keep it current while working (original prompt at top, then implementation notes, test runs, findings, and next steps per phase).
+- `PROGRESS.md` — current status and next steps; keep it current while working (original prompt at top, then status and next steps per phase). Implementation notes, test runs, and findings go in the devlog, `docs/devlog/summary.md`; the dated log PROGRESS.md kept to 2026-08-23 is in `docs/devlog/progress-log.md`, newest first.
 - `docs/harness.md` — the LLM playtest → annotate → replay → improve harness (`npm run playtest:llm`, `npm run playtest:recursive`).
 - `docs/learning/lessons.md` — per the fleet evidence-anchor rule; `docs/learning/defect-register.md` — every defect the user has reported, and the check that now covers its class. Read the register before touching a surface it names.

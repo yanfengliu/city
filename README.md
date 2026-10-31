@@ -42,7 +42,7 @@ Automated playtesting exposes `window.render_game_to_text()` for bounded JSON st
 
 ## Status
 
-v1 is complete and browser-verified: roads and terrain, zoning and growth, citizens and employment, purposeful traffic and pedestrians, micro-level traffic rules, services and green leisure, utilities and economy, overlays, inspection, save/load, and the full game shell. The final-source frame-pacing gate passes every DPR/speed profile; its concise result and provenance are recorded in [PROGRESS.md](PROGRESS.md). See the roadmap's **Later** section for deliberately out-of-v1 work such as freeform roads, public transport, districts, incidents, high density, freight, terrain sculpting, unlock progression, and audio.
+v1 is complete and browser-verified: roads and terrain, zoning and growth, citizens and employment, purposeful traffic and pedestrians, micro-level traffic rules, services and green leisure, utilities and economy, overlays, inspection, save/load, and the full game shell. The final-source frame-pacing gate passes every DPR/speed profile; its concise result and provenance are recorded in [the progress log](docs/devlog/progress-log.md#2026-08-02--phase-7-and-v1-close-on-final-source-presentation-evidence). See the roadmap's **Later** section for deliberately out-of-v1 work such as freeform roads, public transport, districts, incidents, high density, freight, terrain sculpting, unlock progression, and audio.
 
 ## Part of a fleet
 

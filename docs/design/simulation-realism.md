@@ -118,4 +118,4 @@ Performance: vehicle system at 600 cars stays within its per-tick budget (queue 
 
 Congestion realism tuning (bucket thresholds, capacity per cell) stays a `game-design.md` concern; this doc changes what a single car does, not how load is scored.
 
-Service-building model fidelity and HUD layout stability are presentation workstreams recorded in PROGRESS.md (2026-07-17); they share no mechanics with this doc.
+Service-building model fidelity and HUD layout stability are presentation workstreams recorded in `docs/devlog/progress-log.md` (2026-07-17); they share no mechanics with this doc.
