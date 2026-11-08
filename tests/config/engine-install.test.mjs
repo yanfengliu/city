@@ -1,8 +1,9 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, test } from 'vitest';
 
 // Exercise the actual Node guard: City's Vite configuration intentionally shims
@@ -17,6 +18,7 @@ async function checkEngineInstall(root) {
 }
 
 const roots = [];
+const aliases = [];
 const pin = {
   version: '2.8.1',
   url: 'https://github.com/yanfengliu/civ-engine/releases/download/engine-dist/civ-engine-6a8ae8fa4e65c8d49c933956592e1a088c32a78b.tgz',
@@ -28,6 +30,7 @@ async function fixture() {
   roots.push(root);
   const installed = path.join(root, 'node_modules/civ-engine');
   await mkdir(path.join(root, 'scripts'), { recursive: true });
+  await copyFile(new URL('../../scripts/check-engine.mjs', import.meta.url), path.join(root, 'scripts/check-engine.mjs'));
   await mkdir(path.join(installed, 'dist'), { recursive: true });
   await json(path.join(root, 'scripts/civ-engine-pin.json'), pin);
   await json(path.join(root, 'package.json'), { dependencies: { 'civ-engine': pin.url } });
@@ -54,6 +57,7 @@ async function changeJson(root, file, mutate) {
   await json(target, value);
 }
 afterEach(async () => {
+  for (const alias of aliases.splice(0)) await unlink(alias);
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
@@ -93,5 +97,53 @@ describe('retained engine installation', () => {
     await rm(target, { recursive: true });
     await symlink(sharedTarget, target, process.platform === 'win32' ? 'junction' : 'dir');
     await expect(checkEngineInstall(root)).rejects.toThrow(/physical|linked|outside/);
+  });
+});
+
+describe('engine installation CLI', () => {
+  const routes = ['direct', 'junction', ...(process.platform === 'win32' ? ['case variant'] : [])];
+  async function entry(root, route) {
+    if (route === 'case variant') return path.join(root, 'SCRIPTS/CHECK-ENGINE.mjs');
+    if (route === 'direct') return path.join(root, 'scripts/check-engine.mjs');
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'city-engine-alias-'));
+    roots.push(parent);
+    const alias = path.join(parent, 'checkout');
+    await symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    aliases.push(alias);
+    return path.join(alias, 'scripts/check-engine.mjs');
+  }
+  const run = (args) => spawnSync(process.execPath, args, { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+
+  test.each(routes)('checks and reports a valid installation through %s', async (route) => {
+    const { root, installed } = await fixture();
+    const result = run([await entry(root, route)]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toContain(`civ-engine ${pin.version}: verified retained archive and private Node/browser runtimes`);
+    expect(result.stdout).toContain(installed);
+  });
+
+  test.each(routes)('fails visibly for an invalid pin through %s', async (route) => {
+    const { root } = await fixture();
+    await changeJson(root, 'package.json', (p) => { p.dependencies['civ-engine'] = 'file:../civ-engine'; });
+    const result = run([await entry(root, route)]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Engine installation: package dependency differs from the pin');
+    expect(result.stdout).toBe('');
+  });
+
+  test.each(['normal', 'absent', 'nonexistent'])('does not check on import with %s argv', async (argv) => {
+    const { root } = await fixture();
+    await changeJson(root, 'package.json', (p) => { p.dependencies['civ-engine'] = 'file:../civ-engine'; });
+    const importer = path.join(root, 'scripts/import-check.mjs');
+    const alterArgv = argv === 'absent' ? 'delete process.argv[1];' : argv === 'nonexistent' ? `process.argv[1] = ${JSON.stringify(path.join(root, 'missing.mjs'))};` : '';
+    await writeFile(importer, `${alterArgv}\nconst guard = await import(${JSON.stringify(pathToFileURL(path.join(root, 'scripts/check-engine.mjs')).href)});\nconsole.log(typeof guard.checkEngineInstall);\n`);
+    const result = run([importer]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout.trim()).toBe('function');
   });
 });

@@ -1,6 +1,6 @@
 # Install the retained engine archive
 
-Status: complete
+Status: active
 Owner: Codex root
 Created: 2026-11-07
 Updated: 2026-11-07
@@ -37,6 +37,8 @@ The isolated worktree is C:/Users/38909/Documents/worktrees/city-engine-pin-1107
 - [x] Root integrated main64e0aab and followed hosted CI42429408841 to success; private worktree retirement follows the record commit.
 
 ## Outcome
+
+2026-11-07 follow-up: resume this retained-engine deliverable for the independently reproduced CLI silent-success defect through filesystem aliases. Actual Node contracts first produced two junction failures with twenty passes: an invalid pin exited zero and a valid fixture printed no verification. Canonical filesystem identity, normalized for case only on Windows, fixes both; all22 contracts now pass, including the original13, direct/junction/Windows-case success and refusal, and inert imports with normal/absent/nonexistent argv. Targeted zero-warning lint, the actual physical installed engine2.8.1 check, and private npm ci --ignore-scripts pass on Node24.22.1/npm11.6.2. Shared voxel inputs remain unchanged. No dependency, gameplay, saved format, CI ordering, or policy changes are included. Raw logs stay ignored under tmp/engine-guard-1107/. Root owns pending full-gate scheduling, exact independent review, and integration; the earlier delivered adoption below remains recorded.
 
 Delivered at main64e0aab3d7c71ba11e9b8ebdc452481ba6115de4 after local verification and independent Astra/xhigh review; hosted CI42429408841 succeeded. Original reviewed tree is recoverable at d4534ce and repair tree at4a18151; full authored rounds0/1 are retained. Producer readiness is accepted from root: engine CI42425758281 passed on6a8ae8fa4e65c8d49c933956592e1a088c32a78b; the retained archive's SHA512 is sha512-Ga0WkDVK6oVDv53VQZJNJDOVjDB4OCt92YTSx1MCKdeytlUtGalyzOQmY/34RWTASTLp+wd4bbT0HUkTINtREw==. Shared primary dependencies remain untouched; existing checkouts need README's npm ci --ignore-scripts before guarded dev/test/build. Task-owned links and temporary resources are retired after this closure record; the foreign Vite-consumer worktree stays untouched.
 

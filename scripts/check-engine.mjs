@@ -47,7 +47,12 @@ export async function checkEngineInstall(root = defaultRoot) {
   return { version: pin.version, url: pin.url, integrity: pin.integrity, packageRoot };
 }
 
-if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+const canonicalPath = async (file) => {
+  const resolved = await realpath(file).catch(() => null);
+  return process.platform === 'win32' ? resolved?.toLowerCase() : resolved;
+};
+const invokedPath = process.argv[1] ? await canonicalPath(process.argv[1]) : null;
+if (invokedPath && invokedPath === await canonicalPath(fileURLToPath(import.meta.url))) {
   try {
     const result = await checkEngineInstall();
     console.log(`civ-engine ${result.version}: verified retained archive and private Node/browser runtimes`);
