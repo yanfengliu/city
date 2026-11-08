@@ -1,5 +1,8 @@
 # Devlog Summary
 
+- 2026-11-07: Verified canonical installed-path test expectations with a real checkout alias, preserving physical-runtime and linked-install rejection. Independent review found no material issues;23 focused cases and all6 required commands pass (133 files/904 tests). Full audit9 moderate, production0; owned processes cleaned and shared inputs unchanged. Work2 integration and delivery remain pending.
+
+
 - 2026-11-07: Delivered retained-engine CLI alias validation via main40d5fde/source24cd825; CI42434776542 passed. Independent Astra review,22 focused contracts,903 tests/133 files, typecheck/lint/build and both high-severity audits pass. Nine moderate development findings remain; production zero. Owned processes closed and voxel inputs unchanged. Work2 is complete.
 
 - 2026-11-07: Retained-engine adoption delivered at main64e0aab; CI42429408841 passed. Exact Astra review and repair review,894 tests, type/lint/build and both audits passed; stale shared installations require README's scripts-disabled clean install. Work2 records evidence and bounds.

@@ -1,0 +1,48 @@
+# Review 3: implementation
+
+## Target
+
+Review date: 2026-11-07. Exact frozen candidates, each relative to its supplied base:
+
+- Farm: C:/Users/38909/Documents/worktrees/engine-path-portability-1107/farm; tree 0d7873a6578fe92460eefda1c3b80de5ae3b9313; base 589d38536243b9bc2759a9dabf06f4f653de7341.
+- City: C:/Users/38909/Documents/worktrees/engine-path-portability-1107/city; tree d3f0226bc6d3c329317fadd33f3a4831deb7105f; base 670ad083dfdf76e6977e8b7e45a21a3abcf55afc.
+- civ-sim-web: C:/Users/38909/Documents/worktrees/engine-path-portability-1107/civ-sim-web; tree ed2a3e074e424f4777ae876114db6f4ce8866347; base 6914e46b712c8c9b1e39223821a2185739c5cd43.
+- idle-life: C:/Users/38909/Documents/worktrees/engine-path-portability-1107/idle-life; tree 4276c227a8ad8c1a27aecf475b553b1f680fef3f; base 5cecbc42581ff250f84ac62970484f4e0f76221e.
+
+For every target, independent Git comparisons of both the index and tracked worktree against the supplied tree were empty, including the final check. Exact tree-to-base comparisons contain four files per repository: the installation test, existing work plan, devlog summary, and detailed devlog. No production guard, manifest, lockfile, pin, policy, application, or configuration change is present.
+
+## Reviewers and coverage
+
+Authored by publisher_review, the root-assigned independent native Astra/xhigh review lane. This was an in-session read-only review; no external model CLI or source export was attempted. I inspected the exact test diffs, complete installation tests and surrounding fixtures, unchanged guard implementation, added work/devlog text, retained RED source and RED/GREEN logs, runtime logs, input/runtime hash receipts, lint diagnostics, and the bounded cleanup receipt. I did not read other review reports to establish this conclusion.
+
+## Reports
+
+Farm: No material finding. C:/Users/38909/Documents/worktrees/engine-path-portability-1107/farm/tests/testing/engineInstall.test.mjs:54 creates direct and actual checkout-junction cases; lines 67–68 compare the complete filesystem realpath and explicitly reject the alias spelling. The CLI assertion at line 123 likewise expects the complete canonical package path while retaining successful status, empty stderr, and the verification message. The new API alias is registered after successful creation, and the existing cleanup at lines 48–50 unlinks aliases before recursive removal of owned roots. Unchanged negative contracts at lines 71–98 continue to reject manifest/lock/version/integrity drift and linked engine, node_modules, and dist locations; lines 126–146 retain invalid CLI and inert-import behavior. This remains a correction to the test oracle, with no relaxation of the production installation boundary.
+
+City: No material finding. C:/Users/38909/Documents/worktrees/engine-path-portability-1107/city/tests/config/engine-install.test.mjs:65 adds the genuine alias case, lines 78–79 require canonical identity and reject lexical alias output, and line 134 preserves the complete-path CLI expectation. Existing cleanup at lines 59–61 unlinks the alias before roots. The unchanged Node subprocess wrapper at lines 9–17 is significant surrounding code: the API test invokes the actual Node guard rather than City's browser-shimmed path module. Existing manifest drift tests still require City's scripts-disabled repair diagnostic at line 93; linked-package/dist checks and invalid-CLI/import checks remain intact. The production guard's City-specific diagnostic is unchanged.
+
+civ-sim-web: No material finding. C:/Users/38909/Documents/worktrees/engine-path-portability-1107/civ-sim-web/scripts/check-engine.test.mjs:55 exercises both root spellings; lines 68–69 require the complete physical result and forbid returning the alias. Line 139 changes only the CLI's expected full path. The added alias collection and lines 49–51 unlink the new API alias before root deletion, including assertion-failure cleanup. Existing CLI fixtures remain separate: lines 103–111 create their own owned temporary container, and the existing root cleanup removes that container; the new aliases collection is specifically used for the added API alias. Existing drift, stale Node/browser runtime, shared engine/node_modules/dist, invalid CLI, and normal/absent/missing-argv import contracts are preserved.
+
+idle-life: No material finding. C:/Users/38909/Documents/worktrees/engine-path-portability-1107/idle-life/scripts/check-engine.test.mjs:54 adds the actual root alias; lines 67–68 assert the canonical physical package path and reject the alias spelling. Line 138 canonicalizes the CLI expectation without dropping its status, stderr, or verified-runtime assertions. Lines 48–50 unlink the newly registered API aliases before removing fixture roots. The unchanged CLI alias fixture at lines 102–110 remains owned by its temporary container. Existing negative package/runtime/link cases and invalid CLI/inert-import cases remain unchanged. No AGENTS or other policy change is part of this candidate.
+
+Shared contract reasoning: an alias of the checkout root is valid because the unchanged guard explicitly canonicalizes that root before selecting its private package. By contrast, linking node_modules, the engine package, or runtime dist outside that private package remains invalid. In all four repositories, the unchanged scripts/check-engine.mjs:14 canonicalizes the root; lines 27–34 enforce physical directories and private manifest resolution; lines 37–45 resolve and import both compiled runtime entries; and lines 50–62 retain null-safe canonical invocation detection and visible CLI failure. These surrounding checks are why full realpath(installed) is the correct independent filesystem oracle. No hard-coded Windows username, abbreviated-path replacement, basename-only comparison, lowercasing of the returned path, or assertion suppression was introduced. The real junction fixture reproduces the same lexical-versus-physical path class without requiring an 8.3 short name to exist on the local machine.
+
+## Findings and disposition
+
+No material findings in any of the four exact candidates. No repair or additional review round is requested for the reviewed test changes. This conclusion covers the bounded test-portability follow-up; it is not a new whole-repository audit or authorization to skip required gates.
+
+## Verification
+
+For each repository, I compared the retained red-test.txt with the final test. The differences are the realpath import, replacement of the API lexical equality with full realpath equality plus explicit alias inequality, and replacement of the CLI lexical-path expectation with full realpath. The retained RED logs show the alias=true API case failing on the intended expected-alias/received-physical difference with 22 other cases passing. GREEN logs report 23/23 on Windows. This is a valid test-oracle regression demonstration, not a claimed production-guard RED. I did not rerun those checks or establish results on another OS.
+
+All four test SHA-256 values match review-packet.json: Farm CFF0898DE9EAF0640707925B67DD5B13F9D4DB41B58DF49173F0A93D0E48AAF7; City 0C91FD8CEB94425905ECECE6F3C9235EC00EE4C630199B09999E04BC48439634; civ-sim-web 23802DE922BAF00EDF2CBC7FD0086B24AABB8661F8F58ECC5E39251C0045C4BB; idle-life 13EEA75AA6FB1FD74518945B64A1A3C8F72436EEA997D5A3C081D560609822DC. I independently rehashed each manifest, lock, production guard, pin, and the installed engine package.json/dist/index.js/dist/index.browser.js; all match the retained receipts. Filesystem attributes identify node_modules and civ-engine as directories, not reparse-point aliases. Retained runtime.log files report verified physical Node/browser engine 2.8.1 at each task's own installation. These are inspected receipts and files, not newly executed runtime checks.
+
+Evidence roots are Farm and City tmp/engine-path-portability-1107, civ-sim-web output/engine-path-portability-1107, and idle-life .artifacts/engine-path-portability-1107, within the absolute target paths above. Records report private npm ci --ignore-scripts on Node 24.22.1/npm 11.6.2; install logs, frozen input receipts, runtime receipts, and focused results are retained there. Farm and City affected-file lint receipts report exit 0. civ-sim-web's extra direct MJS lint logs and unchanged-baseline diagnostic show the same existing parserOptions.project exclusion; this is correctly disclosed and is not represented as a passing lint gate. Idle-life records that no lint script exists. Normal required gates and fresh audits remain pending.
+
+The shared C:/Users/38909/Documents/worktrees/engine-path-portability-1107/session/focused-cleanup.json reports an empty bounded task-path scan and explicitly says it is not a full descendant census. I did not independently recensus the worker's earlier processes or inspect browser output. I created no fixture files, browser/server processes, installs, commits, staging changes, or other repository mutations. No tests, gates, network calls, or source exports were performed by this reviewer.
+
+The updated plans/devlogs distinguish this prepared follow-up from earlier completed adoption work and keep independent review, full gates, fresh audits, integration, and delivery pending; they make no new hosted-CI success claim.
+
+## Round outcome
+
+All four exact candidates are accepted for this bounded independent source review with no material findings. Root retains responsibility for the required full gates, receipt inspection, integration/delivery, configured hosted CI, and final task-resource cleanup. Retaining this report alone does not complete those steps.

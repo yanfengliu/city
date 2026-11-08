@@ -1,6 +1,6 @@
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { copyFile, mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from 'fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, realpath, rm, symlink, unlink, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'node:url';
@@ -62,11 +62,21 @@ afterEach(async () => {
 });
 
 describe('retained engine installation', () => {
-  test('accepts a physical compiled package with the pinned archive and matching runtimes', async () => {
-    const { root, installed } = await fixture();
+  test.each([false, true])('accepts a physical compiled package (checkout alias: %s)', async (useAlias) => {
+    let { root, installed } = await fixture();
+    if (useAlias) {
+      const parent = await mkdtemp(path.join(os.tmpdir(), 'city-engine-api-alias-'));
+      roots.push(parent);
+      const alias = path.join(parent, 'checkout');
+      await symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+      aliases.push(alias);
+      root = alias;
+      installed = path.join(alias, 'node_modules/civ-engine');
+    }
     const result = await checkEngineInstall(root);
     expect(result).toMatchObject({ version: pin.version, url: pin.url, integrity: pin.integrity });
-    expect(result.packageRoot).toBe(installed);
+    expect(result.packageRoot).toBe(await realpath(installed));
+    if (useAlias) expect(result.packageRoot).not.toBe(installed);
   });
 
   test.each([
@@ -121,7 +131,7 @@ describe('engine installation CLI', () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
     expect(result.stdout).toContain(`civ-engine ${pin.version}: verified retained archive and private Node/browser runtimes`);
-    expect(result.stdout).toContain(installed);
+    expect(result.stdout).toContain(await realpath(installed));
   });
 
   test.each(routes)('fails visibly for an invalid pin through %s', async (route) => {
