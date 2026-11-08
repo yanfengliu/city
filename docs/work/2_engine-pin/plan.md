@@ -1,6 +1,6 @@
 # Install the retained engine archive
 
-Status: active
+Status: complete
 Owner: Codex root
 Created: 2026-11-07
 Updated: 2026-11-07
@@ -34,11 +34,11 @@ The isolated worktree is C:/Users/38909/Documents/worktrees/city-engine-pin-1107
 - [x] Pin the archive, prove red/green guard and CI contracts, and complete bounded audit repair.
 - [x] Obtain the heavy-gate slot and run the required suite/build with owned resource cleanup.
 - [x] Freeze the staged candidate for independent review and repair the resulting diagnostic finding with RED/GREEN contracts and focused re-review.
-- [ ] Root integrates, follows hosted CI and cleans the private worktree.
+- [x] Root integrated main64e0aab and followed hosted CI42429408841 to success; private worktree retirement follows the record commit.
 
 ## Outcome
 
-Local verification and independent Astra/xhigh review passed; root delivery remains pending. Original reviewed tree is recoverable at d4534ce and repair tree at4a18151; full authored rounds0/1 are retained. Producer readiness is accepted from root: engine CI 42425758281 passed on 6a8ae8fa4e65c8d49c933956592e1a088c32a78b; the retained archive's SHA512 is sha512-Ga0WkDVK6oVDv53VQZJNJDOVjDB4OCt92YTSx1MCKdeytlUtGalyzOQmY/34RWTASTLp+wd4bbT0HUkTINtREw==.
+Delivered at main64e0aab3d7c71ba11e9b8ebdc452481ba6115de4 after local verification and independent Astra/xhigh review; hosted CI42429408841 succeeded. Original reviewed tree is recoverable at d4534ce and repair tree at4a18151; full authored rounds0/1 are retained. Producer readiness is accepted from root: engine CI42425758281 passed on6a8ae8fa4e65c8d49c933956592e1a088c32a78b; the retained archive's SHA512 is sha512-Ga0WkDVK6oVDv53VQZJNJDOVjDB4OCt92YTSx1MCKdeytlUtGalyzOQmY/34RWTASTLp+wd4bbT0HUkTINtREw==. Shared primary dependencies remain untouched; existing checkouts need README's npm ci --ignore-scripts before guarded dev/test/build. Task-owned links and temporary resources are retired after this closure record; the foreign Vite-consumer worktree stays untouched.
 
 ## Environment and initial evidence
 
