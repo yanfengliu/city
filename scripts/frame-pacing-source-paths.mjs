@@ -3,6 +3,10 @@ const STATIC_SOURCE_PATHS = Object.freeze([
   'index.html',
   'package.json',
   'package-lock.json',
+  'node_modules/civ-engine/package.json',
+  'node_modules/civ-engine/dist',
+  'scripts/check-engine.mjs',
+  'scripts/civ-engine-pin.json',
   'scripts/benchmark-frame-pacing.mjs',
   'scripts/frame-pacing-browser-lifecycle.d.mts',
   'scripts/frame-pacing-browser-lifecycle.mjs',
@@ -38,5 +42,5 @@ export function framePacingSourcePaths(packageMetadata) {
     `node_modules/${name}/package.json`,
     `node_modules/${name}/dist`,
   ]);
-  return [...STATIC_SOURCE_PATHS, ...linkedPaths];
+  return [...new Set([...STATIC_SOURCE_PATHS, ...linkedPaths])];
 }

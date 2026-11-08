@@ -42,7 +42,6 @@ describe('CI workflow contracts', () => {
     expect(workflow).toContain('permissions:\n  contents: read\n\njobs:');
     for (const name of [
       'Checkout city',
-      'Checkout civ-engine (sibling)',
       'Checkout voxel (sibling)',
     ]) {
       expectStepLines(name, [
@@ -70,38 +69,28 @@ describe('CI workflow contracts', () => {
       'npm run git:artifacts:range -- "$ARTIFACT_BASE" HEAD',
     ]);
     expectStepBefore('Setup Node 24', 'Check Git artifact history');
-    expectStepBefore('Check Git artifact history', 'Install civ-engine dependencies');
     expectStepBefore('Check Git artifact history', 'Install voxel dependencies');
     expectStepBefore('Check Git artifact history', 'Install city dependencies');
     expectStepBefore('Check Git artifact history', 'Test (includes the SessionReplayer.selfCheck determinism gate)');
     expect(workflow).toContain('on:\n  push:\n  pull_request:');
   });
 
-  it('checks out and builds every local file dependency before city installs', () => {
+  it('installs the retained engine archive and builds only the voxel sibling', () => {
     expect(Object.entries(packageJson.dependencies)
       .filter(([, value]) => value.startsWith('file:../'))
       .sort(([left], [right]) => left.localeCompare(right)))
       .toEqual([
-        ['civ-engine', 'file:../civ-engine'],
         ['voxel', 'file:../voxel'],
       ]);
-    expectStepLines('Checkout civ-engine (sibling)', [
-      'repository: yanfengliu/civ-engine',
-      'ref: main',
-      'path: civ-engine',
-    ]);
+    expect(packageJson.dependencies['civ-engine']).toMatch(/^https:\/\/github\.com\/yanfengliu\/civ-engine\/releases\/download\/engine-dist\/civ-engine-[a-f0-9]{40}\.tgz$/);
+    expect(workflow).not.toContain('repository: yanfengliu/civ-engine');
+    expect(workflow).not.toContain('working-directory: civ-engine');
+    expect(step('Setup Node 24')).not.toContain('civ-engine/package-lock.json');
+    expect(step('Setup Node 24')).toContain('voxel/package-lock.json');
     expectStepLines('Checkout voxel (sibling)', [
       'repository: yanfengliu/voxel',
       'ref: main',
       'path: voxel',
-    ]);
-    expectStepLines('Install civ-engine dependencies', [
-      'working-directory: civ-engine',
-      'run: npm ci',
-    ]);
-    expectStepLines('Build civ-engine dist', [
-      'working-directory: civ-engine',
-      'run: npm run build',
     ]);
     expectStepLines('Install voxel dependencies', [
       'working-directory: voxel',
@@ -113,20 +102,22 @@ describe('CI workflow contracts', () => {
     ]);
     expectStepLines('Install city dependencies', [
       'working-directory: city',
-      'run: npm ci',
+      'run: npm ci --ignore-scripts',
+    ]);
+    expectStepLines('Verify installed engine', [
+      'working-directory: city',
+      'run: npm run engine:check',
     ]);
     for (const checkout of [
       'Checkout city',
-      'Checkout civ-engine (sibling)',
       'Checkout voxel (sibling)',
     ]) {
       expectStepBefore(checkout, 'Setup Node 24');
     }
-    expectStepBefore('Setup Node 24', 'Install civ-engine dependencies');
-    expectStepBefore('Install civ-engine dependencies', 'Build civ-engine dist');
-    expectStepBefore('Build civ-engine dist', 'Install city dependencies');
     expectStepBefore('Setup Node 24', 'Install voxel dependencies');
     expectStepBefore('Install voxel dependencies', 'Build voxel dist');
     expectStepBefore('Build voxel dist', 'Install city dependencies');
+    expectStepBefore('Install city dependencies', 'Verify installed engine');
+    expectStepBefore('Verify installed engine', 'Test (includes the SessionReplayer.selfCheck determinism gate)');
   });
 });

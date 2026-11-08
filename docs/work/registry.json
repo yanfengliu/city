@@ -22,6 +22,10 @@
           "source": "city@d3c555f53642a7135bad06c4aead0cb28c28ddd7:docs/architecture/voxel-buildings-migration.md"
         }
       ]
+    },
+    {
+      "id": 2,
+      "theme": "engine-pin"
     }
   ]
 }

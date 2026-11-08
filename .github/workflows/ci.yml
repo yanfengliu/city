@@ -18,17 +18,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # Both file:../ sibling dependencies deliberately track main: local dev
-      # consumes the live sibling repos, and the fleet co-evolves in lockstep.
-      # Build each dist so city's install resolves exactly like local dev.
-      - name: Checkout civ-engine (sibling)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: yanfengliu/civ-engine
-          ref: main
-          path: civ-engine
-          persist-credentials: false
-
       # voxel exports dist/ only, so a checkout without a build installs a link whose
       # voxel/core and voxel/three entrypoints do not exist.
       - name: Checkout voxel (sibling)
@@ -46,7 +35,6 @@ jobs:
           cache: npm
           cache-dependency-path: |
             city/package-lock.json
-            civ-engine/package-lock.json
             voxel/package-lock.json
 
       - name: Check Git artifact history
@@ -55,14 +43,6 @@ jobs:
           ARTIFACT_BASE: 0dbda4f4bd1a86f4e86140bd943c4da985ccd4bf
         run: |
           npm run git:artifacts:range -- "$ARTIFACT_BASE" HEAD
-
-      - name: Install civ-engine dependencies
-        working-directory: civ-engine
-        run: npm ci
-
-      - name: Build civ-engine dist
-        working-directory: civ-engine
-        run: npm run build
 
       - name: Install voxel dependencies
         working-directory: voxel
@@ -74,7 +54,12 @@ jobs:
 
       - name: Install city dependencies
         working-directory: city
-        run: npm ci
+        # voxel was built explicitly above; do not rerun its prepare via the link.
+        run: npm ci --ignore-scripts
+
+      - name: Verify installed engine
+        working-directory: city
+        run: npm run engine:check
 
       - name: Test (includes the SessionReplayer.selfCheck determinism gate)
         working-directory: city

@@ -71,7 +71,12 @@ describe('frame-pacing benchmark contract', () => {
       .sort((left, right) => left.localeCompare(right));
 
     expect(names).toEqual(expectedNames);
-    expect(names).toEqual(['civ-engine', 'voxel']);
+    expect(names).toEqual(['voxel']);
+    // The engine is an archive now, but the measured compiled bytes remain inputs.
+    expect(paths).toContain('node_modules/civ-engine/package.json');
+    expect(paths).toContain('node_modules/civ-engine/dist');
+    expect(paths).toContain('scripts/check-engine.mjs');
+    expect(paths).toContain('scripts/civ-engine-pin.json');
     expect(paths).toContain('.gitattributes');
     expect(paths).toContain('scripts/recorder-source-manifest.mjs');
     expect(paths).toContain('scripts/frame-pacing-source-paths.mjs');

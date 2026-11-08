@@ -4,6 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "engine:check": "node scripts/check-engine.mjs",
+    "predev": "npm run engine:check",
+    "pretest": "npm run engine:check",
+    "prebuild": "npm run engine:check",
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/check-production-bundle.mjs",
     "preview": "vite preview",
@@ -22,7 +26,7 @@
     "lessons:check": "node scripts/check-lessons.mjs"
   },
   "dependencies": {
-    "civ-engine": "file:../civ-engine",
+    "civ-engine": "https://github.com/yanfengliu/civ-engine/releases/download/engine-dist/civ-engine-6a8ae8fa4e65c8d49c933956592e1a088c32a78b.tgz",
     "three": "^0.185.1",
     "voxel": "file:../voxel"
   },

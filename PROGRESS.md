@@ -4,7 +4,7 @@
 
 > I want to build a city skyline clone both in terms of behavior and graphics. […] grid-aligned roads for now are ok. 3d graphics yes. Learn from other repos' AGENTS.md and CLAUDE.md and form your own. Write down necessary design, specs, and roadmaps to docs then start working. /goal do not stop until you have a fully functioning game.
 
-Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine (file:../civ-engine) in a Web Worker, conventions distilled from civ-engine/town/townscaper/civ-sim-web AGENTS docs.
+Decisions locked: grid-aligned roads, 3D (Three.js), sim on civ-engine in a Web Worker, conventions distilled from civ-engine/town/townscaper/civ-sim-web AGENTS docs. Engine installation now uses a retained prebuilt archive; [work 2](docs/work/2_engine-pin/plan.md) tracks validation and delivery.
 
 ## Status
 

@@ -4,7 +4,7 @@ Each phase lands as one or more commits on `main` with all gates green (`test`, 
 
 ## Phase 0 — Scaffold
 
-Vite + TS strict + Three.js + civ-engine (`file:../civ-engine`) + Vitest + ESLint. Directory skeleton per architecture.md. Worker boots a trivial world; canvas renders a ground plane; `npm run dev/test/typecheck/lint/build` all work. Automation hooks registered (`render_game_to_text`, `advanceTime`).
+Vite + TS strict + Three.js + civ-engine (retained prebuilt archive) + Vitest + ESLint. Directory skeleton per architecture.md. Worker boots a trivial world; canvas renders a ground plane; `npm run dev/test/typecheck/lint/build` all work. Automation hooks registered (`render_game_to_text`, `advanceTime`).
 
 Accept: empty scene at 60 fps, worker round-trip visible (tick counter in HUD), all gates green.
 

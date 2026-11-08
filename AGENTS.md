@@ -4,7 +4,7 @@
 
 A browser city-building game inspired by Cities: Skylines — cloning the core simulation behavior (roads, RCI zoning, growable buildings, agent-based traffic, utilities, services, pollution/land value, economy) with a 3D presentation. Grid-aligned roads for now (freeform splines are a possible later phase); its own implementation and visual identity, not an asset/source clone.
 
-The simulation runs on **civ-engine** (`file:../civ-engine`), the local headless deterministic ECS engine — it provides ECS, pathfinding, layers, occupancy, commands/events, and serialization; game rules are game code here. Read `docs/architecture/architecture.md` § "Sim internals worth pinning" and `docs/design/game-design.md` before touching sim code — they own the engine contracts this game builds on.
+The simulation runs on **civ-engine**, installed from a retained prebuilt archive pinned in `scripts/civ-engine-pin.json` and `package-lock.json` — it provides ECS, pathfinding, layers, occupancy, commands/events, and serialization; game rules are game code here. Read `docs/architecture/architecture.md` § "Sim internals worth pinning" and `docs/design/game-design.md` before touching sim code — they own the engine contracts this game builds on.
 
 Stack: Vite + TypeScript (strict) + Three.js + civ-engine + Vitest. Desktop browser only; single primary canvas; the first screen is the playable game, not a landing page.
 
@@ -71,7 +71,7 @@ Read `PROGRESS.md`, the section map at the top of `docs/architecture/architectur
 - Files under 500 LOC. 2-space indentation.
 - `npm run visual:sweep` is how the canon's multi-angle visual check is run here: every model from four azimuths at two distances, one contact sheet per subject under `output/visual-sweep/<stamp>/`. Review the sheets. Expose `window.render_game_to_text()` and `window.advanceTime(ms)` for automated playtesting; init Three.js with `preserveDrawingBuffer: true` so screenshots capture WebGL.
 - Game testing loop for meaningful gameplay changes: implement a small behavior with its headless test → dev server → drive the game in a real browser → check `render_game_to_text()` output, screenshots, and controls agree → fix and repeat. Verify before calling the game complete: road place/bulldoze, zone paint/erase, service and utility placement, camera orbit/pan/zoom, overlays, speed/pause, save/load/reset, demand meter and budget reacting to play, traffic visibly flowing and congesting.
-- Do not edit the civ-engine repo unless the user asks; if an engine bug or missing feature blocks the game, note it in `PROGRESS.md` and work around it here. The engine is pinned as `file:../civ-engine`.
+- Do not edit the civ-engine repo unless the user asks; if an engine bug or missing feature blocks the game, note it in `PROGRESS.md` and work around it here. Installation and verified engine-upgrade steps are in `README.md`.
 - Repo review lenses for adversarial passes: correctness, sim-determinism, engine-contract, rendering/perf.
 
 ## Conventions

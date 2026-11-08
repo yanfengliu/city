@@ -6,14 +6,19 @@ A Cities: Skylines-inspired city builder that runs entirely in the browser. Draw
 
 ## Play
 
-Development uses Node 24 from `.nvmrc`. The local `file:` dependencies expect sibling checkouts at `../civ-engine` and `../voxel`; run `npm ci` and `npm run build` in both siblings before installing City. The fleet bootstrap described below prepares the checkout layout.
+Development uses Node 24 from `.nvmrc` (24.15 or newer for the existing jsdom dependency). City installs the prebuilt civ-engine 2.8.1 archive retained under producer commit `6a8ae8fa4e65c8d49c933956592e1a088c32a78b`; its exact URL and integrity are recorded in `scripts/civ-engine-pin.json` and `package-lock.json`. No engine checkout or build is needed.
+
+The remaining `file:../voxel` dependency needs a built voxel sibling. Prepare it separately in a checkout you own; when another session owns that checkout, use its existing build without changing it. Install City with `--ignore-scripts` so the linked voxel package's `prepare` hook does not rebuild shared files. The fleet bootstrap described below prepares the sibling layout.
 
 ```bash
-npm ci
+npm ci --ignore-scripts
+npm run engine:check
 npm run dev
 ```
 
 Open the printed URL (default `http://localhost:5199`). The first screen is the playable game.
+
+The engine check also runs before dev, test, and build. It rejects archive/lock drift, shared engine or node_modules links, and package/compiled-runtime version disagreement. For an engine upgrade, verify a retained producer archive, update the dependency and pin together, regenerate the lock using `npm install --package-lock-only --ignore-scripts`, then repeat a clean install and the checks below. Keep the retained commit URL rather than the rolling release asset.
 
 Core loop: draw **Roads** → paint **Zone R/C/I** nearby → place a **Coal/Wind** plant and drag **Line**s to districts → place a **Pump** beside water and drag underground **Pipe**s → balance demand, services, utilities, taxes, and traffic. **Fire/Police/Clinic/School/Park/Garden** provide distinct coverage and leisure effects. Overlays expose pollution, noise, land value, congestion, utilities, and service coverage. Save, Load, New, pause, and 1×/2×/4× controls are in the game HUD.
 
@@ -32,6 +37,8 @@ npm test           # Vitest contracts, scenarios, replay, and benchmark contract
 npm run typecheck  # TypeScript strict mode
 npm run lint       # ESLint with zero warnings
 npm run build      # typecheck + production Vite build + worker budget
+npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
 ```
 
 Run `npm run hooks:install` once per clone to activate the tracked pre-commit artifact gate. It inspects staged Git objects before a normal commit; CI independently scans every commit after the fixed clean policy epoch on every pushed branch and pull request, including an oversized or evidence blob that a later commit deletes. City's exact thresholds, reviewed fixture allowance, and the client-hook/server-admission boundary are recorded in [the local policy](docs/policies/local-rules.md).

@@ -1,5 +1,7 @@
 # Devlog Summary
 
+- 2026-11-07: Prepared retained civ-engine 2.8.1 installation and CI adoption (work 2), preserving voxel's explicit build and engine benchmark fingerprints. Clean private install, 894 tests across 133 files, typecheck/lint/build, and both high-severity audits pass on Node 24.22.1; nonmajor audit repairs leave nine moderate development findings. Processes closed and checked voxel entries stayed unchanged; independent review and root delivery are pending.
+
 - 2026-10-30: **PROGRESS.md is a short status, and its dated log moved word for word to `docs/devlog/progress-log.md`** — the owner asked that the docs follow progressive disclosure (`../fleet/FLEET.md`, Repo file shape). PROGRESS.md, 252,800 bytes read at every session start, keeps its original prompt and status, 6,709 bytes, and links the log, which runs newest first. `docs/architecture/architecture.md` opens with a section map, and the session start reads that map, then the sections the work needs. AGENTS.md now sends implementation notes, test runs, and findings to this devlog, and the six docs that cited a PROGRESS.md entry name the log instead. A script found every old sentence in its new home, nine pointer sentences reworded, and went red on a planted deletion. Docs only.
 
 - 2026-09-05: Moved the recursive-loop and voxel-buildings proposals into work IDs 0 and 1, retaining their authored content and committed provenance.
