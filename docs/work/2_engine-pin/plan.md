@@ -25,7 +25,7 @@ The isolated worktree is C:/Users/38909/Documents/worktrees/city-engine-pin-1107
 - [x] Installation and CI contracts prove the old linked/source-build paths fail and the retained-package path passes while preserving voxel ordering and artifact enforcement.
 - [x] Test, typecheck, zero-warning lint, production build/bundle budget, and both high-severity audits pass under a supported Node 24 patch.
 - [x] Any task-owned process exits or is cleaned up; the shared voxel entry hashes remain unchanged by this task.
-- [ ] The exact staged candidate receives independent in-session review before root commits and delivers it.
+- [x] The exact staged candidate receives independent in-session review before root commits and delivers it.
 
 ## Implementation steps
 
@@ -33,11 +33,12 @@ The isolated worktree is C:/Users/38909/Documents/worktrees/city-engine-pin-1107
 - [x] Create an independent worktree and check paths before creating its sibling mapping.
 - [x] Pin the archive, prove red/green guard and CI contracts, and complete bounded audit repair.
 - [x] Obtain the heavy-gate slot and run the required suite/build with owned resource cleanup.
-- [ ] Freeze the staged candidate for independent review, then root integrates and follows hosted CI.
+- [x] Freeze the staged candidate for independent review and repair the resulting diagnostic finding with RED/GREEN contracts and focused re-review.
+- [ ] Root integrates, follows hosted CI and cleans the private worktree.
 
 ## Outcome
 
-Local verification passed; independent review and root delivery remain pending. Producer readiness is accepted from root: engine CI 42425758281 passed on 6a8ae8fa4e65c8d49c933956592e1a088c32a78b; the retained archive's SHA512 is sha512-Ga0WkDVK6oVDv53VQZJNJDOVjDB4OCt92YTSx1MCKdeytlUtGalyzOQmY/34RWTASTLp+wd4bbT0HUkTINtREw==.
+Local verification and independent Astra/xhigh review passed; root delivery remains pending. Original reviewed tree is recoverable at d4534ce and repair tree at4a18151; full authored rounds0/1 are retained. Producer readiness is accepted from root: engine CI 42425758281 passed on 6a8ae8fa4e65c8d49c933956592e1a088c32a78b; the retained archive's SHA512 is sha512-Ga0WkDVK6oVDv53VQZJNJDOVjDB4OCt92YTSx1MCKdeytlUtGalyzOQmY/34RWTASTLp+wd4bbT0HUkTINtREw==.
 
 ## Environment and initial evidence
 
@@ -47,11 +48,13 @@ The CI contract first failed on the old engine checkout and the new guard suite 
 
 ## Local verification
 
-Clean npm ci --ignore-scripts under Node 24.22.1/npm 11.7.0 installed 187 private packages. Farm's reviewed 59-line guard is unchanged. City tests exercise it through native Node children because City's existing Vite node:path browser alias intercepts direct test imports; the browser configuration and shims remain unchanged. Thirteen guard contracts and three CI contracts pass, verifying the physical engine package, exact URL/integrity, Node/browser runtime versions, voxel build ordering, and retained artifact-history gate.
+Clean npm ci --ignore-scripts under Node 24.22.1/npm 11.7.0 installed 187 private packages. Farm's reviewed 59-line guard is reused with City's scripts-disabled recovery diagnostic. City tests exercise it through native Node children because City's existing Vite node:path browser alias intercepts direct test imports; the browser configuration and shims remain unchanged. Thirteen guard contracts and three CI contracts pass, verifying the physical engine package, exact URL/integrity, Node/browser runtime versions, voxel build ordering, and retained artifact-history gate.
 
 The first full suite had 893 passes and one migration-specific failure: the frame-pacing provenance test still required civ-engine to be a linked dependency. The revised contract first failed when the engine's compiled inputs disappeared. The manifest now explicitly retains the installed engine package/dist and also fingerprints the guard/pin, while the linked dependency list correctly contains only voxel. The recorder benchmark already fingerprinted the installed engine and required no change. No gameplay assertion or threshold was relaxed.
 
 Final npm test passed 133 files and 894 tests in 18.87 seconds. Typecheck and zero-warning lint passed. Production build passed with the unchanged worker budget at 164480/166000 bytes; the existing large application-chunk warning remains. This proves the native build/test dependencies work when City installation scripts are ignored. No live visual sweep, browser interaction run, or performance benchmark was added or claimed for this installation-only change.
+
+Root repeated all six gates after F0's diagnostic repair; each exited0 with the same894 tests and worker size. The PowerShell runner appended e s t to its test invocation, so root ran the exact unfiltered npm test separately:133 files/894 tests,18.17 seconds,exit0. Focused re-review closed F0 with no new findings. The final task-path process scan found no owned leftovers.
 
 Both high-severity audits passed: nine moderate development findings remain; production has none. Key nonmajor repairs are Vitest 4.1.9 to 4.1.12, Vite 8.1.2 to 8.3.6, ESLint 10.6.0 to 10.14.0, brace-expansion 5.0.9 to 5.0.12, source-map-js 1.2.1 to 1.2.2, and undici 8.10.0 to 8.12.4. jsdom stays 30.0.1. Lock regeneration refreshes voxel's descriptive linked-package metadata from 1.2.0 to its already-present 1.3.0; it does not install or build voxel.
 
