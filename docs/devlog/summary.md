@@ -1,6 +1,6 @@
 # Devlog Summary
 
-- 2026-11-07: Fixed retained-engine CLI validation being skipped through a checkout junction. Canonical entry identity preserves inert imports and Windows case handling. Actual CLI tests reproduce two failures before the fix and pass all22 afterward; targeted lint and private runtime2.8.1 verification pass. Work2 follow-up awaits full gates, independent review, and integration.
+- 2026-11-07: Fixed retained-engine CLI validation through checkout aliases in24cd825. Independent Astra review accepted the exact source;22 focused contracts and903 tests/133 files, typecheck/lint/build and both high-severity audits pass. Nine moderate development findings remain; production zero. Owned processes closed and voxel inputs unchanged; work2 awaits main integration and hosted acceptance.
 
 - 2026-11-07: Retained-engine adoption delivered at main64e0aab; CI42429408841 passed. Exact Astra review and repair review,894 tests, type/lint/build and both audits passed; stale shared installations require README's scripts-disabled clean install. Work2 records evidence and bounds.
 
