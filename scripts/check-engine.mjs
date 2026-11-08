@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const defaultRoot = fileURLToPath(new URL('..', import.meta.url));
 const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
 function requireMatch(condition, message) {
-  if (!condition) throw new Error(`Engine installation: ${message}. Run npm ci after restoring the verified pin and lockfile.`);
+  if (!condition) throw new Error(`Engine installation: ${message}. Run npm ci --ignore-scripts after restoring the verified pin and lockfile.`);
 }
 
 /** npm ci verifies archive bytes; this checks the selected artifact and runtime identity. */

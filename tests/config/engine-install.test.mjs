@@ -76,7 +76,7 @@ describe('retained engine installation', () => {
   ])('rejects manifest, lock, or installed-package drift: %s', async (file, mutate) => {
     const { root } = await fixture();
     await changeJson(root, file, mutate);
-    await expect(checkEngineInstall(root)).rejects.toThrow();
+    await expect(checkEngineInstall(root)).rejects.toThrow(/Run npm ci --ignore-scripts after restoring/);
   });
 
   test.each(['index.js', 'index.browser.js'])('rejects a stale compiled %s despite a current manifest', async (entry) => {
